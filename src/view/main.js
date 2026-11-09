@@ -5,7 +5,7 @@ import { createWorld, advance, step } from '../sim/world.js';
 import { spawnClash, spawnRaid, spawnCavLab, spawnCounterLab } from '../sim/scenarios.js';
 import { makeAi } from '../sim/ai.js';
 import { makeRng } from '../sim/rng.js';
-import { arrowOf } from '../sim/production.js';
+import { arrowOf, wallStanding } from '../sim/production.js';
 import { createScene } from './scene.js';
 import { createCrowd } from './crowd.js';
 import { createHud } from './hud.js';
@@ -131,6 +131,7 @@ function syncLook() {
     const g = view.strongholdMeshes.get(st.id), color = [0x1D9E75, 0xD85A30][st.owner] ?? 0x888780;
     g.userData.ring.material.color.setHex(color);
     (g.userData.box ?? g.userData.flag).material.color.setHex(color);
+    if (g.userData.wallRing) g.userData.wallRing.visible = wallStanding(st) && (st.owner === 0 || !seeAt || seeAt(st.x, st.z));   // 성벽 고리(적은 보일 때만)
   }
 }
 

@@ -4,6 +4,7 @@ import { ARCHER, CAVALRY } from './rules.js';
 import { buildingTarget } from './production.js';
 import { BUFF } from './generals.js';
 import { activeCast } from './casts.js';
+import { FM } from './formation.js';
 import { isPoint } from './map.js';
 
 const DEG = 180 / Math.PI;
@@ -123,6 +124,13 @@ export function stepCombat(w) {
     s.contact[i] = t;
     if (u.holdsLine) s.braced[i] = infantryNear(w, i, r.melee.brace) ? 0 : 1;
     s.contactHold[i] = t >= 0 && r.units[s.side[t]][s.type[t]].holdsLine && s.braced[t] ? 1 : 0;   // 버티는 창에만 막힌다
+    if (u.charges && s.contactHold[i] && s.fmRole[t] === FM.OUTER) {   // 꽂힘(거점 진형 바깥 고리 창, formation.js): 달려와 부딪힌 기병 — 창마다 cooldown초에 한 번
+      const I = r.formation.impale;
+      if (s.vx[i] * s.vx[i] + s.vz[i] * s.vz[i] > (u.speed * 0.6) ** 2 && w.time - s.impaleAt[t] >= I.cooldown - 1e-9) {
+        dmg[i] += I.damage; s.staggerUntil[i] = Math.max(s.staggerUntil[i], w.time + I.stagger); s.impaleAt[t] = w.time;
+        w.events.push({ kind: 'impale', side: s.side[t], spear: t, cav: i });
+      }
+    }
     s.hitTimer[i] += dt;
     if (s.staggerUntil[i] > w.time) { s.hitTimer[i] = Math.min(s.hitTimer[i], interval); continue; }   // 돌격에 흔들려 못 친다
     if (u.siege && hitBuilding(w, i, u, interval)) continue;          // 공성병은 사거리 안 건물·성벽이 먼저

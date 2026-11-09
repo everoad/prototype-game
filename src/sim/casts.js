@@ -4,10 +4,9 @@ import { STATE, ORDER, spawn } from './soldiers.js';
 import { rangeOf } from './combat.js';
 import { INFANTRY } from './rules.js';
 import { setGoal } from './world.js';
-import { canSee } from './vision.js';
 import { isPoint } from './map.js';
 
-export const CASTS = ['march', 'drum', 'volley', 'scout', 'levy'];   // 강행군·돌격 북·화살 비·정찰·긴급 징집 — 단추·숫자키 1~5 차례
+export const CASTS = ['march', 'drum', 'volley', 'levy'];   // 강행군·돌격 북·화살 비·긴급 징집 — 단추·숫자키 1~4 차례(정찰은 뺐다 — 사용자 2026-11-09: 직접 부대를 돌려 정찰하는 판단이 없어진다)
 
 const fail = reason => ({ ok: false, reason });
 
@@ -67,7 +66,8 @@ export function castOrder(w, o) {
   const x = o.x, z = o.z;
   if (!Number.isFinite(x) || !Number.isFinite(z) || x < 0 || z < 0 || x > w.map.width || z > w.map.depth) return fail('판 밖');
   const until = w.time + def.seconds;
-  let r = R.radius, count = 0;
+  const r = R.radius;
+  let count = 0;
   if (order === 'march' || order === 'drum') {
     const t = castTargets(w, side, order, x, z), arr = order === 'march' ? s.marchUntil : s.drumUntil;
     for (const i of t.ids) arr[i] = Math.max(arr[i], until);   // 강행군 쐐기 빠르기는 멤버의 marchUntil에서 나온다(groups.js)
@@ -76,9 +76,9 @@ export function castOrder(w, o) {
     const t = castTargets(w, side, order, x, z);
     for (const i of t.ids) { s.volleyUntil[i] = until; s.volleyX[i] = x; s.volleyZ[i] = z; s.rtarget[i] = -1; }   // 다음 훑기에서 원 안 과녁을 고른다
     count = t.ids.length;
-  } else if (order === 'scout') r = def.radius;
-  // stats: 끝나면 결과 알림(개발용)으로 나가는 수치 — 쓰러뜨린 적·피해(화살 비·돌격 북), 밀어냄(돌격 북), 더 간 거리(강행군), 본 적(정찰)
-  pay(w, side, order, def, { x, z, r, until, count, stats: { kills: 0, damage: 0, pushed: 0, extra: 0, seen: 0 }, reported: false });
+  }
+  // stats: 끝나면 결과 알림(개발용)으로 나가는 수치 — 쓰러뜨린 적·피해(화살 비·돌격 북), 밀어냄(돌격 북), 더 간 거리(강행군)
+  pay(w, side, order, def, { x, z, r, until, count, stats: { kills: 0, damage: 0, pushed: 0, extra: 0 }, reported: false });
   return { ok: true, count };
 }
 
@@ -111,19 +111,12 @@ function levy(w, side, id, def) {
   return { ok: true, count: n };
 }
 
-// 결과 수치 모으기(강행군 더 간 거리, 정찰 본 적), 끝난 명령의 결과 알림, 끝난 원 지우기(화면이 끝난 원을 1초 더 그리게).
-const SEEN_EVERY = 20;   // 틱 — 정찰 원 안의 보이는 적을 세는 주기
+// 결과 수치 모으기(강행군 더 간 거리), 끝난 명령의 결과 알림, 끝난 원 지우기(화면이 끝난 원을 1초 더 그리게).
 export function stepCasts(w) {
   const s = w.soldiers, mm = w.rules.orders.march.speedMult;
   for (const side of [0, 1]) {
     const m = activeCast(w, side, 'march');                 // 지난 걸음에서 ×mm로 간 몫 중 평소보다 더 간 몫((mm − 1) / mm)
     if (m) for (let i = 0; i < s.count; i++) if (s.alive[i] && s.side[i] === side && s.marchUntil[i] > w.time) m.stats.extra += Math.hypot(s.x[i] - s.px[i], s.z[i] - s.pz[i]) * (mm - 1) / mm;
-    const sc = w.tick % SEEN_EVERY === 0 ? activeCast(w, side, 'scout') : null;
-    if (sc) {
-      let n = 0;
-      for (let i = 0; i < s.count; i++) if (s.alive[i] && s.side[i] !== side && (s.x[i] - sc.x) ** 2 + (s.z[i] - sc.z) ** 2 <= sc.r * sc.r && canSee(w, side, s.x[i], s.z[i])) n++;
-      sc.stats.seen = Math.max(sc.stats.seen, n);
-    }
   }
   for (const c of w.casts) if (c.stats && !c.reported && c.until <= w.time + 1e-9) {
     c.reported = true;

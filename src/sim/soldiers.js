@@ -26,6 +26,7 @@ export function createSoldiers(capacity, map, cellSize) {
     leaveUntil: f32(),                    // 맞붙어 있다 보낸 병사: 이때까지 바로 옆 적만 친다
     marchUntil: f32(), drumUntil: f32(),  // 금 명령(casts.js): 강행군·돌격 북이 끝나는 때
     volleyUntil: f32(), volleyX: f32(), volleyZ: f32(),   // 화살 비가 끝나는 때와 원 가운데
+    fmRole: new Uint8Array(capacity), impaleAt: f32(),   // 거점 수비 진형 역할(formation.js FM), 이 창이 마지막으로 기병을 꽂은 때
     idleAt: f32(),
     staggerUntil: f32(),                  // 기병 돌격에 맞아 이때까지 못 친다
     braced: new Uint8Array(capacity),
@@ -59,7 +60,7 @@ export function spawn(s, side, type, x, z, rules) {
   s.serial[id] = s.nextSerial++;
   s.order[id] = 0; s.orderFoe[id] = -1;
   s.slotX[id] = 0;
-  s.marchUntil[id] = 0; s.drumUntil[id] = 0; s.volleyUntil[id] = 0;
+  s.marchUntil[id] = 0; s.drumUntil[id] = 0; s.volleyUntil[id] = 0; s.fmRole[id] = 0; s.impaleAt[id] = -1e9;
   return id;
 }
 

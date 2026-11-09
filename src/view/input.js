@@ -9,7 +9,7 @@
 //   Alt+오른쪽 = 어택땅: 땅·구역 선으로도 싸우며 간다(Shift와 같이 쓰면 어택땅으로 길을 잇는다).
 //   Ctrl+오른쪽 = 고른 우리 거점의 생산 방향(병사는 안 움직인다). 거점 판의 "생산 방향" 단추 뒤 오른쪽 클릭도 같다.
 // · 화면 이동: 가운데 버튼 끌기·WASD·방향키는 scene.js, 화면 가장자리(0.3초 머문 뒤)는 여기.
-import { placeTroops, groupTroops, boxTroops, remember, stillSelected, rightClickTarget, sendTarget, FLOW_SECTOR_PICK } from './select.js';
+import { placeTroops, groupTroops, boxTroops, remember, stillSelected, rightClickTarget, sendTarget, fortInfo, FLOW_SECTOR_PICK } from './select.js';
 import { CASTS, canCast, castTargets } from '../sim/casts.js';
 import { isPoint } from '../sim/map.js';
 import { CAST_COLORS } from './scene.js';
@@ -55,7 +55,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     if (e.key === 'Alt') { altHeld = true; e.preventDefault(); }   // Alt = 어택땅. 기본 동작(윈도 브라우저 메뉴로 포커스가 넘어감)을 막는다
     if (e.key === 'Escape') { if (aim) stopAim(); else if (arrowMode) arrowMode = false; else select([], null, false); }
     const tag = e.target && e.target.tagName;
-    if (/^Digit[1-5]$/.test(e.code) && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') toggleAim(CASTS[Number(e.code.slice(5)) - 1]);   // 꾹 누름(반복)·Ctrl/Alt+숫자(브라우저 탭)는 무시
+    if (/^Digit[1-9]$/.test(e.code) && Number(e.code.slice(5)) <= CASTS.length && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && tag !== 'INPUT' && tag !== 'SELECT' && tag !== 'TEXTAREA') toggleAim(CASTS[Number(e.code.slice(5)) - 1]);   // 꾹 누름(반복)·Ctrl/Alt+숫자(브라우저 탭)는 무시
   });
   window.addEventListener('keyup', e => { if (e.key === 'Shift') { shiftHeld = false; showPreview(); } if (e.key === 'Control') ctrlHeld = false; if (e.key === 'Alt') { altHeld = false; e.preventDefault(); } });
   window.addEventListener('blur', () => { shiftHeld = false; ctrlHeld = false; altHeld = false; });
@@ -113,6 +113,14 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     return null;
   }
   const troopsOf = (w, pk) => (pk.kind === 'wedge' ? groupTroops(w, pk.grp) : placeTroops(w, side, { kind: pk.kind, id: pk.id }));
+
+  // ---- 성벽·건물 체력 한 줄(사용자 2026-11-09) ----
+  const num = v => Math.round(v).toLocaleString('ko-KR');
+  function fortLine(w, st) {
+    const f = fortInfo(st, w.rules), weak = f.buildings.filter(b => !b.building).sort((a, b) => a.hp / a.max - b.hp / b.max)[0];
+    const wall = f.wall ? `성벽 ${num(f.wall.hp)} / ${num(f.wall.max)}` : '성벽 없음';
+    return f.buildings.length ? `${wall} · 건물 ${f.buildings.length}채${weak ? `(가장 약한 ${num(weak.hp)} / ${num(weak.max)})` : ''}` : wall;
+  }
 
   // ---- 이름 ----
   const sectorName = sec => `구역 ${SECTOR_NAME[sec.id.split('-')[1]] ?? sec.id}`;
@@ -175,7 +183,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
       o = { kind: 'cast', side, order: 'levy', stronghold: st.id };
     } else o = { kind: 'cast', side, order: aim, x: p.x, z: p.z };
     const r = onOrder(o), name = CAST_TEXT[aim].name;
-    if (r && r.ok) { toast(aim === 'scout' ? name : `${name} — ${r.count}명`); stopAim(); }
+    if (r && r.ok) { toast(`${name} — ${r.count}명`); stopAim(); }
     else if (r) toast(`${name}: ${r.reason}`);
   }
 
@@ -322,6 +330,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
       else if (pk.st.kind === 'land') lines.push(`${placeName(pk.st)} · 금 ${w.rules.lands.gold[pk.st.landKind]}/분${pk.st.landKind === 'choke' ? ` · 시야 ${w.rules.lands.sight.choke} m` : ''} · 우리 병사 ${n}명`);   // 작은 땅
       else if (pk.st.owner === side && pk.st.kind !== 'vp') lines.push(`${placeName(pk.st)} · 서 있는 병사 ${n}명 — 누르면 고르기·짓기`);
       else lines.push(`${placeName(pk.st)} · 우리 병사 ${n}명`);
+      if (pk.kind === 'stronghold' && !isPoint(pk.st) && (pk.st.owner === side || !canSee || canSee(pk.st.x, pk.st.z))) lines.push(fortLine(w, pk.st));   // 성벽·건물 체력(적 거점은 보일 때만)
     }
     if (sel.ids.length) {
       const flow = ctrlHeld || arrowMode, p = view.screenToGround(pointer.x, pointer.y), t = p && targetAt(w, p, flow ? FLOW_SECTOR_PICK : undefined);
@@ -348,8 +357,8 @@ export function createInput(view, canvas, getWorld, side, hooks) {
       lines.push(st ? (ok.ok ? `${name} → ${placeName(st)} — 왼쪽 클릭으로 걸기` : `${name}: ${ok.reason}`) : `${name}: 경보가 뜬 우리 거점을 누르세요 — 오른쪽·Esc 그만두기`);
     } else if (p) {
       view.setHover(null);
-      view.setAim({ x: p.x, z: p.z, r: aim === 'scout' ? w.rules.orders.scout.radius : w.rules.orders.radius, color: CAST_COLORS[aim] });
-      if (aim !== 'scout' && now - aimAt > AIM_PREVIEW_EVERY) {
+      view.setAim({ x: p.x, z: p.z, r: w.rules.orders.radius, color: CAST_COLORS[aim] });
+      if (now - aimAt > AIM_PREVIEW_EVERY) {
         aimAt = now;
         const s = w.soldiers;
         if (!aimFlags || aimFlags.length !== s.capacity) aimFlags = new Uint8Array(s.capacity);
@@ -359,7 +368,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
         aimN = t.ids.length;
       }
       const c = canCast(w, side, aim);
-      lines.push(`${name}${aim === 'scout' ? '' : ` · 걸리는 ${aim === 'volley' ? '궁수' : '병사'} ${aimN}명`} — 왼쪽 클릭으로 걸기, 오른쪽·Esc 그만두기`);
+      lines.push(`${name} · 걸리는 ${aim === 'volley' ? '궁수' : '병사'} ${aimN}명 — 왼쪽 클릭으로 걸기, 오른쪽·Esc 그만두기`);
       if (!c.ok) lines.push(c.reason);
     } else view.setAim(null);
     tipEl.innerHTML = lines.map(l => l.replace(/&/g, '&amp;').replace(/</g, '&lt;')).join('<br>');
@@ -389,7 +398,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     clear: () => select([], null, false),
     aim: toggleAim,                                                  // 명령 줄 단추(hud.js)
     aiming: () => aim,
-    preview: () => (aim && aimFlags && aim !== 'scout' && aim !== 'levy' ? { flags: aimFlags, order: aim } : null),
+    preview: () => (aim && aimFlags && aim !== 'levy' ? { flags: aimFlags, order: aim } : null),
     selectIds: ids => select(ids.filter(i => getWorld().soldiers.alive[i]), null, false),   // 알림 [고르기]
   };
 }

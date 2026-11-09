@@ -51,6 +51,20 @@ export function sendTarget(w, side, p, foe, sectorPick = SEND_SECTOR_PICK) {
   return { kind: 'foe', id: foe, serial: w.soldiers.serial[foe] };
 }
 
+// 거점의 성벽·건물 체력(사용자 2026-11-09 "지금도 건물 성벽 체력은 보여야 할 것 같다").
+// wall = 서 있는 성벽(본진 처음 성벽 또는 다 지은 성벽 칸 — 2단계는 체력 ×2) { hp, max } 또는 null, buildings = 성벽 말고 칸마다 { kind, hp, max, building }.
+export function fortInfo(st, rules) {
+  const B = rules.buildings;
+  let wall = st.wallHp > 0 ? { hp: st.wallHp, max: B.wall.hqHp } : null;
+  const buildings = [];
+  for (const b of st.slots ?? []) {
+    if (!b) continue;
+    if (b.kind === 'wall') { if (!wall && !b.building && b.hp > 0) wall = { hp: b.hp, max: B.wall.hp * (b.level >= 2 ? 2 : 1) }; continue; }
+    buildings.push({ kind: b.kind, hp: b.hp, max: B.hp, building: !!b.building });
+  }
+  return { wall, buildings };
+}
+
 // 쐐기 하나의 살아 있는 병사.
 export function groupTroops(w, grp) {
   const s = w.soldiers;

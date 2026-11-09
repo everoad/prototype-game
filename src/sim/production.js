@@ -122,7 +122,7 @@ function countGarrisons(w) {
     for (let n2 = extra[k].length - 1; n2 >= 0 && st.garrisonWeight > want + 1e-9; n2--) {
       const i = extra[k][n2], wt = r.units[s.side[i]][s.type[i]].weight;
       if (st.garrisonWeight - wt < want - 1e-9) break;
-      if ((s.x[i] - st.x) ** 2 + (s.z[i] - st.z) ** 2 > reach2 || s.target[i] >= 0) continue;   // 싸우는 중이면 둔다
+      if ((s.x[i] - st.x) ** 2 + (s.z[i] - st.z) ** 2 > reach2 || s.target[i] >= 0 || s.rtarget[i] >= 0) continue;   // 싸우는(쏘는) 중이면 둔다
       joinGroup(w, gatheringGroup(w, st, arrowOf(w, st), classOf(s.type[i])), i);
       st.garrisonWeight -= wt;
     }

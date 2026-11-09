@@ -19,6 +19,7 @@ import { stepVision } from './vision.js';
 import { UPGRADES } from './orders.js';
 import { stepCasts } from './casts.js';
 import { stepSiege } from './siege.js';
+import { stepFormation } from './formation.js';
 
 const CROWD_FREE = 4;   // 한 칸(4 m)에 이만큼까지는 붐빔 비용 없음
 const CROWD_COST = 1;   // 그 위로 한 명마다 m
@@ -94,6 +95,7 @@ export function step(w, orders = []) {
   stepProduction(w);                                    // ②
   stepCasts(w);                                         // 끝난 금 명령의 원 지우기
   stepSiege(w);                                         // 다 된 공성병
+  stepFormation(w);                                     // 거점 수비 진형 자리(2초마다)
   rebuildGrid(w.soldiers);
   refreshOneField(w);
   stepGenerals(w);                                      // 장수 걷기·패주·별동대 자리·기운
@@ -126,10 +128,11 @@ export function advance(w, seconds, maxSteps = 5) {
 // 병사들의 목표를 정한다. 구역이면 선분 위 자기 자리(병사 번호로 고정). 명령(ORDER)은 지운다 — 적(foe)이면 ATTACK.
 // 보내기(orders.js send)는 이 뒤에 MOVE를 건다.
 export function setGoal(w, ids, target) {
-  if (target.kind === 'general') { joinGeneral(w, ids, target.id); return; }   // 장수에게: 한도까지 붙고 넘치면 가까운 구역
   const s = w.soldiers;
+  if (target.kind === 'general') { for (const i of ids) s.fmRole[i] = 0; joinGeneral(w, ids, target.id); return; }   // 장수에게: 한도까지 붙고 넘치면 가까운 구역
   for (const i of ids) {
     s.order[i] = ORDER.NONE;
+    s.fmRole[i] = 0;                                              // 목표가 바뀌면 진형 역할이 풀린다(formation.js가 다시 정한다)
     if (target.kind === 'foe') {                                  // 적 병사 공격(사용자 2026-11-08): 그 적의 자리로, 죽었으면 마지막 자리로
       const f = target.id, ok = f >= 0 && f < s.count && s.alive[f] && s.serial[f] === target.serial;
       s.goalKind[i] = GOAL.POINT; s.goalId[i] = -1; s.goalX[i] = ok ? s.x[f] : target.x; s.goalZ[i] = ok ? s.z[f] : target.z;

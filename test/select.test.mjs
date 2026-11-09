@@ -6,7 +6,7 @@ import { spawn, kill, STATE, GOAL } from '../src/sim/soldiers.js';
 import { SPEAR, ARCHER } from '../src/sim/rules.js';
 import { applyOrder } from '../src/sim/orders.js';
 import { spawnGarrisons } from '../src/sim/production.js';
-import { placeTroops, boxTroops } from '../src/view/select.js';
+import { placeTroops, boxTroops, fortInfo } from '../src/view/select.js';
 
 const run = (w, sec) => { for (let k = 0; k < sec * 20; k++) step(w); };
 const empty = () => createWorld({ scenario: 'empty', seed: 1, knobs: { mirror: true } });
@@ -159,4 +159,18 @@ test('오른쪽 클릭 목표(사용자 2026-11-08 "승점을 고르고 적 본�
   const loose = spawn(w.soldiers, 1, SPEAR, 520, 320, w.rules);         // 거점·승점 원 밖의 적
   assert.deepEqual(sendTarget(w, 0, { x: 521, z: 320 }, loose), { kind: 'foe', id: loose, serial: w.soldiers.serial[loose] });
   assert.deepEqual(sendTarget(w, 0, { x: 600, z: 400 }, -1), { kind: 'stronghold', id: 'vpC' }, '적이 없으면 원래 목표');
+});
+
+// 성벽·건물 체력 보이기(사용자 2026-11-09 "지금도 건물 성벽 체력은 보여야 할 것 같다")
+test('fortInfo: 본진 처음 성벽과 건물, 올린 성벽, 성벽 없는 거점', () => {
+  const w = createWorld({ seed: 1, scenario: 'battle' }), st = id => w.strongholds.find(x => x.id === id);
+  const hq = fortInfo(st('hq0'), w.rules);
+  assert.deepEqual(hq.wall, { hp: 20000, max: 20000 });
+  assert.deepEqual(hq.buildings.map(b => [b.kind, b.hp, b.max]), [['archery', 2000, 2000], ['stable', 2000, 2000]]);
+  const f = st('f0L'); f.slots[f.slotCount] = { kind: 'wall', level: 2, hp: 15000 };
+  assert.deepEqual(fortInfo(f, w.rules).wall, { hp: 15000, max: 20000 });
+  const r = st('f0R');
+  assert.equal(fortInfo(r, w.rules).wall, null); assert.deepEqual(fortInfo(r, w.rules).buildings, []);
+  r.slots[r.slotCount] = { kind: 'wall', level: 1, hp: 10000, building: true };
+  assert.equal(fortInfo(r, w.rules).wall, null, '짓는 중인 성벽은 아직 서 있지 않다');
 });

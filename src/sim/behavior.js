@@ -7,6 +7,7 @@ import { nearestEnemy, bestRangedTarget, hitAngleDeg, rangeOf } from './combat.j
 import { CAVALRY, ARCHER } from './rules.js';
 import { STATE, GOAL, ORDER } from './soldiers.js';
 import { garrisonReach } from './defense.js';
+import { FM, fmMember } from './formation.js';
 import { attachedThink, BUFF } from './generals.js';
 
 const SEARCH_EVERY = 8;      // 대상이 없는 병사가 새 적을 찾는 틱 간격(병사마다 엇갈림) — 반지름 40 m 찾기가 가장 비싸다
@@ -19,6 +20,7 @@ export function stepBehavior(w) {
   if (w.tick % 10 === 0 || !w.coarse) buildCoarse(w);
   for (let i = 0; i < s.count; i++) {
     if (!s.alive[i]) continue;
+    if (s.fmRole[i] && !fmMember(w, i)) s.fmRole[i] = 0;              // 쐐기에 듦·거점을 잃음·진형 끔: 다음 자리 나누기를 기다리지 않는다
     if (s.state[i] === STATE.ROUT) {
       if (w.time >= s.routUntil[i]) { s.state[i] = STATE.FRONT; s.target[i] = -1; }
       continue;
@@ -37,8 +39,9 @@ export function stepBehavior(w) {
       const rain = s.volleyUntil[i] > w.time ? { x: s.volleyX[i], z: s.volleyZ[i], r: w.rules.orders.radius } : null;
       const keep = rt >= 0 && s.alive[rt] && (s.x[rt] - s.x[i]) ** 2 + (s.z[rt] - s.z[i]) ** 2 <= rng * rng && (!rain || (s.x[rt] - rain.x) ** 2 + (s.z[rt] - rain.z) ** 2 <= rain.r * rain.r);
       if (!keep) { const inRain = rain ? bestRangedTarget(w, i, rng, rain) : -1; s.rtarget[i] = inRain >= 0 ? inRain : bestRangedTarget(w, i, rng); }
-      if (s.type[i] === ARCHER && s.state[i] !== STATE.GARRISON && !(s.buff[i] & BUFF.HOLD) && maybeKite(w, i)) continue;
+      if (s.type[i] === ARCHER && s.state[i] !== STATE.GARRISON && !(s.buff[i] & BUFF.HOLD) && !s.fmRole[i] && maybeKite(w, i)) continue;   // 거점 진형 궁수는 물러나지 않는다
     }
+    if (s.fmRole[i]) { formationThink(w, i); continue; }                // 거점 수비 진형(formation.js)
     if (s.state[i] === STATE.GARRISON) { garrisonThink(w, i); continue; }
     const sector = s.goalKind[i] === GOAL.SECTOR;
     if (u.charges && sector) { cavalryThink(w, i); continue; }
@@ -325,6 +328,32 @@ function cavTarget(w, i) {
         best = j; bp = p; bd = d2;
       }
   return best;
+}
+
+// 거점 수비 진형(설계서 2026-11-09-flood-stronghold-formation-design.md §3): 바깥 고리(창)는 쫓지 않고 outerReach m 안 적만,
+// 궁수는 근접 과녁 없이 제자리에서 쏘고(원거리 과녁은 위에서 고른다), 안쪽·가운데 고리는 수비대처럼 원 + 40 m 안 적에게 나갔다가 제자리로.
+// 바깥 고리는 원 안으로 뚫고 들어온 적도 친다 — 그 병사에서 거점 반지름 R 안의 적만(한 명이 들어와도 맞은편 고리까지 무너지지 않게).
+function formationThink(w, i) {
+  const s = w.soldiers, role = s.fmRole[i], reach = w.rules.formation.outerReach;
+  if (role === FM.ARCHER) { s.target[i] = -1; return; }
+  if (role === FM.OUTER) {
+    const st = w.strongholds[s.goalId[i]], R2 = st.radius * st.radius;
+    const d2 = j => (s.x[j] - s.x[i]) ** 2 + (s.z[j] - s.z[i]) ** 2;
+    const inside = j => (s.x[j] - st.x) ** 2 + (s.z[j] - st.z) ** 2 <= R2;
+    const t = s.target[i];
+    if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && (d2(t) <= reach * reach || (inside(t) && d2(t) <= R2))) return;
+    s.target[i] = nearestEnemy(s, i, reach);
+    if (s.target[i] >= 0 || !st.nearIds || !(st.weightNear?.[1 - s.side[i]] > 0) || (i + w.tick) % 4 > 1) return;
+    let best = -1, bd = R2;
+    for (const j of st.nearIds) {
+      if (!s.alive[j] || s.side[j] === s.side[i] || !inside(j)) continue;
+      const d = d2(j);
+      if (d <= bd) { bd = d; best = j; }
+    }
+    s.target[i] = best;
+    return;
+  }
+  garrisonThink(w, i);
 }
 
 // 수비대(§6.3 우선순위 3): 거점 원 + 40 m 안의 적에게 달려든다(우리 건물을 치는 적도 이 안에 있다 — 공성 사거리 45 m).

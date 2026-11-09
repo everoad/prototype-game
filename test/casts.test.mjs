@@ -6,7 +6,7 @@ import { spawn, kill, STATE, ORDER, GOAL } from '../src/sim/soldiers.js';
 import { updateVision, canSee } from '../src/sim/vision.js';
 import { SPEAR, ARCHER, INFANTRY } from '../src/sim/rules.js';
 import { applyOrder } from '../src/sim/orders.js';
-import { castOrder, castTargets } from '../src/sim/casts.js';
+import { castOrder, castTargets, CASTS } from '../src/sim/casts.js';
 import { desiredVelocity } from '../src/sim/movement.js';
 
 const run = (w, sec) => { for (let k = 0; k < Math.round(sec * 20); k++) step(w); };
@@ -198,13 +198,12 @@ test('보내면 화살 비가 풀린다', () => {
   assert.ok(ids.every(i => w.soldiers.volleyUntil[i] === 0));
 });
 
-// ---- Task 4: 정찰·긴급 징집 ----
-test('정찰: 원 안 안개가 걷히고 30초 뒤 닫힌다', () => {
+// ---- Task 4: 긴급 징집(정찰은 2026-11-09에 뺐다) ----
+test('정찰 명령은 없다 — 명령은 넷(사용자 2026-11-09: 직접 부대를 돌려 정찰하는 판단이 없어진다)', () => {
   const w = empty(); w.sides[0].gold = 500;
-  updateVision(w); assert.equal(canSee(w, 0, 600, 600), false);
-  assert.ok(castOrder(w, { kind: 'cast', side: 0, order: 'scout', x: 600, z: 600 }).ok);
-  updateVision(w); assert.equal(canSee(w, 0, 600, 600), true); assert.equal(canSee(w, 0, 600, 740), true);
-  run(w, 31); updateVision(w); assert.equal(canSee(w, 0, 600, 600), false);
+  assert.deepEqual(CASTS, ['march', 'drum', 'volley', 'levy']);
+  assert.equal(castOrder(w, { kind: 'cast', side: 0, order: 'scout', x: 600, z: 600 }).reason, '모르는 명령');
+  assert.equal(w.sides[0].gold, 500);
 });
 
 test('긴급 징집: 경보가 없는 거점이면 거절', () => {
@@ -296,13 +295,4 @@ test('결과 알림: 강행군 — 평소보다 더 간 거리', () => {
   run(w, 20.2);
   const n = resultOf(w, 'march'), u = w.rules.units[0][SPEAR].speed;   // 20초 동안 (×2 − ×1) × 빠르기
   assert.ok(n && n.count === 1 && Math.abs(n.extra - u * 20) < u * 3, JSON.stringify(n));
-});
-
-test('결과 알림: 정찰 — 본 적 최대 수', () => {
-  const w = empty(); w.sides[0].gold = 500;
-  block(w, 12, 600, 600, { side: 1 });
-  castOrder(w, { kind: 'cast', side: 0, order: 'scout', x: 600, z: 610 });
-  run(w, 30.2);
-  const n = resultOf(w, 'scout');
-  assert.ok(n && n.seen === 12, JSON.stringify(n));
 });

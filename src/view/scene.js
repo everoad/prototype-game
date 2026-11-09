@@ -12,12 +12,13 @@ const LOOK = {
   fogAlpha: 120,   // 안 보이는 칸의 어둡기(0~255)
   camStart: { tx: 600, tz: 370, h: 700, yaw: -Math.PI / 4 }, camMinH: 120, camMaxH: 900, pitchDeg: 45, fov: 40, maxFov: 80,   // yaw −45°: 대각선 시점(사용자 2026-11-08) — 우리 쪽이 왼쪽 아래, 적이 오른쪽 위
   treeSpacing: 8, rotateStep: Math.PI / 24, arrowWidth: 2.2, arrowOpacity: 0.55, keyPanScreens: 0.3,
-  // 금 명령 원(casts.js): 거는 순간 flash초 동안 채운 원이 옅어지고, 화살 비·정찰은 끝날 때까지 테두리 호가 남은 몫만큼 남는다. 적이 건 원은 보일 때 빨갛게 번쩍만.
+  // 금 명령 원(casts.js): 거는 순간 flash초 동안 채운 원이 옅어지고, 화살 비는 끝날 때까지 테두리 호가 남은 몫만큼 남는다. 적이 건 원은 보일 때 빨갛게 번쩍만.
+  wallRing: { inset: 2, width: 5, color: 0x6b6a64, opacity: 0.9 },   // 성벽이 서 있는 거점: 원 안쪽 두꺼운 회색 고리
   vpPole: { h: 22, r: 0.6, fw: 10, fh: 6 }, landPole: { h: 12, r: 0.45, fw: 6, fh: 4 },   // 승점·작은 땅 깃대
   cast: { flash: 0.6, flashOpacity: 0.35, ringOpacity: 0.9, aimOpacity: 0.95, aimFill: 0.1, pool: 32, ringWidth: 0.06 },
 };
 // 화살 비는 보라(설계서의 주황은 적 편 색과 헷갈려서, 2026-11-09 화면 확인)
-export const CAST_COLORS = { march: 0x7fd3ff, drum: 0xf2c14e, volley: 0xc77dff, scout: 0xffffff, levy: 0x9fe870, enemy: 0xff3b30 };
+export const CAST_COLORS = { march: 0x7fd3ff, drum: 0xf2c14e, volley: 0xc77dff, levy: 0x9fe870, enemy: 0xff3b30 };
 
 export function createScene(canvas, map, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: !!opts.preserveDrawingBuffer });
@@ -90,6 +91,8 @@ export function createScene(canvas, map, opts = {}) {
       const size = s.kind === 'hq' ? 28 : 16;
       const box = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.4, size), new THREE.MeshLambertMaterial({ color }));
       box.position.y = size * 0.2; g.add(box); g.userData.box = box;
+      const W = LOOK.wallRing, wall = new THREE.Mesh(new THREE.RingGeometry(s.radius - W.inset - W.width, s.radius - W.inset, 64), new THREE.MeshBasicMaterial({ color: W.color, transparent: true, opacity: W.opacity, side: THREE.DoubleSide }));
+      wall.rotation.x = -Math.PI / 2; wall.position.y = 0.35; wall.visible = false; g.add(wall); g.userData.wallRing = wall;   // 성벽이 서 있는 동안(main.js)
     }
     g.userData.ring = ring;
     g.position.set(s.x, heightAt(s.x, s.z), -s.z);
@@ -325,7 +328,7 @@ export function createScene(canvas, map, opts = {}) {
         m.visible = true; m.position.set(c.x, y, -c.z); m.scale.setScalar(c.r); m.material.color.setHex(color);
         m.material.opacity = C.flashOpacity * (1 - age / C.flash);
       }
-      if (mine && (c.order === 'volley' || c.order === 'scout') && now < c.until && na < C.pool) {
+      if (mine && c.order === 'volley' && now < c.until && na < C.pool) {
         const m = arcs[na++], frac = Math.max(0.01, (c.until - now) / (c.until - c.at));
         if (Math.abs(frac - m.userData.frac) > 0.01) { m.geometry.dispose(); m.geometry = new THREE.RingGeometry(1 - C.ringWidth, 1, 64, 1, Math.PI / 2, frac * Math.PI * 2); m.userData.frac = frac; }
         m.visible = true; m.position.set(c.x, y + 0.1, -c.z); m.scale.setScalar(c.r); m.material.color.setHex(color);

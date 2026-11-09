@@ -107,7 +107,7 @@ function send(w, o) {
     }
   }
   if (!ids.length && !moved) return fail('보낼 병사가 없다');
-  for (const i of [...ids, ...gone]) s.volleyUntil[i] = 0;                  // 보내면 화살 비가 풀린다(casts.js)
+  for (const i of [...ids, ...gone]) { s.volleyUntil[i] = 0; s.fmRole[i] = 0; }   // 보내면 화살 비·거점 진형 역할이 풀린다
   if (f.kind === 'ids') detachFromGroups(w, ids);                            // 행군 중인 쐐기에서 고른 병사(사용자 2026-11-08)
   const to = t.kind === 'point' ? pointTarget(w, t, ids.length) : t.kind === 'foe' ? foeTarget(w, t) : t;
   if (t.kind === 'general') setGoal(w, ids, t);
@@ -143,7 +143,7 @@ function appendRoute(w, o) {
   const groups = w.groups.filter(g => g.sent && g.state === 'march' && g.members.some(i => chosen.has(i) && s.alive[i] && s.group[i] === g.id));
   const loose = ids.filter(i => s.group[i] < 0 && s.order[i]);
   if (!groups.length && !loose.length) return fail('이어 갈 병력이 없다');
-  for (const i of ids) s.volleyUntil[i] = 0;                                // 보내면 화살 비가 풀린다(casts.js)
+  for (const i of ids) { s.volleyUntil[i] = 0; s.fmRole[i] = 0; }          // 보내면 화살 비·거점 진형 역할이 풀린다
   if (groups.some(g => (g.via?.length ?? 0) >= MAX_VIA)) return fail(`경유점은 ${MAX_VIA}개까지`);
   const n = groups.reduce((a, g) => a + g.members.filter(i => s.alive[i] && s.group[i] === g.id).length, 0) + loose.length;
   const to = t.kind === 'point' ? pointTarget(w, t, n) : t.kind === 'foe' ? foeTarget(w, t) : t;

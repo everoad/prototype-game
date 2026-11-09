@@ -15,6 +15,7 @@ test('막힘 기준: 적 무게가 max(5, 우리 무게)를 넘을 때', () => {
 
 test('수비대가 차고, 원 + 40 m 밖은 쫓지 않고, 막아라는 지휘 한도만큼 끌어왔다가 10초 뒤 돌려보낸다', () => {
   const w = defenseWorld();                                   // 뒤 거점 r0L, 수비대 0
+  w.rules.formation.enabled = false;                          // 수비대 규칙 자체를 본다(창만 선 수비대는 진형에선 바깥 고리라 쫓지 않는다 — formation.test)
   runSeconds(w, 20);
   assert.ok(garrisonWeight(w, 'r0L') >= 60, `수비대 ${garrisonWeight(w, 'r0L')}`);
   const far = enemyAt(w, 'r0L', 120);

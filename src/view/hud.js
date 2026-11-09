@@ -57,14 +57,14 @@ const WHAT = { pikes: '창병 80%', archery: '궁수 80%', stable: '기병 80%',
 const UPGRADE_NAME = ['성벽', '망루'];
 const LEVEL2 = { pikes: '방패벽 창병', archery: '장궁수', stable: '중기병', wall: '체력 ×2', tower: '시야 300 m' };   // 2단계가 주는 것
 export const buildingName = (kind, side) => NAMES[kind]?.[side] ?? kind;
+const hpText = (hp, max) => `${Math.round(hp).toLocaleString('ko-KR')} / ${Math.round(max).toLocaleString('ko-KR')}`;
 
 const ALERT_NAME = { attacked: '공격받음', blocked: '생산 막힘', sighted: '적 발견' };
-// 금 명령(설계서 2026-11-09-flood-gold-orders-design.md): 단추 이름과 한 줄 설명(수치는 규칙에서 읽는다). 차례 = 숫자키 1~5(casts.js CASTS)
+// 금 명령(설계서 2026-11-09-flood-gold-orders-design.md): 단추 이름과 한 줄 설명(수치는 규칙에서 읽는다). 차례 = 숫자키 1~4(casts.js CASTS)
 export const CAST_TEXT = {
   march: { name: '강행군', what: r => `원 안 우리 병사가 ${r.orders.march.seconds}초 동안 ×${r.orders.march.speedMult} 빠르게 걷는다(쐐기는 가운데가 원 안이면 통째로)` },
   drum: { name: '돌격 북', what: r => `원 안 우리 병사가 ${r.orders.drum.seconds}초 동안 화력 ×${r.orders.drum.damageMult}, 무너지지 않고, 근접으로 맞은 적을 ${r.orders.drum.knockback} m 밀어낸다` },
   volley: { name: '화살 비', what: r => `원에 화살이 닿는 서 있는 궁수가 ${r.orders.volley.seconds}초 동안 원 안 적만 ×${r.orders.volley.fireMult} 빠르게 쏜다` },
-  scout: { name: '정찰', what: r => `둘레 ${r.orders.scout.radius} m가 ${r.orders.scout.seconds}초 동안 보인다` },
   levy: { name: '징집', what: r => `"공격받음" 경보가 뜬 우리 거점에 보병 ${Math.round(r.orders.levy.count)}명이 바로 나온다` },
 };
 const PLACE_NAME = { hq: '본진', front: '앞 거점', rear: '뒤 거점' };
@@ -103,7 +103,7 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     <div class="help" id="help"><b>왼쪽</b> 고르기: 거점 가운데·승점 깃대·쐐기를 누르거나 빈 땅에서 끌어 네모(Shift = 더하기, Esc = 풀기). 우리 거점을 누르면 짓기 판.
       <b>오른쪽</b> 고른 병력 보내기 — 거점·승점을 누르면 싸우며 간다, 땅·구역 선을 누르면 이동만(가는 길엔 싸우지 않고 닿은 적만 친다): 거점·승점 원 → 그 거점, 구역 선 위 → 그 구역, 그 밖 → 그 자리. <b>적 병사를 오른쪽 클릭 = 그 적 공격. Alt+오른쪽 = 어택땅(빈 땅으로도 싸우며 간다).</b> Shift+오른쪽 = 누를 때마다 길을 이어 간다(바로 출발, 경유점 3개까지), Ctrl+오른쪽 = 고른 우리 거점의 새 병사 방향.
       경보를 누르면 그 자리로, "막아라"는 가까운 구역에서 500을 돌려 막는다. <b>화면</b> 가운데 버튼 끌기·WASD·방향키·화면 가장자리·미니맵, 휠 = 확대, Q/E = 회전.
-      <b>명령</b> 아래 줄 단추나 1~5 → 땅에 원을 찍어 건다(징집은 경보 뜬 거점). 오른쪽·Esc = 그만두기.</div>
+      <b>명령</b> 아래 줄 단추나 1~4 → 땅에 원을 찍어 건다(징집은 경보 뜬 거점). 오른쪽·Esc = 그만두기.</div>
     <canvas class="mini" id="mini" width="192" height="128"></canvas>
     <div class="alerts" id="alerts"></div>
     <div class="gens" id="gens"></div>
@@ -143,7 +143,8 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     if (open.owner !== 0) { closeBuild(); return; }
     const gold = w.sides[0].gold, def = w.rules.buildings;
     const kindName = { hq: '본진', front: '앞 거점', rear: '뒤 거점' }[open.kind];
-    let html = `<h3><span>${kindName} ${open.id} · 금 ${gold.toFixed(0)}</span><span><button data-flow="1" title="누른 뒤 오른쪽 클릭(또는 Ctrl+오른쪽 클릭)">생산 방향</button> <button data-close="1">닫기</button></span></h3>`;
+    const hqWall = open.kind === 'hq' && open.wallHp > 0 ? ` · 성벽 ${hpText(open.wallHp, def.wall.hqHp)}` : open.kind === 'hq' ? ' · 성벽 무너짐' : '';   // 본진 처음 성벽
+    let html = `<h3><span>${kindName} ${open.id} · 금 ${gold.toFixed(0)}${hqWall}</span><span><button data-flow="1" title="누른 뒤 오른쪽 클릭(또는 Ctrl+오른쪽 클릭)">생산 방향</button> <button data-close="1">닫기</button></span></h3>`;
     open.slots.forEach((b, k) => {
       const up = k >= open.slotCount;
       if (k === open.slotCount) html += `<div class="slot"><span>거점 강화</span></div>`;
@@ -154,7 +155,8 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
       }
       else {
         const left = b.building ? ` (짓는 중 ${Math.max(0, b.doneAt - w.time).toFixed(0)}초)` : '';
-        html += `<b>${buildingName(b.kind, 0)} ${b.level}단계${b.level >= 2 && LEVEL2[b.kind] ? ` (${LEVEL2[b.kind]})` : ''}${left}</b>`;
+        const maxHp = b.kind === 'wall' ? def.wall.hp * (b.level >= 2 ? 2 : 1) : def.hp;
+        html += `<b>${buildingName(b.kind, 0)} ${b.level}단계${b.level >= 2 && LEVEL2[b.kind] ? ` (${LEVEL2[b.kind]})` : ''}${left}</b> <span class="muted">체력 ${hpText(b.hp, maxHp)}</span>`;   // 성벽·건물 체력(사용자 2026-11-09)
         if (!b.building && b.level < 2) { const c = def[b.kind].cost * def.upgradeCost; html += `<button data-kind="upgrade" data-slot="${k}" class="${gold < c ? 'poor' : ''}">올리기 ${c} · ${LEVEL2[b.kind] ?? ''}</button>`; }
         const spent = def[b.kind].cost * (b.level >= 2 ? 1 + def.upgradeCost : 1);
         html += `<button data-kind="demolish" data-slot="${k}">철거 +${(spent * def.demolishRefund).toFixed(0)}</button>`;
@@ -308,7 +310,6 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     if (n.order === 'volley') return `${name} 결과: 적 ${n.kills}명 쓰러뜨림 · 피해 ${dmg}(명령 몫 ${Math.round(n.damage * (1 - 1 / r.orders.volley.fireMult))}) · 궁수 ${n.count}명`;
     if (n.order === 'drum') return `${name} 결과: 적 ${n.kills}명 쓰러뜨림 · ${n.pushed}번 밀어냄 · 피해 ${dmg}(명령 몫 ${Math.round(n.damage * (1 - 1 / r.orders.drum.damageMult))}) · ${n.count}명`;
     if (n.order === 'march') return `${name} 결과: ${n.count}명이 평균 ${n.count ? Math.round(n.extra / n.count) : 0} m 더 감`;
-    if (n.order === 'scout') return `${name} 결과: 적 최대 ${n.seen}명 봄`;
     return `${name} 끝`;
   }
 

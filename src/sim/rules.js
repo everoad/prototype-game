@@ -78,7 +78,6 @@ export function makeRules(knobs = {}) {
       march: { cost: 60, cooldown: 90, seconds: 20, speedMult: 2 },   // 2026-11-09 놀아 본 뒤: 60초 ×1.3은 안 보였다 → 20초 ×2(쐐기가 치고 나가는 게 보이게)
       drum: { cost: 80, cooldown: 120, seconds: 15, damageMult: 1.3, knockback: 3 },   // 돌격 북: 화력 ×1.3, 근접 타격마다 맞은 적 3 m 밀려남(1.5면 15초에 줄이 6 m, 3이면 9 m — 2026-11-09 잼), 안 무너짐(전에는 받는 피해 ×0.7 30초 — 안 보였다)
       volley: { cost: 30, cooldown: 30, seconds: 10, fireMult: 2 },   // 화살 비: 원 안 적만, 쏘는 간격 ÷ fireMult(한 발 피해는 그대로)
-      scout: { cost: 40, cooldown: 60, seconds: 30, radius: 150 },
       levy: { cost: 100, cooldown: 120, count: 150 * s },           // 긴급 징집: "공격받음" 경보가 뜬 우리 거점에만
     },
     siegeBuy: { cost: 150, count: 10 * s, seconds: 20 },             // 공성병 사기: 거점에서 사면 seconds 뒤 그 거점에 count명
@@ -99,6 +98,10 @@ export function makeRules(knobs = {}) {
     capture: { vp: 15, land: 15, front: 60, rear: 60, hq: 120, wallMult: 2, decaySeconds: 30 },
     // 작은 땅(설계서 2026-11-09-flood-small-lands-design.md): 원 반지름 m, 주인에게 1분 금(거점 금에 더한다), 주인 시야 m
     lands: { radius: 30, gold: { edge: 30, deep: 40, choke: 20 }, sight: { owned: 100, choke: 200 } },
+    // 거점 수비 진형(설계서 2026-11-09-flood-stronghold-formation-design.md): 고리 반지름 = 거점 반지름 × 비율(궁수는 바깥 고리 − archerBehind m), 간격·겹 m,
+    // reslotEvery초마다 자리 다시 나누기, 바깥 고리는 outerReach m 안 적만 친다, 꽂힘 = 달려온 기병 피해·못 치는 초·창마다 다시 꽂는 초. enabled = 켜고 끄기(견줘 재기)
+    formation: { enabled: true, outer: 0.8, archerBehind: 2, inner: 0.55, middle: 0.4, gap: { outer: 1.2, archer: 1.2, inner: 1.3, middle: 2 }, layer: { outer: 1.4, archer: 1.4, inner: 1.5, middle: 2 },
+      reslotEvery: 2, outerReach: 3, impale: { damage: 60, stagger: 1, cooldown: 2 } },
     morale: {
       start: 60,
       vpDrain: 3,            // 승점 차이 1개당 1분에

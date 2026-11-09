@@ -71,7 +71,6 @@ export function updateVision(w) {
         stamp(V, side, p.x, p.z, range, range / 2);
       });
     }
-    for (const c of w.casts ?? []) if (c.side === side && c.order === 'scout' && c.until > w.time) stamp(V, side, c.x, c.z, c.r, vr.forestSeen);   // 정찰(casts.js)
     // 본 적 거점의 건물을 기억한다(거점 가운데가 보이면)
     for (const st of w.strongholds) {
       if (st.owner === side || isPoint(st)) continue;
