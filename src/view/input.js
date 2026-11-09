@@ -11,15 +11,16 @@
 // · 화면 이동: 가운데 버튼 끌기·WASD·방향키는 scene.js, 화면 가장자리(0.3초 머문 뒤)는 여기.
 import { placeTroops, groupTroops, boxTroops, remember, stillSelected, rightClickTarget, sendTarget, FLOW_SECTOR_PICK } from './select.js';
 import { CASTS, canCast, castTargets } from '../sim/casts.js';
+import { isPoint } from '../sim/map.js';
 import { CAST_COLORS } from './scene.js';
 import { CAST_TEXT } from './hud.js';
 // · 금 명령(설계서 2026-11-09-flood-gold-orders-design.md §1.3): 명령 줄 단추나 숫자키 1~5로 겨누고, 왼쪽 클릭으로 원을 찍어 건다(징집은 경보 뜬 우리 거점).
 //   같은 단추·키 다시, 오른쪽 클릭, Esc = 그만두기(겨누는 동안 오른쪽 클릭은 보내기가 아니다). 숫자 칸에 칠 때는 키가 먹지 않는다.
 
 const TAP_MOVE = 8;          // px — 이보다 덜 움직이고 떼면 누르기, 넘으면 네모
-const CORE_M = { hq: 32, front: 22, rear: 22, vp: 20 };   // 누르는 범위: 가운데 건물(승점은 깃대) 둘레 m — 건물 자리 26·16 m + 반 폭 + 여유
+const CORE_M = { hq: 32, front: 22, rear: 22, vp: 20, land: 14 };   // 누르는 범위: 가운데 건물(승점은 깃대) 둘레 m — 건물 자리 26·16 m + 반 폭 + 여유
 const CORE_MIN_PX = 20;      // 멀리서 볼 때도 누를 수 있게 화면 최소 반지름 px
-const POLE_TOP = 22, POLE_PX = 28;   // 승점 깃대 높이 m(장면과 같게), 깃대에서 누르는 거리 px
+const POLE_TOP = { vp: 22, land: 12 }, POLE_PX = 28;   // 승점 깃대 높이 m(장면과 같게), 깃대에서 누르는 거리 px
 const WEDGE_PICK_M = 4, WEDGE_PICK_PX = 10;   // 쐐기: 누른 곳에서 가장 가까운 쐐기 병사가 이만큼 안이면 그 쐐기
 const FOE_PICK_M = 6, FOE_PICK_PX = 12;       // 오른쪽 클릭: 누른 곳에서 가장 가까운 보이는 적 병사가 이만큼 안이면 그 적을 공격
 const EDGE_PX = 40, EDGE_WAIT = 0.3, EDGE_SCREENS = 0.35;   // 화면 가장자리 이동: 띠 폭 px, 머문 뒤 초, 가장 끝에서 1초에 흐르는 화면 높이(깊이의 제곱)
@@ -29,6 +30,7 @@ const HOVER_COUNT_EVERY = 300;   // ms — 마우스를 올린 곳의 병사 수
 const SIDE_LR = { L: '왼쪽', C: '가운데', R: '오른쪽' };
 const SECTOR_NAME = { left: '왼쪽', center: '가운데', right: '오른쪽' };
 const KIND_NAME = { hq: '본진', front: '앞 거점', rear: '뒤 거점' };
+const LAND_NAME = { edge: '가장자리 땅', deep: '깊은 땅', choke: '길목' };
 
 export function createInput(view, canvas, getWorld, side, hooks) {
   const { onOrder = () => ({ ok: true }), toast = () => {}, onPlace = () => {}, onSelection = () => {}, canSee = null } = hooks;
@@ -70,7 +72,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     for (const st of w.strongholds) {
       const c = view.worldToScreen(st.x, st.z, 0), px = Math.hypot(cx - c.x, cy - c.y);
       let hit = px <= CORE_MIN_PX || (p && Math.hypot(p.x - st.x, p.z - st.z) <= CORE_M[st.kind]);
-      if (!hit && st.kind === 'vp') hit = segPx(cx, cy, st.x, st.z, POLE_TOP) <= POLE_PX;
+      if (!hit && isPoint(st)) hit = segPx(cx, cy, st.x, st.z, POLE_TOP[st.kind]) <= POLE_PX;
       if (hit && px < bd) { bd = px; best = st; }
     }
     return best;
@@ -117,6 +119,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
   function placeName(st) {
     if (st.kind === 'vp') return `승점 ${SIDE_LR[st.id.slice(2)] ?? st.id}`;
     const who = st.owner === side ? '우리 ' : st.owner === null ? '' : '적 ';
+    if (st.kind === 'land') return `${who}${LAND_NAME[st.landKind]}(${SIDE_LR[st.id.slice(-1)]})`;   // 작은 땅
     return st.kind === 'hq' ? `${who}본진` : `${who}${KIND_NAME[st.kind]}(${SIDE_LR[st.id.slice(-1)]})`;
   }
 
@@ -142,7 +145,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     }
     rebuildFlags();
     route = null; arrowMode = false; showPreview();
-    onPlace(place && place.owner === side && place.kind !== 'vp' ? place : null);
+    onPlace(place && place.owner === side && !isPoint(place) ? place : null);
     onSelection(sel.ids);
   }
   function rebuildFlags() {
@@ -161,7 +164,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
   }
   function stopAim() { aim = null; aimFlags = null; view.setAim(null); view.setHover(null); }
   // 징집: 누른 곳의 거점(가운데 건물 또는 원 안)
-  const strongholdAt = (w, cx, cy, p) => coreAt(w, cx, cy, p) ?? (p && w.strongholds.find(st => st.kind !== 'vp' && Math.hypot(p.x - st.x, p.z - st.z) <= st.radius)) ?? null;
+  const strongholdAt = (w, cx, cy, p) => coreAt(w, cx, cy, p) ?? (p && w.strongholds.find(st => !isPoint(st) && Math.hypot(p.x - st.x, p.z - st.z) <= st.radius)) ?? null;
   function castAt(e) {
     const w = getWorld(), p = view.screenToGround(e.clientX, e.clientY);
     if (!p || w.result) return;
@@ -202,7 +205,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
   }
   function setFlow(w, p) {
     const st = place && w.strongholds.find(x => x.id === place.id);
-    if (!st || st.owner !== side || st.kind === 'vp') { toast('생산 방향: 우리 거점을 먼저 누르세요'); return; }
+    if (!st || st.owner !== side || isPoint(st)) { toast('생산 방향: 우리 거점을 먼저 누르세요'); return; }
     const t = targetAt(w, p, FLOW_SECTOR_PICK);
     if (!t || t.target.kind === 'point') { toast('생산 방향은 구역 선이나 거점으로만'); return; }
     const r = onOrder({ kind: 'arrow', side, from: st.id, target: t.target });
@@ -316,6 +319,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
       if (key !== hoverCount.key || now - hoverCount.at > HOVER_COUNT_EVERY) hoverCount = { key, n: troopsOf(w, pk).length, at: now };
       const n = hoverCount.n;
       if (pk.kind === 'wedge') lines.push(`쐐기 · ${n}명`);
+      else if (pk.st.kind === 'land') lines.push(`${placeName(pk.st)} · 금 ${w.rules.lands.gold[pk.st.landKind]}/분${pk.st.landKind === 'choke' ? ` · 시야 ${w.rules.lands.sight.choke} m` : ''} · 우리 병사 ${n}명`);   // 작은 땅
       else if (pk.st.owner === side && pk.st.kind !== 'vp') lines.push(`${placeName(pk.st)} · 서 있는 병사 ${n}명 — 누르면 고르기·짓기`);
       else lines.push(`${placeName(pk.st)} · 우리 병사 ${n}명`);
     }
@@ -366,7 +370,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
   function arrowsToDraw(w, arrowOf) {
     const out = [];
     for (const st of w.strongholds) {
-      if (st.owner !== side || st.kind === 'vp') continue;
+      if (st.owner !== side || isPoint(st)) continue;
       const t = arrowOf(w, st);
       let to = null;
       if (t.kind === 'sector') { const s = w.map.sectors.find(x => x.id === t.id); to = { x: (s.x0 + s.x1) / 2, z: s.z }; }   // 구역 선 가운데(병사가 서는 곳)

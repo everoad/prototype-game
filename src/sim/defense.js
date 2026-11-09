@@ -4,6 +4,7 @@ import { forEachNear, STATE, GOAL } from './soldiers.js';
 import { setGoal } from './world.js';
 import { retargetGathering } from './groups.js';
 import { arrowOf } from './production.js';
+import { isPoint } from './map.js';
 
 const SCAN_EVERY = 5;          // 틱
 const ALERT_LINGER = 5;        // 조건이 끝나도 경보를 이만큼 더 둔다 s(깜빡임 방지)
@@ -26,6 +27,7 @@ export function stepDefense(w) {
   const s = w.soldiers, r = w.rules;
   for (const st of w.strongholds) {
     if (st.kind === 'vp') continue;
+    const land = st.kind === 'land';                                        // 작은 땅: 무게만 세고 "공격받음" 경보만(집에 남음·막힘·망루 없음)
     const reach = garrisonReach(w, st), reach2 = reach * reach, in2 = st.radius * st.radius;
     const near = [0, 0], inside = [0, 0], ids = st.nearIds ?? (st.nearIds = []);
     ids.length = 0;
@@ -39,7 +41,9 @@ export function stepDefense(w) {
       if (d2 <= in2) inside[s.side[j]] += wt;
     });
     st.near = near;
+    st.weightNear = inside;
     const own = st.owner;
+    if (land) { if (own !== null) raise(w, own, st, 'attacked', inside[1 - own] > 0); continue; }
     st.home = own !== null && overwhelmed(near[1 - own], near[own], r.defense.overwhelmMin);   // 집에 남음
     let blocked = false;
     st.slots.forEach((b, k) => {                                                              // 건물 막힘
@@ -144,7 +148,7 @@ function releaseHolds(w) {
 // 가까운 우리 거점 2곳의 흐름도 그 거점으로 간다. 이미 막는 중이면 못 한다.
 export function holdTheLine(w, o) {
   const k = w.strongholds.findIndex(x => x.id === o.stronghold), st = w.strongholds[k];
-  if (!st || st.kind === 'vp') return { ok: false, reason: '거점이 아니다' };
+  if (!st || isPoint(st)) return { ok: false, reason: '거점이 아니다' };
   if (st.owner !== o.side) return { ok: false, reason: '우리 거점이 아니다' };
   if (w.holds.some(h => h.stronghold === k && h.side === o.side)) return { ok: false, reason: '이미 막는 중' };
   const s = w.soldiers, r = w.rules;
@@ -170,7 +174,7 @@ export function holdTheLine(w, o) {
   }
   setGoal(w, pulled, { kind: 'stronghold', id: st.id });
   for (const i of pulled) { s.state[i] = STATE.GARRISON; s.returnTo[i] = sec; s.target[i] = -1; s.hasPursuit[i] = 0; s.chargeUntil[i] = 0; }
-  const others = w.strongholds.filter(x => x !== st && x.owner === o.side && x.kind !== 'vp')
+  const others = w.strongholds.filter(x => x !== st && x.owner === o.side && !isPoint(x))
     .sort((a, b) => Math.hypot(a.x - st.x, a.z - st.z) - Math.hypot(b.x - st.x, b.z - st.z)).slice(0, 2);
   const flows = others.map(x => ({ from: x.id, prev: w.sides[o.side].arrows.get(x.id) }));
   for (const f of flows) setArrow(w, o.side, f.from, { kind: 'stronghold', id: st.id });

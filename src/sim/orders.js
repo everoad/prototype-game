@@ -6,6 +6,7 @@ import { STATE, GOAL, ORDER } from './soldiers.js';
 import { setGoal, pointFieldId } from './world.js';
 import { castOrder } from './casts.js';
 import { buySiege } from './siege.js';
+import { isPoint } from './map.js';
 
 const fail = reason => ({ ok: false, reason });
 
@@ -28,7 +29,7 @@ export function applyOrder(w, o) {
 function arrow(w, o) {
   const k = w.strongholds.findIndex(s => s.id === o.from);
   const st = w.strongholds[k];
-  if (!st || st.kind === 'vp') return fail('거점이 아니다');
+  if (!st || isPoint(st)) return fail('거점이 아니다');
   if (st.owner !== o.side) return fail('우리 거점이 아니다');
   const t = o.target;
   if (t.kind === 'sector' && st.original !== st.owner) return fail('빼앗은 거점의 병력은 지키기나 장수에게만 간다');
@@ -183,7 +184,7 @@ export const slotKinds = (st, k) => (k < st.slotCount ? MAKERS : [UPGRADES[k - s
 
 function ownSlot(w, o) {
   const st = w.strongholds.find(x => x.id === o.stronghold);
-  if (!st || st.kind === 'vp') return { err: '거점이 아니다' };
+  if (!st || isPoint(st)) return { err: '거점이 아니다' };
   if (st.owner !== o.side) return { err: '우리 거점이 아니다' };
   if (!(o.slot >= 0 && o.slot < st.slots.length)) return { err: '없는 칸' };
   return { st };

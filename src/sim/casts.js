@@ -5,6 +5,7 @@ import { rangeOf } from './combat.js';
 import { INFANTRY } from './rules.js';
 import { setGoal } from './world.js';
 import { canSee } from './vision.js';
+import { isPoint } from './map.js';
 
 export const CASTS = ['march', 'drum', 'volley', 'scout', 'levy'];   // 강행군·돌격 북·화살 비·정찰·긴급 징집 — 단추·숫자키 1~5 차례
 
@@ -20,7 +21,7 @@ export function canCast(w, side, order, strongholdId = null) {
   if (w.time < ready - 1e-9) { const wait = ready - w.time; return { ok: false, reason: `다시 쓰기 ${Math.ceil(wait)}초`, wait }; }
   if (order === 'levy') {                                   // 긴급 징집은 지킬 때만: "공격받음" 경보가 뜬 우리 거점(금으로 병사를 사서 공격에 쓰지 않게)
     const st = w.strongholds.find(x => x.id === strongholdId);
-    if (!st || st.kind === 'vp' || st.owner !== side) return fail('우리 거점이 아니다');
+    if (!st || isPoint(st) || st.owner !== side) return fail('우리 거점이 아니다');
     if (!w.sides[side].alerts.some(a => a.kind === 'attacked' && a.stronghold === st.id)) return fail('경보가 뜬 우리 거점에만');
   }
   return { ok: true };

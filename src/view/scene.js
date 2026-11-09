@@ -13,6 +13,7 @@ const LOOK = {
   camStart: { tx: 600, tz: 370, h: 700, yaw: -Math.PI / 4 }, camMinH: 120, camMaxH: 900, pitchDeg: 45, fov: 40, maxFov: 80,   // yaw −45°: 대각선 시점(사용자 2026-11-08) — 우리 쪽이 왼쪽 아래, 적이 오른쪽 위
   treeSpacing: 8, rotateStep: Math.PI / 24, arrowWidth: 2.2, arrowOpacity: 0.55, keyPanScreens: 0.3,
   // 금 명령 원(casts.js): 거는 순간 flash초 동안 채운 원이 옅어지고, 화살 비·정찰은 끝날 때까지 테두리 호가 남은 몫만큼 남는다. 적이 건 원은 보일 때 빨갛게 번쩍만.
+  vpPole: { h: 22, r: 0.6, fw: 10, fh: 6 }, landPole: { h: 12, r: 0.45, fw: 6, fh: 4 },   // 승점·작은 땅 깃대
   cast: { flash: 0.6, flashOpacity: 0.35, ringOpacity: 0.9, aimOpacity: 0.95, aimFill: 0.1, pool: 32, ringWidth: 0.06 },
 };
 // 화살 비는 보라(설계서의 주황은 적 편 색과 헷갈려서, 2026-11-09 화면 확인)
@@ -79,11 +80,12 @@ export function createScene(canvas, map, opts = {}) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(s.radius - 1.5, s.radius, 64), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.3;
     g.add(ring);
-    if (s.kind === 'vp') {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 22, 6), new THREE.MeshLambertMaterial({ color: 0x5f5e5a }));
-      pole.position.y = 11; g.add(pole);
-      const flag = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 0.4), new THREE.MeshLambertMaterial({ color }));
-      flag.position.set(5, 19, 0); g.add(flag); g.userData.flag = flag;
+    if (s.kind === 'vp' || s.kind === 'land') {                // 승점: 깃대 22 m, 작은 땅: 낮은 깃대(LOOK.landPole)
+      const P = s.kind === 'land' ? LOOK.landPole : LOOK.vpPole;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(P.r, P.r, P.h, 6), new THREE.MeshLambertMaterial({ color: 0x5f5e5a }));
+      pole.position.y = P.h / 2; g.add(pole);
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(P.fw, P.fh, 0.4), new THREE.MeshLambertMaterial({ color }));
+      flag.position.set(P.fw / 2, P.h - P.fh / 2 - 0.5, 0); g.add(flag); g.userData.flag = flag;
     } else {
       const size = s.kind === 'hq' ? 28 : 16;
       const box = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.4, size), new THREE.MeshLambertMaterial({ color }));

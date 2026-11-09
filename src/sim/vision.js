@@ -2,7 +2,7 @@
 // 보는 것: 병사 30 · 장수 50 · 거점 100 · 망루 250(2단계 300) m, 보는 쪽이 언덕 칸이면 ×1.5.
 // 병사는 같은 칸에 있으면 한 번만 찍는다(칸 가운데에서). rules.vision.everyTicks마다 다시 계산한다.
 // 적 건물은 마지막으로 본 모습만 안다(못 본 거점은 '?').
-import { HILL, FOREST } from './map.js';
+import { HILL, FOREST, isPoint } from './map.js';
 import { buildingPos } from './defense.js';
 
 export function sightRange(kind, onHill, rules) {
@@ -63,7 +63,8 @@ export function updateVision(w) {
     for (const g of w.generals ?? []) if (g.side === side) stamp(V, side, g.x, g.z, sightRange('general', terrainAt(map, g.x, g.z) === HILL, r), vr.forestSeen);
     for (const st of w.strongholds) {
       if (st.owner !== side) continue;
-      stamp(V, side, st.x, st.z, sightRange('stronghold', false, r), vr.forestSeen);
+      const range = st.kind === 'land' ? (st.landKind === 'choke' ? r.lands.sight.choke : r.lands.sight.owned) : sightRange('stronghold', false, r);   // 작은 땅 100 m, 길목 200 m
+      stamp(V, side, st.x, st.z, range, vr.forestSeen);
       st.slots.forEach((b, k) => {                                          // 다 지은 망루
         if (!b || b.kind !== 'tower' || b.building) return;
         const p = buildingPos(st, k), range = sightRange(b.level >= 2 ? 'tower2' : 'tower', terrainAt(map, p.x, p.z) === HILL, r);
@@ -73,7 +74,7 @@ export function updateVision(w) {
     for (const c of w.casts ?? []) if (c.side === side && c.order === 'scout' && c.until > w.time) stamp(V, side, c.x, c.z, c.r, vr.forestSeen);   // 정찰(casts.js)
     // 본 적 거점의 건물을 기억한다(거점 가운데가 보이면)
     for (const st of w.strongholds) {
-      if (st.owner === side || st.kind === 'vp') continue;
+      if (st.owner === side || isPoint(st)) continue;
       if (canSee(w, side, st.x, st.z)) V.memory[side].set(st.id, st.slots.map(b => (b ? { kind: b.kind, level: b.level, building: !!b.building } : null)));
     }
   }
@@ -104,7 +105,7 @@ export function visibleEnemies(w, side) {
 export function knownBuildings(w, side) {
   const out = new Map(), mem = w.vision?.memory[side];
   for (const st of w.strongholds) {
-    if (st.owner === side || st.kind === 'vp') out.set(st.id, st.slots.map(b => (b ? { kind: b.kind, level: b.level, building: !!b.building } : null)));
+    if (st.owner === side || isPoint(st)) out.set(st.id, st.slots.map(b => (b ? { kind: b.kind, level: b.level, building: !!b.building } : null)));
     else out.set(st.id, mem?.get(st.id) ?? '?');
   }
   return out;

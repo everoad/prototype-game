@@ -2,7 +2,7 @@
 // ① 명령 ② 생산 ③ 판단 ④ 걸음·밀기·되돌리기 ⑤ 싸움 ⑥ 점령·사기 ⑦ 시야 ⑧ 사건 정리.
 import { makeRules } from './rules.js';
 import { makeRng } from './rng.js';
-import { buildMap } from './map.js';
+import { buildMap, isPoint } from './map.js';
 import { createSoldiers, rebuildGrid, hash01, GOAL, STATE, ORDER } from './soldiers.js';
 import { computeField } from './flowfield.js';
 import { stepMovement } from './movement.js';
@@ -29,7 +29,7 @@ export function createWorld({ knobs = {}, seed = 1, scenario = 'battle' } = {}) 
   const capacity = Math.ceil(rules.cap * 3) + 2000;
   const soldiers = createSoldiers(capacity, map, rules.movement.cellSize);
   const strongholds = map.strongholds.map(d => ({
-    ...d, slotCount: d.slots, slots: Array.from({ length: d.slots + (d.kind === 'vp' ? 0 : UPGRADES.length) }, () => null),   // 생산 칸 + 강화 칸(성벽·망루)
+    ...d, slotCount: d.slots, slots: Array.from({ length: d.slots + (isPoint(d) ? 0 : UPGRADES.length) }, () => null),   // 생산 칸 + 강화 칸(성벽·망루). 점(승점·땅)은 칸이 없다
     gauge: d.side === 0 ? 100 : d.side === 1 ? -100 : 0, owner: d.side, original: d.side,
     wallHp: 0, garrisonWeight: 0, levyAcc: 0, produced: 0, weightIn: [0, 0],
   }));
@@ -65,7 +65,7 @@ function setupBattle(w) {
 // 거점 주인이 바뀌면 원래 주인이 사기를 잃는다(승점은 계속 깎는 쪽이라 사건이 없다).
 function onOwnerChange(w, st, old, nu) {
   w.events.push({ kind: 'captured', stronghold: st.id, from: old, to: nu });
-  if (old === null || st.kind === 'vp') return;
+  if (old === null || isPoint(st)) return;                 // 점(승점·작은 땅)은 건물·사기와 상관없다
   st.slots.forEach((b, k) => { if (b) { burnBuilding(w, st, k, old); } });   // 빼앗기면 남은 건물이 모두 탄다(§3.3)
   if (st.kind !== 'hq') st.wallHp = 0;
   const kind = st.kind === 'hq' ? 'loseHq' : st.original === old ? (st.kind === 'front' ? 'loseFront' : 'loseRear') : 'loseCaptured';

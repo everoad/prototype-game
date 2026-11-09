@@ -3,6 +3,7 @@
 import { spawn } from './soldiers.js';
 import { SIEGE } from './rules.js';
 import { setGoal } from './world.js';
+import { isPoint } from './map.js';
 
 const fail = reason => ({ ok: false, reason });
 const NOTICE_SECONDS = 30;   // 알림(w.notices)을 이만큼 지난 뒤 지운다
@@ -11,7 +12,7 @@ const NOTICE_SECONDS = 30;   // 알림(w.notices)을 이만큼 지난 뒤 지운
 export function buySiege(w, o) {
   if (w.result) return fail('판이 끝났다');
   const st = w.strongholds.find(x => x.id === o.stronghold), def = w.rules.siegeBuy;
-  if (!st || st.kind === 'vp' || st.owner !== o.side) return fail('우리 거점이 아니다');
+  if (!st || isPoint(st) || st.owner !== o.side) return fail('우리 거점이 아니다');
   if (st.siegeAt != null) return fail('이미 사는 중');
   if (w.sides[o.side].gold < def.cost - 1e-9) return fail('금이 모자라다');
   w.sides[o.side].gold -= def.cost;

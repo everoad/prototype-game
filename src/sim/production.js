@@ -1,6 +1,7 @@
 // 생산(설계서 §3.1): 양은 땅에서 — 거점마다 무게/분으로 징집, 상한이면 멈춘다. 건물의 종류 바꾸기는 Task 8에서 더한다.
 import { spawn, STATE, GOAL } from './soldiers.js';
 import { SPEAR, ARCHER, CAVALRY, INFANTRY, TYPES } from './rules.js';
+import { isPoint } from './map.js';
 import { setGoal } from './world.js';
 import { gatheringGroup, joinGroup, formationOffsets, classOf } from './groups.js';
 import { garrisonReach } from './defense.js';
@@ -115,7 +116,7 @@ function countGarrisons(w) {
   }
   if (!release) return;
   w.strongholds.forEach((st, k) => {
-    if (st.owner === null || st.kind === 'vp' || st.home || !w.production) return;
+    if (st.owner === null || isPoint(st) || st.home || !w.production) return;
     const want = garrisonWant(r, st);
     const reach2 = garrisonReach(w, st) ** 2;
     for (let n2 = extra[k].length - 1; n2 >= 0 && st.garrisonWeight > want + 1e-9; n2--) {
@@ -137,8 +138,9 @@ export function stepProduction(w) {
   countGarrisons(w);
   for (const st of w.strongholds) {
     if (st.owner === null) continue;
-    w.sides[st.owner].gold += r.gold.perMinute[st.kind === 'hq' ? 'hq' : st.kind === 'vp' ? 'vp' : 'stronghold'] / 60 * dt;   // 수입
-    if (st.kind === 'vp') continue;
+    const income = st.kind === 'land' ? r.lands.gold[st.landKind] : r.gold.perMinute[st.kind === 'hq' ? 'hq' : st.kind === 'vp' ? 'vp' : 'stronghold'];   // 작은 땅은 종류마다(거점 금에 더한다)
+    w.sides[st.owner].gold += income / 60 * dt;   // 수입
+    if (isPoint(st)) continue;                         // 점(승점·땅)은 생산하지 않는다
     for (const b of st.slots) if (b && b.building && w.time >= b.doneAt) b.building = false;   // 짓기 마침
     const perMin = st.kind === 'hq' ? r.levy.hq : r.levy.stronghold;
     const gain = perMin / 60 * dt, shares = conversionShares(st.slots, r);
@@ -202,7 +204,7 @@ export function spawnSectorArmy(w, sec, weight, mix) {
 export function spawnGarrisons(w) {
   const r = w.rules;
   for (const st of w.strongholds) {
-    if (st.owner === null || st.kind === 'vp') continue;
+    if (st.owner === null || isPoint(st)) continue;
     const want = st.kind === 'hq' ? r.garrison.hq : r.garrison.stronghold;
     const wt = r.units[st.owner][INFANTRY].weight;
     const ids = [];

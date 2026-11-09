@@ -4,6 +4,7 @@ import { ARCHER, CAVALRY } from './rules.js';
 import { buildingTarget } from './production.js';
 import { BUFF } from './generals.js';
 import { activeCast } from './casts.js';
+import { isPoint } from './map.js';
 
 const DEG = 180 / Math.PI;
 
@@ -218,7 +219,7 @@ function splash(w, dmg, from, center, scale, aura) {
 function hitBuilding(w, i, u, interval, every = 1) {
   const s = w.soldiers, r = w.rules;
   for (const st of w.strongholds) {
-    if (st.owner === null || st.owner === s.side[i] || st.kind === 'vp') continue;
+    if (st.owner === null || st.owner === s.side[i] || isPoint(st)) continue;
     const d = Math.hypot(s.x[i] - st.x, s.z[i] - st.z);
     if (d > (u.siege ? st.radius * 0.5 + u.range : st.radius)) continue;
     const bt = buildingTarget(st);

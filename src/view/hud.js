@@ -68,6 +68,8 @@ export const CAST_TEXT = {
   levy: { name: '징집', what: r => `"공격받음" 경보가 뜬 우리 거점에 보병 ${Math.round(r.orders.levy.count)}명이 바로 나온다` },
 };
 const PLACE_NAME = { hq: '본진', front: '앞 거점', rear: '뒤 거점' };
+const LAND_NAME = { edge: '가장자리 땅', deep: '깊은 땅', choke: '길목' };   // 작은 땅(2026-11-09)
+const placeLabel = st => (st.kind === 'land' ? LAND_NAME[st.landKind] : PLACE_NAME[st.kind] ?? '');
 const NOTICE_SHOW = 15;   // 공성병 준비 알림을 보이는 초
 const RESULT_TOAST_MS = 6000;   // 금 명령 결과 알림을 보이는 ms
 
@@ -81,6 +83,7 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
       <span class="muted" id="time"></span>
       <span class="muted" id="counts"></span>
       <span class="muted" id="vp"></span>
+      <span class="muted" id="lands" title="쥔 작은 땅 수(우리 : 적)"></span>
       <b id="gold"></b>
       <span class="muted" id="decisions" title="30초 넘게 유지된 명령(바로 되돌린 잡일은 세지 않는다, 설계서 §10.5-3)"></span>
       <span class="muted" id="fps"></span>
@@ -185,9 +188,9 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     noticeIds = notes.map(n => n.ids);
     $('alerts').innerHTML = list.map(a => {
       const st = w.strongholds.find(x => x.id === a.stronghold);
-      let act = a.kind === 'sighted' ? '' : holding.has(a.stronghold) ? '<span class="muted">막는 중</span>' : `<button data-hold="${a.stronghold}">막아라</button>`;
-      if (a.kind === 'attacked') act += ` <button data-levy="${a.stronghold}">징집 ${cost}</button>`;   // 금 명령 긴급 징집(casts.js) — 상태는 levyButtons가
-      return `<div class="alert ${a.kind}" data-st="${a.stronghold}"><span>${ALERT_NAME[a.kind]} · ${PLACE_NAME[st.kind] ?? ''} ${a.stronghold}</span><span>${act}</span></div>`;
+      let act = a.kind === 'sighted' || st.kind === 'land' ? '' : holding.has(a.stronghold) ? '<span class="muted">막는 중</span>' : `<button data-hold="${a.stronghold}">막아라</button>`;   // 땅에는 막아라·징집 없음
+      if (a.kind === 'attacked' && st.kind !== 'land') act += ` <button data-levy="${a.stronghold}">징집 ${cost}</button>`;   // 금 명령 긴급 징집(casts.js) — 상태는 levyButtons가
+      return `<div class="alert ${a.kind}" data-st="${a.stronghold}"><span>${ALERT_NAME[a.kind]} · ${placeLabel(st)} ${a.stronghold}</span><span>${act}</span></div>`;
     }).join('') + notes.map((n, k) => `<div class="alert notice" data-st="${n.stronghold}"><span>공성병 ${n.ids.length}명 준비됨 · ${n.stronghold}</span><button data-pick="${k}">고르기</button></div>`).join('');
     levyButtons(w);
   }
@@ -325,6 +328,7 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     const t = w.time, mm = Math.floor(t / 60), ss = Math.floor(t % 60);
     $('time').textContent = `${mm}:${String(ss).padStart(2, '0')}`;
     $('vp').textContent = `승점 ${w.vpCount[0]} : ${w.vpCount[1]}`;
+    { const n = [0, 0]; for (const st of w.strongholds) if (st.kind === 'land' && (st.owner === 0 || st.owner === 1)) n[st.owner]++; $('lands').textContent = `땅 ${n[0]} : ${n[1]}`; }
     if (fps) $('fps').textContent = `FPS ${fps.toFixed(0)}`;
     $('gold').textContent = `금 ${w.sides[0].gold.toFixed(0)}`;
     if (w.metrics) $('decisions').textContent = `결정 ${w.metrics.decisions[0]} (${(w.metrics.decisions[0] / Math.max(1, w.time / 60)).toFixed(1)}/분)`;

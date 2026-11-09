@@ -96,7 +96,9 @@ export function makeRules(knobs = {}) {
       demolishRefund: 0.5,
       maxShare: 0.8,
     },
-    capture: { vp: 15, front: 60, rear: 60, hq: 120, wallMult: 2, decaySeconds: 30 },
+    capture: { vp: 15, land: 15, front: 60, rear: 60, hq: 120, wallMult: 2, decaySeconds: 30 },
+    // 작은 땅(설계서 2026-11-09-flood-small-lands-design.md): 원 반지름 m, 주인에게 1분 금(거점 금에 더한다), 주인 시야 m
+    lands: { radius: 30, gold: { edge: 30, deep: 40, choke: 20 }, sight: { owned: 100, choke: 200 } },
     morale: {
       start: 60,
       vpDrain: 3,            // 승점 차이 1개당 1분에
@@ -160,6 +162,8 @@ export function makeRules(knobs = {}) {
       // 금 명령(2026-11-09): 돌격 북은 둘레 50 m에 맞붙은 우리 병사가 drumMinOwn명 넘고 보이는 적 무게가 더 클 때, 화살 비는 둘레 50 m 보이는 적 무게가 volleyMinWeight 넘을 때.
       // 후보는 병사 sample명에 하나, 판단마다 maxCandidates개까지(1초마다 도는 AI가 무겁지 않게)
       casts: { drumMinOwn: 100 * s, volleyMinWeight: 30 * s, sample: 8, maxCandidates: 40 },
+      // 작은 땅(2026-11-09): 길목 먹기(판 시각 chokeAt초부터, chokeRetry초마다 무게 chokeWeight), 땅 기습 무게, 땅 지키기(경보 defendDelay초 뒤 보이는 적 × defendRatio, defendEvery초에 한 번), 기습 점수에서 땅 금/분 1당 빼는 무게
+      lands: { chokeAt: 30, chokeRetry: 60, chokeWeight: 100 * s, raidWeightMin: 100 * s, raidWeightMax: 200 * s, defendRatio: 1.5, defendEvery: 30, defendDelay: 2, valueWeight: 5 * s },
       holdLate: 15, holdLateGauge: 50, holdSpeed: 3 * k.speed,             // 막아라 뒤 이만큼 지나도 밀리고 게이지가 이 밑이면 다른 곳 병력도 · 끌려오는 걸음 m/s
       personality: {
         aggressive: { vp: 1.5, threat: 1, push: 1.3, raidEvery: 1 },

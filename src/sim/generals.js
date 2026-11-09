@@ -11,6 +11,7 @@ import { retargetGathering } from './groups.js';
 import { arrowOf } from './production.js';
 import { computeField, fieldAim, fieldDir } from './flowfield.js';
 import { seenByStructures } from './vision.js';
+import { isPoint } from './map.js';
 
 export const BUFF = { AURA: 1, CHARGE: 2, HOLD: 4 };
 const AURA_RADIUS = 120;      // 기운 받을 병사를 찾는 반경 m
@@ -38,7 +39,7 @@ export const isRouted = (w, g) => w.time < g.routedUntil;
 // 장수가 우리 거점이나 우리 구역 선분에서 assembleRange(150 m) 안인가 — 흐름이 장수에게 모이는 조건(§3.4).
 export function generalInReach(w, g) {
   const R = w.rules.general.assembleRange;
-  for (const st of w.strongholds) if (st.owner === g.side && st.kind !== 'vp' && Math.hypot(st.x - g.x, st.z - g.z) <= R) return true;
+  for (const st of w.strongholds) if (st.owner === g.side && !isPoint(st) && Math.hypot(st.x - g.x, st.z - g.z) <= R) return true;
   for (const sec of w.map.sectors) {
     if (sec.side !== g.side) continue;
     const px = Math.max(sec.x0, Math.min(sec.x1, g.x));

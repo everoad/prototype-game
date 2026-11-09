@@ -2,6 +2,7 @@
 // 살아 있는·싸우는 병사, 구역마다 정면이 빈 시간, 맞닿은 병사의 수명, 결정 수(30초 넘게 유지된 명령).
 // 세상에 붙여 쓴다: w.metrics = makeStats(); 판정이 틱마다 w.metrics.tick(w)를 부른다(사건은 틱마다 지워지므로). w.stats는 전투 측정 도구(tools/)가 쓴다.
 import { STATE } from './soldiers.js';
+import { isPoint } from './map.js';
 
 export const STATS = {
   sampleEvery: 1,      // 표본 s
@@ -78,7 +79,7 @@ export function makeStats({ seed = 0 } = {}) {
 
   function finish(w) {
     const r = w.result, endTime = w.time;
-    const lost = [0, 1].map(side => captures.filter(c => c.from === side && w.strongholds.find(x => x.id === c.stronghold)?.kind !== 'vp').map(c => c.at));
+    const lost = [0, 1].map(side => captures.filter(c => c.from === side && !isPoint(w.strongholds.find(x => x.id === c.stronghold) ?? { kind: 'vp' })).map(c => c.at));   // 점(승점·땅)을 잃은 것은 무너짐이 아니다
     const collapses = [];
     lost.forEach((times, side) => {
       let last = -Infinity;

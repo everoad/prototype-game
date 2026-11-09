@@ -3,6 +3,7 @@
 import { makeAi } from './ai.js';
 import { STATE } from './soldiers.js';
 import { CAVALRY, ARCHER } from './rules.js';
+import { isPoint } from './map.js';
 
 export const BOTS = {
   blob: '① 처음에 우리 병력을 한 덩어리로 가운데를 뚫어 적 본진으로(60초마다 다시)',
@@ -23,7 +24,7 @@ function troops(w, side, type = -1) {
     if (s.alive[i] && s.side[i] === side && (type < 0 || s.type[i] === type) && s.state[i] !== STATE.GARRISON && s.state[i] !== STATE.FLEE && s.state[i] !== STATE.ATTACHED) out.push(i);
   return out;
 }
-const own = (w, side) => w.strongholds.filter(st => st.owner === side && st.kind !== 'vp');
+const own = (w, side) => w.strongholds.filter(st => st.owner === side && !isPoint(st));
 const keep = kinds => o => kinds.includes(o.kind);
 
 export function makeBot(name, side, rng) {

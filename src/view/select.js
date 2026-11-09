@@ -1,6 +1,7 @@
 // 고르기(설계서 §5.2, 사용자 2026-11-08): 무엇을 누르면 어느 병사가 골라지나. 세상을 읽기만 한다(화면 좌표는 project로 받는다).
 import { troopsAt } from '../sim/orders.js';
 import { STATE } from '../sim/soldiers.js';
+import { isPoint } from '../sim/map.js';
 
 // 고를 수 없는 병사: 수비대(늘 남는다)·장수에 붙은 병사·달아나는 병사.
 export const selectable = (s, i, side) => s.alive[i] && s.side[i] === side && s.state[i] !== STATE.GARRISON && s.state[i] !== STATE.ATTACHED && s.state[i] !== STATE.FLEE;
@@ -12,7 +13,7 @@ export function placeTroops(w, side, place) {
   if (place.kind === 'sector') return troopsAt(w, side, place);
   const k = w.strongholds.findIndex(x => x.id === place.id), st = w.strongholds[k];
   if (!st) return [];
-  if (st.owner === side && st.kind !== 'vp') {
+  if (st.owner === side && !isPoint(st)) {
     const out = troopsAt(w, side, place);
     for (const g of w.groups) if (g.origin === k && g.side === side && g.state === 'gather') for (const i of g.members) if (s.alive[i] && s.group[i] === g.id) out.push(i);
     return out;
