@@ -24,7 +24,7 @@ export function createSoldiers(capacity, map, cellSize) {
     target: new Int32Array(capacity), rtarget: new Int32Array(capacity), contact: new Int32Array(capacity),   // contact = 지금 닿은 적(−1)
     throughUntil: f32(), throughX: f32(), throughZ: f32(),
     leaveUntil: f32(),                    // 맞붙어 있다 보낸 병사: 이때까지 바로 옆 적만 친다
-    marchUntil: f32(), drumUntil: f32(),  // 금 명령(casts.js): 강행군·전쟁 북이 끝나는 때
+    marchUntil: f32(), drumUntil: f32(),  // 금 명령(casts.js): 강행군·돌격 북이 끝나는 때
     volleyUntil: f32(), volleyX: f32(), volleyZ: f32(),   // 화살 비가 끝나는 때와 원 가운데
     idleAt: f32(),
     staggerUntil: f32(),                  // 기병 돌격에 맞아 이때까지 못 친다

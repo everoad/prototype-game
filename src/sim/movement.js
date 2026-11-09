@@ -12,6 +12,9 @@ const HOLD_RADIUS = 3;    // 정면에 선 병사는 자리에서 이만큼 밀�
 const FIGHT_PUSH = 0.3; // 싸우는 병사는 밀려도 덜 움직인다(떨림 감쇠, 보완 6)
 const PUSH_SHARE = 0.8; // 겹친 길이 중 한 틱에 스스로 비키는 몫(둘이 같이 비키니 합은 1을 넘는다 — 빽빽한 곳에서 간격 0.6 m 이상 유지)
 
+// 돌진·강행군 빠르기 배율(겹치면 큰 쪽 하나).
+const boost = (w, s, i) => Math.max(s.chargeUntil[i] > w.time ? w.rules.group.chargeSpeed : 1, s.marchUntil[i] > w.time ? w.rules.orders.march.speedMult : 1);
+
 export function desiredVelocity(w, i) {
   const s = w.soldiers;
   if (s.state[i] === STATE.ROUT) {                         // 국지 무너짐: 우리 쪽으로 달아난다(§6.3a)
@@ -58,12 +61,12 @@ export function desiredVelocity(w, i) {
     const dx = s.x[t] - s.x[i], dz = s.z[t] - s.z[i], d = Math.hypot(dx, dz);
     if (d <= (ranged ? rng * 0.85 : w.rules.melee.reach * 0.9)) return [0, 0];
     let sp = w.rules.units[s.side[i]][s.type[i]].speed * w.map.speedMult(s.x[i], s.z[i]);
-    if (s.chargeUntil[i] > w.time || s.marchUntil[i] > w.time) sp *= w.rules.group.chargeSpeed;   // 돌진·강행군
+    sp *= boost(w, s, i);   // 돌진·강행군
     return [dx / d * sp, dz / d * sp];
   }
   if (s.hasPursuit[i]) {                                   // 정면 병사: 120 m 안 적 무리로 다가간다
     const dx = s.pursuitX[i] - s.x[i], dz = s.pursuitZ[i] - s.z[i], d = Math.hypot(dx, dz);
-    if (d > 1) { const sp = w.rules.units[s.side[i]][s.type[i]].speed * w.map.speedMult(s.x[i], s.z[i]) * (s.marchUntil[i] > w.time ? w.rules.group.chargeSpeed : 1); return [dx / d * sp, dz / d * sp]; }   // 강행군도 먹는다
+    if (d > 1) { const sp = w.rules.units[s.side[i]][s.type[i]].speed * w.map.speedMult(s.x[i], s.z[i]) * (s.marchUntil[i] > w.time ? w.rules.orders.march.speedMult : 1); return [dx / d * sp, dz / d * sp]; }   // 강행군도 먹는다
   }
   const kind = s.goalKind[i];
   if (kind === GOAL.SECTOR && s.state[i] === STATE.FRONT) return [0, 0];   // 정면 병사는 자리로 돌아가지 않고 선다
@@ -77,7 +80,7 @@ export function desiredVelocity(w, i) {
   }
   let speed = w.rules.units[s.side[i]][s.type[i]].speed * w.map.speedMult(s.x[i], s.z[i]) * Math.min(1, d / SLOW_RADIUS);
   if (s.group[i] >= 0 && d > 2) speed *= w.rules.group.catchUp;                 // 쐐기 자리에서 처지면 따라잡는다
-  if (s.chargeUntil[i] > w.time || s.marchUntil[i] > w.time) speed *= w.rules.group.chargeSpeed;   // 쐐기가 풀린 돌진·강행군(casts.js)
+  speed *= boost(w, s, i);   // 쐐기가 풀린 돌진·강행군(casts.js)
   if (d < NEAR_DIRECT || pastFieldTarget(w, i, gx, gz)) return [dx / d * speed, dz / d * speed];
   const field = fieldFor(w, i);
   if (!field) return [dx / d * speed, dz / d * speed];

@@ -254,10 +254,10 @@ export function stepGroups(w) {
     while (turn < -Math.PI) turn += 2 * Math.PI;
     const maxTurn = g.turnRateDeg * Math.PI / 180 * dt;
     grp.heading += Math.max(-maxTurn, Math.min(maxTurn, turn));
-    // 강행군(casts.js)은 병사에 붙는다: 쐐기는 모든 멤버에게 강행군이 남아 있을 때만 빠르다(쐐기를 새로 짜도 이어지고, 늦게 낀 병사를 끌고 가지 않는다). 돌진과 겹쳐 곱하지 않는다.
+    // 강행군(casts.js)은 병사에 붙는다: 쐐기는 모든 멤버에게 강행군이 남아 있을 때만 빠르다(쐐기를 새로 짜도 이어지고, 늦게 낀 병사를 끌고 가지 않는다). 돌진과 겹치면 큰 쪽 하나.
     let slowest = Infinity, march = Infinity;
     for (const i of grp.members) if (s.alive[i]) { slowest = Math.min(slowest, r.units[s.side[i]][s.type[i]].speed); march = Math.min(march, s.marchUntil[i]); }
-    const v = (isFinite(slowest) ? slowest : 3) * (g.speedFactorByClass?.[grp.cls] ?? g.speedFactor) * (grp.charging || (isFinite(march) && march > w.time) ? g.chargeSpeed : 1) * w.map.speedMult(grp.x, grp.z);
+    const v = (isFinite(slowest) ? slowest : 3) * (g.speedFactorByClass?.[grp.cls] ?? g.speedFactor) * Math.max(grp.charging ? g.chargeSpeed : 1, isFinite(march) && march > w.time ? r.orders.march.speedMult : 1) * w.map.speedMult(grp.x, grp.z);
     grp.vx = Math.cos(grp.heading) * v; grp.vz = Math.sin(grp.heading) * v;
     const nx = grp.x + grp.vx * dt, nz = grp.z + grp.vz * dt;
     if (w.map.walkable(nx, nz)) { grp.x = nx; grp.z = nz; }

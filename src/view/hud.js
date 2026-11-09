@@ -61,14 +61,15 @@ export const buildingName = (kind, side) => NAMES[kind]?.[side] ?? kind;
 const ALERT_NAME = { attacked: '공격받음', blocked: '생산 막힘', sighted: '적 발견' };
 // 금 명령(설계서 2026-11-09-flood-gold-orders-design.md): 단추 이름과 한 줄 설명(수치는 규칙에서 읽는다). 차례 = 숫자키 1~5(casts.js CASTS)
 export const CAST_TEXT = {
-  march: { name: '강행군', what: r => `원 안 우리 병사가 ${r.orders.march.seconds}초 동안 ×${r.group.chargeSpeed} 빠르게 걷는다(쐐기는 가운데가 원 안이면 통째로)` },
-  drum: { name: '전쟁 북', what: r => `원 안 우리 병사가 ${r.orders.drum.seconds}초 동안 받는 피해 ×${r.general.holdTaken}, 무너지지 않는다` },
+  march: { name: '강행군', what: r => `원 안 우리 병사가 ${r.orders.march.seconds}초 동안 ×${r.orders.march.speedMult} 빠르게 걷는다(쐐기는 가운데가 원 안이면 통째로)` },
+  drum: { name: '돌격 북', what: r => `원 안 우리 병사가 ${r.orders.drum.seconds}초 동안 화력 ×${r.orders.drum.damageMult}, 무너지지 않고, 근접으로 맞은 적을 ${r.orders.drum.knockback} m 밀어낸다` },
   volley: { name: '화살 비', what: r => `원에 화살이 닿는 서 있는 궁수가 ${r.orders.volley.seconds}초 동안 원 안 적만 ×${r.orders.volley.fireMult} 빠르게 쏜다` },
   scout: { name: '정찰', what: r => `둘레 ${r.orders.scout.radius} m가 ${r.orders.scout.seconds}초 동안 보인다` },
   levy: { name: '징집', what: r => `"공격받음" 경보가 뜬 우리 거점에 보병 ${Math.round(r.orders.levy.count)}명이 바로 나온다` },
 };
 const PLACE_NAME = { hq: '본진', front: '앞 거점', rear: '뒤 거점' };
 const NOTICE_SHOW = 15;   // 공성병 준비 알림을 보이는 초
+const RESULT_TOAST_MS = 6000;   // 금 명령 결과 알림을 보이는 ms
 
 export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFocus = () => {}, getSelection = () => [], onArmFlow = () => {}, onMinimap = () => {}, getFootprint = () => null, seeAt = null, onAim = () => {}, getAim = () => null, onSelectIds = () => {} }) {
   const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
@@ -296,6 +297,18 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     }
   }
 
+  // 금 명령 결과 한 줄(개발용 — 실제 게임에선 뺄 수 있다, 사용자 2026-11-09 "개발 단계에서는 수치를 봐야겠네")
+  const shownResults = new WeakSet();
+  // 피해는 걸린 병사가 낸 전체 — "명령 몫"은 화살 비 = 전체 × (1 − 1/fireMult), 돌격 북 = 전체 × (1 − 1/damageMult)
+  function resultText(n, r) {
+    const name = CAST_TEXT[n.order]?.name ?? n.order, dmg = Math.round(n.damage);
+    if (n.order === 'volley') return `${name} 결과: 적 ${n.kills}명 쓰러뜨림 · 피해 ${dmg}(명령 몫 ${Math.round(n.damage * (1 - 1 / r.orders.volley.fireMult))}) · 궁수 ${n.count}명`;
+    if (n.order === 'drum') return `${name} 결과: 적 ${n.kills}명 쓰러뜨림 · ${n.pushed}번 밀어냄 · 피해 ${dmg}(명령 몫 ${Math.round(n.damage * (1 - 1 / r.orders.drum.damageMult))}) · ${n.count}명`;
+    if (n.order === 'march') return `${name} 결과: ${n.count}명이 평균 ${n.count ? Math.round(n.extra / n.count) : 0} m 더 감`;
+    if (n.order === 'scout') return `${name} 결과: 적 최대 ${n.seen}명 봄`;
+    return `${name} 끝`;
+  }
+
   let lastCounts = 0;
   function update(w, fps) {
     if (performance.now() - lastMini > 250) { lastMini = performance.now(); drawMini(w); }
@@ -328,6 +341,12 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
       $('toasts').appendChild(el); toasts.push({ el, until: performance.now() + 4000 });
     }
     w.moraleLog.length = 0;
+    for (const n of w.notices) {                              // 금 명령 결과(개발용, casts.js): 끝난 명령마다 한 줄
+      if (n.side !== 0 || n.kind !== 'castResult' || shownResults.has(n)) continue;
+      shownResults.add(n);
+      const el = document.createElement('div'); el.className = 'toast'; el.textContent = resultText(n, w.rules);
+      $('toasts').appendChild(el); toasts.push({ el, until: performance.now() + RESULT_TOAST_MS });
+    }
     const now = performance.now();
     while (toasts.length && toasts[0].until < now) toasts.shift().el.remove();
     if (w.result) {

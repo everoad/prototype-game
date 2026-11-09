@@ -149,7 +149,7 @@ function pursue(w, i) {
 // 국지 무너짐: 8 m 안 적 무게가 우리(자기 포함)의 routRatio배 이상이고 체력이 routHp 아래면 routSeconds 동안 달아난다.
 function maybeRout(w, i) {
   const s = w.soldiers, b = w.rules.behavior;
-  if (s.state[i] === STATE.GARRISON || s.state[i] === STATE.FLEE || s.wedge[i] || (s.buff[i] & BUFF.HOLD) || s.drumUntil[i] > w.time) return false;   // 버텨라·전쟁 북: 물러나지 않음
+  if (s.state[i] === STATE.GARRISON || s.state[i] === STATE.FLEE || s.wedge[i] || (s.buff[i] & BUFF.HOLD) || s.drumUntil[i] > w.time) return false;   // 버텨라·돌격 북: 물러나지 않음
   const maxHp = w.rules.units[s.side[i]][s.type[i]].hp;
   if (s.hp[i] >= maxHp * b.routHp) return false;
   if (w.time < s.routUntil[i] + b.routCooldown) return false;   // 돌아온 뒤 잠깐은 다시 달아나지 않는다

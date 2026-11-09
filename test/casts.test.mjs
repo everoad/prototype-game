@@ -75,50 +75,61 @@ test('판이 끝나면 명령을 못 건다', () => {
 test('applyOrder가 cast를 casts.js로 넘기고 원을 남긴다', () => {
   const w = empty(); w.sides[0].gold = 500;
   assert.ok(applyOrder(w, { kind: 'cast', side: 0, order: 'drum', x: 300, z: 300 }).ok);
-  assert.equal(w.casts.length, 1); assert.equal(w.casts[0].r, 50); assert.equal(w.casts[0].until, w.time + 30);
+  assert.equal(w.casts.length, 1); assert.equal(w.casts[0].r, 50); assert.equal(w.casts[0].until, w.time + w.rules.orders.drum.seconds);
 });
 
 // ---- Task 2: 강행군·전쟁 북 ----
 const centroid = (w, ids) => { const s = w.soldiers, a = ids.filter(i => s.alive[i]); return { x: a.reduce((k, i) => k + s.x[i], 0) / a.length, z: a.reduce((k, i) => k + s.z[i], 0) / a.length }; };
 
-test('강행군: 행군하는 쐐기가 1.3배로 걷는다', () => {
+test('강행군: 행군하는 쐐기가 2배로 걷는다', () => {
   const go = cast => {
     const w = empty(); w.sides[0].gold = 500;
     const ids = block(w, 30, 300, 200, { type: INFANTRY });
     applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids }, target: { kind: 'point', x: 300, z: 700 } });
     run(w, 1); const c0 = centroid(w, ids);
     if (cast) assert.ok(castOrder(w, { kind: 'cast', side: 0, order: 'march', x: c0.x, z: c0.z }).ok);
-    run(w, 20); return centroid(w, ids).z - c0.z;
+    run(w, 15); return centroid(w, ids).z - c0.z;
   };
   const ratio = go(true) / go(false);
-  assert.ok(ratio > 1.2 && ratio < 1.4, `비 ${ratio.toFixed(2)}`);
+  assert.ok(ratio > 1.8 && ratio < 2.2, `비 ${ratio.toFixed(2)}`);
 });
 
-test('강행군: 쐐기 밖 병사도 빠르고, 60초 뒤 원래대로', () => {
+test('강행군: 쐐기 밖 병사도 빠르고, 20초 뒤 원래대로', () => {
   const w = empty(); w.sides[0].gold = 500;
   const [i] = block(w, 1, 300, 100); setGoal(w, [i], { kind: 'point', x: 300, z: 790 });
   run(w, 2); let z = w.soldiers.z[i]; run(w, 2); const base = w.soldiers.z[i] - z;
   castOrder(w, { kind: 'cast', side: 0, order: 'march', x: w.soldiers.x[i], z: w.soldiers.z[i] });
   z = w.soldiers.z[i]; run(w, 2); const fast = w.soldiers.z[i] - z;
-  assert.ok(fast / base > 1.2, `빠르기 ${(fast / base).toFixed(2)}`);
+  assert.ok(fast / base > 1.8, `빠르기 ${(fast / base).toFixed(2)}`);
   assert.ok(w.soldiers.marchUntil[i] > w.time);
-  run(w, 60); assert.ok(w.soldiers.marchUntil[i] <= w.time);
+  run(w, 18.1); assert.ok(w.soldiers.marchUntil[i] <= w.time);
 });
 
-test('전쟁 북: 걸린 병사는 받는 피해 ×0.7, 장수 버프가 지워져도 그대로', () => {
-  const loss = drum => {
+test('돌격 북: 걸린 병사의 화력 ×1.3', () => {
+  const dealt = drum => {                                        // 첫 타(1초에 한 번)만 — 밀어내기 전에 잰다
     const w = empty(); w.sides[0].gold = 500;
-    const ours = block(w, 10, 300, 300); block(w, 10, 300, 301, { side: 1 });      // 닿는 거리(1.2 m) 안
+    block(w, 10, 300, 300); const foes = block(w, 10, 300, 301, { side: 1 });   // 닿는 거리(1.2 m) 안
     if (drum) castOrder(w, { kind: 'cast', side: 0, order: 'drum', x: 305, z: 300 });
-    const hp0 = ours.reduce((a, i) => a + w.soldiers.hp[i], 0);
-    for (let k = 0; k < 100; k++) { for (const i of ours) w.soldiers.buff[i] = 0; step(w); }
-    return hp0 - ours.reduce((a, i) => a + Math.max(0, w.soldiers.hp[i]), 0);
+    const hp0 = foes.reduce((a, i) => a + w.soldiers.hp[i], 0);
+    run(w, 1.05);
+    return hp0 - foes.reduce((a, i) => a + Math.max(0, w.soldiers.hp[i]), 0);
   };
-  const ratio = loss(true) / loss(false);
-  assert.ok(ratio > 0.6 && ratio < 0.8, `비 ${ratio.toFixed(2)}`);
+  const ratio = dealt(true) / dealt(false);
+  assert.ok(Math.abs(ratio - 1.3) < 0.05, `비 ${ratio.toFixed(2)}`);
 });
 
-test('전쟁 북: 걸린 병사는 무너지지 않는다(안 걸리면 무너질 자리)', () => {
+test('돌격 북: 근접으로 맞은 적이 밀려나 줄이 앞으로 나간다', () => {
+  const shift = drum => {
+    const w = empty(); w.sides[0].gold = 500;
+    block(w, 30, 300, 300, { type: INFANTRY }); const foes = block(w, 30, 300, 304.4, { side: 1, type: INFANTRY });
+    if (drum) castOrder(w, { kind: 'cast', side: 0, order: 'drum', x: 306, z: 302 });
+    const z0 = centroid(w, foes).z; run(w, 5); return centroid(w, foes).z - z0;
+  };
+  const d = shift(true) - shift(false);
+  assert.ok(d > 3, `적 줄이 더 밀려난 거리 ${d.toFixed(1)} m`);
+});
+
+test('돌격 북: 걸린 병사는 무너지지 않는다(안 걸리면 무너질 자리)', () => {
   const routs = drum => {
     const w = empty(); w.sides[0].gold = 500;
     const ours = block(w, 5, 300, 300); for (const i of ours) w.soldiers.hp[i] = 100;   // 체력 60% 아래
@@ -131,7 +142,7 @@ test('전쟁 북: 걸린 병사는 무너지지 않는다(안 걸리면 무너�
   assert.equal(routs(true), 0);
 });
 
-test('전쟁 북이 걸린 궁수도 근접 적이 오면 뒷걸음질한다', () => {
+test('돌격 북이 걸린 궁수도 근접 적이 오면 뒷걸음질한다', () => {
   const w = empty(); w.sides[0].gold = 500;
   const [a] = block(w, 1, 300, 300, { type: ARCHER }); block(w, 5, 300, 306, { side: 1 });
   castOrder(w, { kind: 'cast', side: 0, order: 'drum', x: 300, z: 300 });
@@ -216,16 +227,16 @@ test('긴급 징집: 경보가 뜬 거점에 보병 150명이 서고, 다시 쓰
 });
 
 // ---- 최종 검토에서 고친 것 ----
-test('강행군: 서 있는 병사에 걸고 보내도 새 쐐기가 1.3배로 걷는다', () => {
+test('강행군: 서 있는 병사에 걸고 보내도 새 쐐기가 2배로 걷는다', () => {
   const go = cast => {
     const w = empty(); w.sides[0].gold = 500;
     const ids = block(w, 30, 300, 200, { type: INFANTRY }), c0 = centroid(w, ids);
     if (cast) assert.ok(castOrder(w, { kind: 'cast', side: 0, order: 'march', x: c0.x, z: c0.z }).ok);
     applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids }, target: { kind: 'point', x: 300, z: 700 } });
-    run(w, 1); const c1 = centroid(w, ids); run(w, 20); return centroid(w, ids).z - c1.z;
+    run(w, 1); const c1 = centroid(w, ids); run(w, 15); return centroid(w, ids).z - c1.z;
   };
   const ratio = go(true) / go(false);
-  assert.ok(ratio > 1.2 && ratio < 1.4, `비 ${ratio.toFixed(2)}`);
+  assert.ok(ratio > 1.8 && ratio < 2.2, `비 ${ratio.toFixed(2)}`);
 });
 
 test('강행군: 행군 쐐기에 걸고 다른 곳으로 다시 보내도 빠르다', () => {
@@ -236,11 +247,11 @@ test('강행군: 행군 쐐기에 걸고 다른 곳으로 다시 보내도 빠�
     run(w, 1); const c0 = centroid(w, ids);
     if (cast) castOrder(w, { kind: 'cast', side: 0, order: 'march', x: c0.x, z: c0.z });
     applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids }, target: { kind: 'point', x: 500, z: 700 } });
-    run(w, 1); const c1 = centroid(w, ids); run(w, 20); const c2 = centroid(w, ids);
+    run(w, 1); const c1 = centroid(w, ids); run(w, 15); const c2 = centroid(w, ids);
     return Math.hypot(c2.x - c1.x, c2.z - c1.z);
   };
   const ratio = go(true) / go(false);
-  assert.ok(ratio > 1.2 && ratio < 1.4, `비 ${ratio.toFixed(2)}`);
+  assert.ok(ratio > 1.8 && ratio < 2.2, `비 ${ratio.toFixed(2)}`);
 });
 
 test('강행군: 정면 병사가 적 무리로 다가갈 때(쫓기)도 빠르다', () => {
@@ -250,5 +261,48 @@ test('강행군: 정면 병사가 적 무리로 다가갈 때(쫓기)도 빠르�
   const base = Math.hypot(...desiredVelocity(w, i));
   s.marchUntil[i] = w.time + 60;
   const fast = Math.hypot(...desiredVelocity(w, i));
-  assert.ok(base > 0 && Math.abs(fast / base - w.rules.group.chargeSpeed) < 1e-6, `${base} → ${fast}`);
+  assert.ok(base > 0 && Math.abs(fast / base - w.rules.orders.march.speedMult) < 1e-6, `${base} → ${fast}`);
+});
+
+// ---- 결과 알림(개발용, 2026-11-09): 효과가 끝나면 무엇을 했는지 ----
+const resultOf = (w, order) => w.notices.find(n => n.kind === 'castResult' && n.side === 0 && n.order === order);
+
+test('결과 알림: 화살 비가 끝나면 쓰러뜨린 적과 피해가 나온다', () => {
+  const w = empty(); w.sides[0].gold = 500;
+  w.rules.units[1][INFANTRY].speed = 0; w.rules.units[1][INFANTRY].dps = 0;
+  block(w, 10, 300, 300, { type: ARCHER, cols: 5 });
+  const foes = block(w, 5, 300, 338, { side: 1, type: INFANTRY }); for (const i of foes) w.soldiers.hp[i] = 30;
+  castOrder(w, { kind: 'cast', side: 0, order: 'volley', x: 300, z: 350 });
+  run(w, 9); assert.equal(resultOf(w, 'volley'), undefined, '끝나기 전에는 없다');
+  run(w, 1.2);
+  const n = resultOf(w, 'volley');
+  assert.ok(n, '끝나면 나온다'); assert.equal(n.kills, 5); assert.ok(n.damage >= 150, `피해 ${n.damage}`); assert.equal(n.count, 10);
+});
+
+test('결과 알림: 돌격 북 — 밀어낸 횟수와 피해', () => {
+  const w = empty(); w.sides[0].gold = 500;
+  block(w, 30, 300, 300, { type: INFANTRY }); block(w, 30, 300, 304.4, { side: 1, type: INFANTRY });
+  castOrder(w, { kind: 'cast', side: 0, order: 'drum', x: 306, z: 302 });
+  run(w, 15.2);
+  const n = resultOf(w, 'drum');
+  assert.ok(n && n.pushed > 0 && n.damage > 0, JSON.stringify(n));
+});
+
+test('결과 알림: 강행군 — 평소보다 더 간 거리', () => {
+  const w = empty(); w.sides[0].gold = 500;
+  const [i] = block(w, 1, 300, 100); setGoal(w, [i], { kind: 'point', x: 300, z: 790 });
+  run(w, 2);
+  castOrder(w, { kind: 'cast', side: 0, order: 'march', x: w.soldiers.x[i], z: w.soldiers.z[i] });
+  run(w, 20.2);
+  const n = resultOf(w, 'march'), u = w.rules.units[0][SPEAR].speed;   // 20초 동안 (×2 − ×1) × 빠르기
+  assert.ok(n && n.count === 1 && Math.abs(n.extra - u * 20) < u * 3, JSON.stringify(n));
+});
+
+test('결과 알림: 정찰 — 본 적 최대 수', () => {
+  const w = empty(); w.sides[0].gold = 500;
+  block(w, 12, 600, 600, { side: 1 });
+  castOrder(w, { kind: 'cast', side: 0, order: 'scout', x: 600, z: 610 });
+  run(w, 30.2);
+  const n = resultOf(w, 'scout');
+  assert.ok(n && n.seen === 12, JSON.stringify(n));
 });

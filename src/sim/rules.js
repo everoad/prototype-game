@@ -73,11 +73,10 @@ export function makeRules(knobs = {}) {
     garrison: { hq: 150 * s, stronghold: 60 * s },
     gold: { start: 200, perMinute: { hq: 60, stronghold: 30, vp: 20 } },
     // 금 명령(설계서 2026-11-09-flood-gold-orders-design.md): 땅에 반지름 radius m 원을 찍어 건다. cost 금, cooldown 초(명령마다·편마다), seconds 효과 초.
-    // 강행군 빠르기 ×1.3 = group.chargeSpeed, 전쟁 북 받는 피해 ×0.7 = general.holdTaken을 읽는다.
     orders: {
       radius: 50,
-      march: { cost: 60, cooldown: 90, seconds: 60 },
-      drum: { cost: 80, cooldown: 120, seconds: 30 },
+      march: { cost: 60, cooldown: 90, seconds: 20, speedMult: 2 },   // 2026-11-09 놀아 본 뒤: 60초 ×1.3은 안 보였다 → 20초 ×2(쐐기가 치고 나가는 게 보이게)
+      drum: { cost: 80, cooldown: 120, seconds: 15, damageMult: 1.3, knockback: 3 },   // 돌격 북: 화력 ×1.3, 근접 타격마다 맞은 적 3 m 밀려남(1.5면 15초에 줄이 6 m, 3이면 9 m — 2026-11-09 잼), 안 무너짐(전에는 받는 피해 ×0.7 30초 — 안 보였다)
       volley: { cost: 30, cooldown: 30, seconds: 10, fireMult: 2 },   // 화살 비: 원 안 적만, 쏘는 간격 ÷ fireMult(한 발 피해는 그대로)
       scout: { cost: 40, cooldown: 60, seconds: 30, radius: 150 },
       levy: { cost: 100, cooldown: 120, count: 150 * s },           // 긴급 징집: "공격받음" 경보가 뜬 우리 거점에만
@@ -158,7 +157,7 @@ export function makeRules(knobs = {}) {
       pushFrom: 60, pushEvery: 10, pushMinWeight: 100 * s, pushCooldown: 90,   // 밀어 넣기: 이 판 시각부터, 구역 병력이 앞 적 × 성향 push 넘고 이 무게 넘으면 깃발에서 보낸다
       raidGatherMax: 120, raidMinShare: 0.5, raidRetry: 30, raidSweep: 10, raidWallPenalty: 200 * s, raidProdBonus: 50 * s, raidDistPenalty: 50 * s, raidRoutes: true, raidFrontPenalty: 1000 * s, raidPassPenalty: 300 * s,   // raidDistPenalty: 100 m마다 더하는 무게(지도 반대편 대각선 기습 방지)
       regroupSeconds: 30, regroupEvery: 10,                      // 승점·빼앗은 거점에 선 병력: 적 없이 이만큼 지나면 가까운 구역으로
-      // 금 명령(2026-11-09): 전쟁 북은 둘레 50 m에 맞붙은 우리 병사가 drumMinOwn명 넘고 보이는 적 무게가 더 클 때, 화살 비는 둘레 50 m 보이는 적 무게가 volleyMinWeight 넘을 때.
+      // 금 명령(2026-11-09): 돌격 북은 둘레 50 m에 맞붙은 우리 병사가 drumMinOwn명 넘고 보이는 적 무게가 더 클 때, 화살 비는 둘레 50 m 보이는 적 무게가 volleyMinWeight 넘을 때.
       // 후보는 병사 sample명에 하나, 판단마다 maxCandidates개까지(1초마다 도는 AI가 무겁지 않게)
       casts: { drumMinOwn: 100 * s, volleyMinWeight: 30 * s, sample: 8, maxCandidates: 40 },
       holdLate: 15, holdLateGauge: 50, holdSpeed: 3 * k.speed,             // 막아라 뒤 이만큼 지나도 밀리고 게이지가 이 밑이면 다른 곳 병력도 · 끌려오는 걸음 m/s

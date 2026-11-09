@@ -13,8 +13,8 @@ const LOOK = {
   ],
   brightness: [0.8, 1.3, 0.72, 1.12, 0.55],
   selectedTint: 2.6,   // 고른 병사 색 배율(사용자 2026-11-08 PC 조작)
-  // 금 명령 효과 빛깔: 병사 색을 그 명령 색(scene.js CAST_COLORS — 강행군 하늘색·전쟁 북 금빛·화살 비 보라) 쪽으로 effectMix만큼 섞는다
-  // (곱하기만 하면 초록 병사에 금빛이 안 보인다). 차례: 고른 병사 > 겨누기 미리 보기 > 화살 비 > 전쟁 북 > 강행군
+  // 금 명령 효과 빛깔: 병사 색을 그 명령 색(scene.js CAST_COLORS — 강행군 하늘색·돌격 북 금빛·화살 비 보라) 쪽으로 effectMix만큼 섞는다
+  // (곱하기만 하면 초록 병사에 금빛이 안 보인다). 차례: 고른 병사 > 겨누기 미리 보기 > 화살 비 > 돌격 북 > 강행군
   effectOrders: ['march', 'drum', 'volley'], effectMix: 0.7,
   corpseColor: 0x55503f, corpseSeconds: 5, corpseMax: 6000, corpseRadius: 0.55,
   shotMax: 4000, shotSeconds: 0.45, shotLength: 3, shotColors: [0x0c447c, 0x412402],

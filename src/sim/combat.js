@@ -3,6 +3,7 @@ import { kill, STATE } from './soldiers.js';
 import { ARCHER, CAVALRY } from './rules.js';
 import { buildingTarget } from './production.js';
 import { BUFF } from './generals.js';
+import { activeCast } from './casts.js';
 
 const DEG = 180 / Math.PI;
 
@@ -106,11 +107,16 @@ export function stepCombat(w) {
   const s = w.soldiers, r = w.rules, dt = r.dt, reach = r.melee.reach, interval = r.melee.interval;
   const dmg = w._dmg && w._dmg.length >= s.capacity ? w._dmg : (w._dmg = new Float32Array(s.capacity));
   dmg.fill(0, 0, s.count);
+  // 금 명령 결과(casts.js, 개발용 알림): 화살 비·돌격 북이 낸 피해·밀어냄, 이 틱에 맞은 병사를 누가 쳤나(1 화살 비, 2 돌격 북) — 쓰러지면 그 명령 몫
+  const credit = w._credit && w._credit.length >= s.capacity ? w._credit : (w._credit = new Uint8Array(s.capacity));
+  credit.fill(0, 0, s.count);
+  const act = [0, 1].map(side => ({ volley: activeCast(w, side, 'volley'), drum: activeCast(w, side, 'drum') }));
   for (let i = 0; i < s.count; i++) {
     if (!s.alive[i]) continue;
     if (s.state[i] === STATE.ROUT) { s.inContact[i] = 0; continue; }   // 달아나는 병사는 치지 않는다
     const u = r.units[s.side[i]][s.type[i]];
-    const bf = s.buff[i], aura = bf ? (bf & BUFF.AURA ? r.general.aura : 1) * (bf & BUFF.CHARGE ? r.general.chargeMult : 1) : 1;   // 장수 기운·돌격
+    const bf = s.buff[i], drum = s.drumUntil[i] > w.time;
+    const aura = (bf ? (bf & BUFF.AURA ? r.general.aura : 1) * (bf & BUFF.CHARGE ? r.general.chargeMult : 1) : 1) * (drum ? r.orders.drum.damageMult : 1);   // 장수 기운·돌격, 돌격 북(casts.js)
     const t = nearestEnemy(s, i, reach);
     s.inContact[i] = t >= 0 ? 1 : 0;
     s.contact[i] = t;
@@ -135,6 +141,7 @@ export function stepCombat(w) {
       const dodge = tu.charges && s.vx[rt] * s.vx[rt] + s.vz[rt] * s.vz[rt] > (tu.speed * 0.6) ** 2 ? r.charge.dodge : 1;   // 달리는 기병은 반만 맞는다
       const hit = dodge * interval * damagePerSecond({ atkSide: s.side[i], atkType: s.type[i], tgtSide: s.side[rt], tgtType: s.type[rt], angleDeg: hitAngleDeg(s, i, rt), guardDeg: guardAngleDeg(s, i, rt), ranged: true, charging: false, building: false, aura, tgtElite: s.elite[rt] === 1 }, r);
       dmg[rt] += hit;
+      { const a = act[s.side[i]]; if (rain && a.volley) { a.volley.stats.damage += hit; credit[rt] = 1; } else if (drum && a.drum) { a.drum.stats.damage += hit; credit[rt] = 2; } }
       if (w.stats) note(w, i, rt, hit, true);
       if (u.splash > 0) splash(w, dmg, i, rt, interval * (u.splashShare ?? 1), aura);
       if (w.shots.length < 8000) w.shots.push({ x1: s.x[i], z1: s.z[i], x2: s.x[rt], z2: s.z[rt], side: s.side[i], t: w.time });
@@ -157,18 +164,21 @@ export function stepCombat(w) {
       angleDeg: hitAngleDeg(s, i, t), ranged: false, charging: impact, building: false, aura, unbraced: !s.braced[i], tgtElite: s.elite[t] === 1,
     }, r);
     dmg[t] += mhit;
+    const drumCast = drum ? act[s.side[i]].drum : null;
+    if (drumCast) { drumCast.stats.damage += mhit; credit[t] = 2; }
     if (w.stats) note(w, i, t, mhit, false);
-    if (impact) {                                                    // 맞은 적은 밀려난다
+    if (impact || drum) {                                            // 맞은 적은 밀려난다(쐐기 충격·돌격, 돌격 북은 타격마다)
       s.chargeHit[i] = 0;
-      const dx = s.x[t] - s.x[i], dz = s.z[t] - s.z[i], l = Math.hypot(dx, dz) || 1, k = r.group.knockback;
+      const dx = s.x[t] - s.x[i], dz = s.z[t] - s.z[i], l = Math.hypot(dx, dz) || 1, k = impact ? r.group.knockback : r.orders.drum.knockback;
       const nx = s.x[t] + dx / l * k, nz = s.z[t] + dz / l * k;
-      if (w.map.walkable(nx, nz)) { s.x[t] = nx; s.z[t] = nz; }
+      if (w.map.walkable(nx, nz)) { s.x[t] = nx; s.z[t] = nz; if (!impact && drumCast) drumCast.stats.pushed++; }
     }
   }
   for (let i = 0; i < s.count; i++) {
     if (!s.alive[i] || dmg[i] === 0) continue;
-    s.hp[i] -= dmg[i] * (s.buff[i] & BUFF.HOLD || s.drumUntil[i] > w.time ? r.general.holdTaken : 1);   // 버텨라·전쟁 북: 받는 피해 ×0.7
+    s.hp[i] -= dmg[i] * (s.buff[i] & BUFF.HOLD ? r.general.holdTaken : 1);   // 버텨라: 받는 피해 ×0.7
     if (s.hp[i] <= 0) {
+      if (credit[i]) { const c = act[1 - s.side[i]][credit[i] === 1 ? 'volley' : 'drum']; if (c) c.stats.kills++; }
       w.deaths.push({ x: s.x[i], z: s.z[i], side: s.side[i], type: s.type[i], t: w.time });
       if (w.stats) w.stats.kills.push({ side: s.side[i], type: s.type[i], by: w.stats.lastHit[i], t: w.time });
       if (w.stats?.onDeath) w.stats.onDeath(i);

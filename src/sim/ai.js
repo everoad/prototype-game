@@ -294,7 +294,7 @@ function weighAround(w, side, x, z, R) {
   return out;
 }
 
-// 전쟁 북 자리: 맞붙은 우리 병사를 후보로, 둘레에 맞붙은 우리가 drumMinOwn명 넘고 보이는 적 무게가 우리보다 큰 곳 중 차이가 가장 큰 곳.
+// 돌격 북 자리: 맞붙은 우리 병사를 후보로, 둘레에 맞붙은 우리가 drumMinOwn명 넘고 보이는 적 무게가 우리보다 큰 곳 중 차이가 가장 큰 곳.
 function drumSpot(w, A) {
   const s = w.soldiers, side = A.side, C = w.rules.ai.casts, R = w.rules.orders.radius;
   let best = null, bs = 0, seen = 0, cands = 0;
