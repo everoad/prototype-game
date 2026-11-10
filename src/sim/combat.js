@@ -12,7 +12,13 @@ const DEG = 180 / Math.PI;
 export function damagePerSecond(o, rules) {
   const a = rules.units[o.atkSide][o.atkType];
   if (o.building) return a.dps * (a.siege ? rules.buildingDamage.siege : rules.buildingDamage.other) * (o.aura ?? 1);
-  let dps = a.dps * (o.aura ?? 1);
+  return a.dps * (o.aura ?? 1) * damageMult(o, rules);
+}
+
+// 화력에 곱하는 배율(돌격·상성·방패·옆뒤) — 투석기 돌(catapult.js)은 한 발 피해에 이것만 곱한다.
+export function damageMult(o, rules) {
+  const a = rules.units[o.atkSide][o.atkType];
+  let dps = 1;
   if (o.charging) dps *= rules.charge.mult;
   if (!(o.unbraced && a.holdsLine)) for (const [atk, tgt, m] of rules.counters) {   // 버티지 못하는 창은 상성 없음
     if (atk !== o.atkType || tgt !== o.tgtType) continue;
@@ -28,7 +34,7 @@ export function damagePerSecond(o, rules) {
   return dps;
 }
 
-// 원거리 목표: 적 궁수 > 공성병 > 기병 > 그 밖, 같으면 가까운 쪽(맞쏘기 우선, §6.1).
+// 원거리 목표: 적 궁수 > 기병 > 그 밖(투석기 포함), 같으면 가까운 쪽(맞쏘기 우선, §6.1).
 const PRIORITY = { [ARCHER]: 0, [CAVALRY]: 2 };
 export function pickRangedTarget(cands, rules) {
   let best = -1, bp = Infinity, bd = Infinity;
@@ -119,11 +125,14 @@ export function stepCombat(w) {
     const u = r.units[s.side[i]][s.type[i]];
     const bf = s.buff[i], drum = s.drumUntil[i] > w.time;
     const aura = (bf ? (bf & BUFF.AURA ? r.general.aura : 1) * (bf & BUFF.CHARGE ? r.general.chargeMult : 1) : 1) * (drum ? r.orders.drum.damageMult : 1);   // 장수 기운·돌격, 돌격 북(casts.js)
-    const t = nearestEnemy(s, i, reach);
+    let t = nearestEnemy(s, i, reach);
+    const tg = s.target[i];                                          // 고른 과녁이 손에 닿으면 그 적을 친다(가장 가까운 적이 바뀔 때마다 휙휙 돌지 않게)
+    if (t >= 0 && tg >= 0 && tg !== t && s.alive[tg] && s.side[tg] !== s.side[i] && (s.x[tg] - s.x[i]) ** 2 + (s.z[tg] - s.z[i]) ** 2 <= reach * reach) t = tg;
     s.inContact[i] = t >= 0 ? 1 : 0;
     s.contact[i] = t;
     if (u.holdsLine) s.braced[i] = infantryNear(w, i, r.melee.brace) ? 0 : 1;
     s.contactHold[i] = t >= 0 && r.units[s.side[t]][s.type[t]].holdsLine && s.braced[t] ? 1 : 0;   // 버티는 창에만 막힌다
+    if (u.catapult) continue;                                         // 투석기: 맞닿음만 센다(쏘지 못하게) — 치기·쏘기는 catapult.js
     if (u.charges && s.contactHold[i] && s.fmRole[t] === FM.OUTER) {   // 꽂힘(거점 진형 바깥 고리 창, formation.js): 달려와 부딪힌 기병 — 창마다 cooldown초에 한 번
       const I = r.formation.impale;
       if (s.vx[i] * s.vx[i] + s.vz[i] * s.vz[i] > (u.speed * 0.6) ** 2 && w.time - s.impaleAt[t] >= I.cooldown - 1e-9) {
@@ -133,7 +142,7 @@ export function stepCombat(w) {
     }
     s.hitTimer[i] += dt;
     if (s.staggerUntil[i] > w.time) { s.hitTimer[i] = Math.min(s.hitTimer[i], interval); continue; }   // 돌격에 흔들려 못 친다
-    if (u.siege && hitBuilding(w, i, u, interval)) continue;          // 공성병은 사거리 안 건물·성벽이 먼저
+    if (u.siege && hitBuilding(w, i, u, interval)) continue;          // 공성 병종(지금은 투석기뿐 — 위에서 건너뛴다)은 사거리 안 건물·성벽이 먼저
     const ranged = u.range > reach * 2;
     if (ranged && t < 0) {                                           // 원거리: 쏘기(근접 적이 닿으면 못 쏜다)
       const rt = s.rtarget[i];
@@ -188,12 +197,18 @@ export function stepCombat(w) {
     s.hp[i] -= dmg[i] * (s.buff[i] & BUFF.HOLD ? r.general.holdTaken : 1);   // 버텨라: 받는 피해 ×0.7
     if (s.hp[i] <= 0) {
       if (credit[i]) { const c = act[1 - s.side[i]][credit[i] === 1 ? 'volley' : 'drum']; if (c) c.stats.kills++; }
-      w.deaths.push({ x: s.x[i], z: s.z[i], side: s.side[i], type: s.type[i], t: w.time });
-      if (w.stats) w.stats.kills.push({ side: s.side[i], type: s.type[i], by: w.stats.lastHit[i], t: w.time });
-      if (w.stats?.onDeath) w.stats.onDeath(i);
-      kill(s, i);
+      killSoldier(w, i);
     }
   }
+}
+
+// 쓰러짐: 흔적·지표를 남기고 지운다(싸움과 투석기 돌이 같이 쓴다).
+export function killSoldier(w, i) {
+  const s = w.soldiers;
+  w.deaths.push({ x: s.x[i], z: s.z[i], side: s.side[i], type: s.type[i], t: w.time });
+  if (w.stats) w.stats.kills.push({ side: s.side[i], type: s.type[i], by: w.stats.lastHit[i], t: w.time });
+  if (w.stats?.onDeath) w.stats.onDeath(i);
+  kill(s, i);
 }
 
 // 투척꾼 바위: 목표 둘레 반지름 안의 다른 적에게도 피해(splashShare만큼).
@@ -222,7 +237,7 @@ function splash(w, dmg, from, center, scale, aura) {
   }
 }
 
-// 건물 치기: 공성병은 사거리(+원 반지름 절반) 안, 그 밖은 적 거점 원 안에서. 성벽이 먼저. 탄 건물은 주인 사기 −2.
+// 건물 치기: 공성 병종은 사거리(+원 반지름 절반) 안(투석기는 catapult.js가 돌로), 그 밖은 적 거점 원 안에서. 성벽이 먼저. 탄 건물은 주인 사기 −2.
 // every: 이 병사의 판단이 몇 틱마다인지(그만큼 피해를 몰아 준다).
 function hitBuilding(w, i, u, interval, every = 1) {
   const s = w.soldiers, r = w.rules;

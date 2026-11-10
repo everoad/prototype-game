@@ -13,7 +13,7 @@ export function createSoldiers(capacity, map, cellSize) {
     serial: new Uint32Array(capacity),
     order: new Uint8Array(capacity), orderFoe: new Int32Array(capacity), orderSerial: new Uint32Array(capacity),   // ORDER와 공격할 적(번호·태어난 차례)
     orderBest: new Float32Array(capacity), orderAt: new Float32Array(capacity),   // 명령: 목표까지 가장 가까웠던 거리와 그때 — 막혀 서 버리면 풀려고   // 태어난 차례(번호는 죽은 병사 것을 다시 쓰므로, 고른 병사를 알아볼 때 함께 본다)
-    x: f32(), z: f32(), vx: f32(), vz: f32(), px: f32(), pz: f32(), hp: f32(), facing: f32(),
+    x: f32(), z: f32(), vx: f32(), vz: f32(), px: f32(), pz: f32(), hp: f32(), facing: f32(), pfacing: f32(),   // pfacing: 앞 틱 끝의 보는 방향(도는 빠르기 한계, movement.js clampTurns)
     slotX: f32(), slotZ: f32(), lane: f32(), chargeUntil: f32(), ffx: f32(), ffz: f32(), routUntil: f32(), routX: f32(), routZ: f32(), pursuitX: f32(), pursuitZ: f32(), holdUntil: f32(), runDist: f32(), lastCharge: f32(), hitTimer: f32(),
     goalX: f32(), goalZ: f32(),
     type: new Uint8Array(capacity), side: new Uint8Array(capacity), state: new Uint8Array(capacity),
@@ -26,7 +26,8 @@ export function createSoldiers(capacity, map, cellSize) {
     leaveUntil: f32(),                    // 맞붙어 있다 보낸 병사: 이때까지 바로 옆 적만 친다
     marchUntil: f32(), drumUntil: f32(),  // 금 명령(casts.js): 강행군·돌격 북이 끝나는 때
     volleyUntil: f32(), volleyX: f32(), volleyZ: f32(),   // 화살 비가 끝나는 때와 원 가운데
-    fmRole: new Uint8Array(capacity), impaleAt: f32(),   // 거점 수비 진형 역할(formation.js FM), 이 창이 마지막으로 기병을 꽂은 때
+    fmRole: new Uint8Array(capacity), impaleAt: f32(), fireAt: f32(), aimNext: f32(),   // 투석기(catapult.js): 마지막으로 쏜 때, 과녁을 다시 찾을 때
+      // 거점 수비 진형 역할(formation.js FM), 이 창이 마지막으로 기병을 꽂은 때
     idleAt: f32(),
     staggerUntil: f32(),                  // 기병 돌격에 맞아 이때까지 못 친다
     braced: new Uint8Array(capacity),
@@ -54,13 +55,14 @@ export function spawn(s, side, type, x, z, rules) {
   s.x[id] = x; s.z[id] = z; s.px[id] = x; s.pz[id] = z; s.vx[id] = 0; s.vz[id] = 0;
   s.hp[id] = rules.units[side][type].hp; s.type[id] = type; s.side[id] = side; s.alive[id] = 1;
   s.facing[id] = side === 0 ? Math.PI / 2 : -Math.PI / 2;   // 적 쪽(편 0은 +z)
+  s.pfacing[id] = s.facing[id];
   s.state[id] = STATE.MARCH; s.goalKind[id] = GOAL.NONE; s.goalId[id] = -1; s.general[id] = -1; s.origin[id] = -1; s.returnTo[id] = -1; s.buff[id] = 0;
   s.target[id] = -1; s.contact[id] = -1; s.inContact[id] = 0; s.rallyPhase[id] = 0; s.group[id] = -1; s.chargeUntil[id] = 0; s.wedge[id] = 0; s.ffx[id] = 0; s.ffz[id] = 0; s.chargeHit[id] = 0; s.hasPursuit[id] = 0; s.routUntil[id] = -1e9; s.rtarget[id] = -1; s.throughUntil[id] = 0; s.contactHold[id] = 0; s.holdUntil[id] = 0; s.runDist[id] = 0; s.lastCharge[id] = -1e9; s.hitTimer[id] = 0; s.idleAt[id] = -1; s.leaveUntil[id] = 0; s.staggerUntil[id] = 0; s.braced[id] = 1; s.elite[id] = 0;
   s.lane[id] = (hash01(id * 3 + 1) * 2 - 1) * rules.behavior.pathWidth;
   s.serial[id] = s.nextSerial++;
   s.order[id] = 0; s.orderFoe[id] = -1;
   s.slotX[id] = 0;
-  s.marchUntil[id] = 0; s.drumUntil[id] = 0; s.volleyUntil[id] = 0; s.fmRole[id] = 0; s.impaleAt[id] = -1e9;
+  s.marchUntil[id] = 0; s.drumUntil[id] = 0; s.volleyUntil[id] = 0; s.fmRole[id] = 0; s.impaleAt[id] = -1e9; s.fireAt[id] = -1e9; s.aimNext[id] = 0;
   return id;
 }
 

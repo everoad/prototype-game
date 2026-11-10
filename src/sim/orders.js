@@ -19,7 +19,7 @@ export function applyOrder(w, o) {
     case 'holdTheLine': return holdTheLine(w, o);
     case 'send': return send(w, o);
     case 'cast': return castOrder(w, o);                 // 금 명령(casts.js)
-    case 'buySiege': return buySiege(w, o);              // 공성병 사기(siege.js)
+    case 'buySiege': return buySiege(w, o);              // 투석기 사기(siege.js)
     case 'generalMove': case 'charge': case 'hold': case 'attach': case 'dissolve': return generalOrder(w, o);
     default: return fail(`모르는 명령 ${o.kind}`);
   }
@@ -143,8 +143,8 @@ function appendRoute(w, o) {
   const groups = w.groups.filter(g => g.sent && g.state === 'march' && g.members.some(i => chosen.has(i) && s.alive[i] && s.group[i] === g.id));
   const loose = ids.filter(i => s.group[i] < 0 && s.order[i]);
   if (!groups.length && !loose.length) return fail('이어 갈 병력이 없다');
-  for (const i of ids) { s.volleyUntil[i] = 0; s.fmRole[i] = 0; }          // 보내면 화살 비·거점 진형 역할이 풀린다
   if (groups.some(g => (g.via?.length ?? 0) >= MAX_VIA)) return fail(`경유점은 ${MAX_VIA}개까지`);
+  for (const i of ids) { s.volleyUntil[i] = 0; s.fmRole[i] = 0; }          // 보내면 화살 비·거점 진형 역할이 풀린다(거절되면 그대로)
   const n = groups.reduce((a, g) => a + g.members.filter(i => s.alive[i] && s.group[i] === g.id).length, 0) + loose.length;
   const to = t.kind === 'point' ? pointTarget(w, t, n) : t.kind === 'foe' ? foeTarget(w, t) : t;
   const fight = t.kind !== 'foe' && (o.engage ?? t.kind === 'stronghold');      // 새 목적지가 거점·승점이면 싸우며 간다(보내기와 같은 규칙)
@@ -199,6 +199,7 @@ function build(w, o) {
   if (st.slots[o.slot]) return fail('칸이 차 있다');
   if (!slotKinds(st, o.slot).includes(o.building)) return fail('이 칸에 지을 수 없다');
   if (o.building === 'wall' && st.kind === 'hq') return fail('본진은 처음부터 성벽이 있다');
+  if (o.building === 'wall' && st.weightIn && st.weightIn[1 - o.side] > 0) return fail('원 안에 적이 있다');   // 성벽이 서면 점령이 잠기므로 — 점령하던 쪽이 갑자기 잠기지 않게(2026-11-09)
   const def = w.rules.buildings[o.building];
   if (w.sides[o.side].gold < def.cost) return fail('금이 모자라다');
   w.sides[o.side].gold -= def.cost;

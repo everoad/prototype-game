@@ -42,12 +42,13 @@ export function rightClickTarget(w, side, p, sectorPick = SEND_SECTOR_PICK) {
   return { kind: 'point', x: p.x, z: p.z };
 }
 
-// 보내기 목표: 누른 곳 밑의 적 병사(foe, 없으면 −1)는 거점·승점 원 밖에서만 "그 적 공격"이다. 원 안이면 그 거점(어택땅).
-// (사용자 2026-11-08 "승점을 고르고 적 본진·거점을 누르면 맞으면서 그냥 걷는다": 원 가운데엔 늘 수비대가 서 있어 그 한 명 공격이 되고,
-//  공격 명령은 그 적에게 닿을 때까지 가는 길의 적을 치지 않는다.)
-export function sendTarget(w, side, p, foe, sectorPick = SEND_SECTOR_PICK) {
-  const t = rightClickTarget(w, side, p, sectorPick);
-  if (foe < 0 || (t && t.kind === 'stronghold')) return t;
+// 보내기 목표: 누른 곳 밑의 적 병사(foe, 없으면 −1)는 "그 적 공격"이다. 다만 거점·승점·땅의 가운데 건물(깃대) 둘레(core = 눌린 그 거점,
+// 화면 input.js coreAt)를 눌렀으면 밑에 적이 있어도 그 곳(어택땅).
+// (사용자 2026-11-08 "승점을 고르고 적 본진·거점을 누르면 맞으면서 그냥 걷는다": 가운데엔 늘 수비대가 서 있어 그 한 명 공격이 됐다.
+//  2026-11-09 "거점 안의 적을 찍으면 근처 적을 따라간다": 원 안 어디서나 어택땅이던 것을 가운데 건물 둘레로 좁혔다.)
+export function sendTarget(w, side, p, foe, core = null, sectorPick = SEND_SECTOR_PICK) {
+  if (foe < 0) return rightClickTarget(w, side, p, sectorPick);
+  if (core) return { kind: 'stronghold', id: core.id };
   return { kind: 'foe', id: foe, serial: w.soldiers.serial[foe] };
 }
 
@@ -63,6 +64,12 @@ export function fortInfo(st, rules) {
     buildings.push({ kind: b.kind, hp: b.hp, max: B.hp, building: !!b.building });
   }
   return { wall, buildings };
+}
+
+// 공성병 알림(siege.js)의 병사 가운데 아직 그 병사인 것(살아 있고 태어난 차례가 같다).
+export function noticeTroops(w, n) {
+  const s = w.soldiers;
+  return n.ids.filter((i, k) => s.alive[i] && (!n.serials || s.serial[i] === n.serials[k]));
 }
 
 // 쐐기 하나의 살아 있는 병사.

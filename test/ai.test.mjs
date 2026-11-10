@@ -52,10 +52,12 @@ test('기습꾼 AI는 때가 되면 병력을 모았다가 우리 거점으로 �
 
 // ---- 금 명령·공성(계획서 2026-11-09 Task 6) ----
 import { createWorld as createWorldG, step as stepG, setGoal as setGoalG } from '../src/sim/world.js';
-import { spawn as spawnG, STATE as STATEG } from '../src/sim/soldiers.js';
+import { spawn as spawnG, STATE as STATEG, kill as killG, GOAL as GOALG } from '../src/sim/soldiers.js';
 import { ARCHER as ARCHERG, INFANTRY as INFANTRYG } from '../src/sim/rules.js';
 import { makeAi as makeAiG, raidTarget } from '../src/sim/ai.js';
 import { makeRng as makeRngG } from '../src/sim/rng.js';
+import { makeBot } from '../src/sim/bots.js';
+import { SIEGE as SIEGEG, CAVALRY as CAVALRYG } from '../src/sim/rules.js';
 // sec초 동안 그 편이 건 금 명령(사건 — 징집 원은 1초 뒤 지워지므로 w.casts가 아니라 걸음마다 모은다)
 const castsDuring = (w, sec, side) => { const out = []; for (let k = 0; k < Math.round(sec * 20); k++) { stepG(w); for (const e of w.events) if (e.kind === 'cast' && e.side === side) out.push(e.order); } return out; };
 function blockG(w, n, x, z, { side = 0, type = INFANTRYG, cols = 10 } = {}) {
@@ -169,3 +171,128 @@ test('땅용으로 모은 기습은 보낼 때 거점으로 목표를 바꾸지 
   assert.equal(raidTarget(w, ai.state, src, { land: true }), null, '땅 기습이면 땅만 고른다');
   assert.notEqual(raidTarget(w, ai.state, src, { land: false })?.st.kind, 'land');
 });
+
+// ---- 리뷰에서 미룬 작은 것(2026-11-09) ----
+const levyFoes = w => { const st = w.strongholds.find(x => x.id === 'f1L'); blockG(w, 200, st.x - 14, st.z - 7, { cols: 20 }); };
+
+test('AI 긴급 징집은 안 보이는 적을 세지 않는다', () => {
+  const w = aiOnSide1();
+  w.rules.vision.stronghold = 1; w.rules.vision.soldier = 1;     // 거점·병사 시야를 거의 없앤다 — 가운데 칸 밖 적이 안 보인다
+  const st = w.strongholds.find(x => x.id === 'f1L');
+  blockG(w, 200, st.x + 20, st.z - 7, { cols: 20 });             // 원 안, 가운데 8 m 칸 밖
+  assert.ok(!castsDuring(w, 6, 1).includes('levy'));
+});
+
+test('AI가 기습용 공성 값을 잡아 둔 동안에도 긴급 징집은 쓴다', () => {
+  const w = aiOnSide1(); stepG(w);
+  const ai = w.controllers[1];
+  Object.assign(ai.state.raid, { phase: 'gather', source: 'r1L', since: w.time, want: 9999, siegeDone: false, land: false });
+  w.sides[1].gold = w.rules.orders.levy.cost + 10;               // 징집은 되고 공성(150)까지는 안 되는 금
+  levyFoes(w);
+  assert.ok(castsDuring(w, 6, 1).includes('levy'));
+});
+
+test('AI는 한 판단에 강행군을 한 번만 건다(거절될 두 번째에 금을 잡지 않는다)', () => {
+  const w = aiOnSide1();
+  const cL = w.strongholds.find(x => x.id === 'cL'); cL.owner = 1; cL.gauge = -100;
+  standAt(w, 'r1L', 60); standAt(w, 'f1L', 60);
+  blockG(w, 20, 77, 577); blockG(w, 20, 77, 397);                // e1L과 cL에 동시에(땅 지키기 둘)
+  const ai = w.controllers[1], per = [];
+  w.controllers[1] = { think: ww => { const o = ai.think(ww); per.push(o.filter(x => x.kind === 'cast' && x.order === 'march').length); return o; } };
+  for (let k = 0; k < 6 * 20; k++) stepG(w);
+  assert.ok(Math.max(...per) <= 1, JSON.stringify(per.filter(Boolean)));
+});
+
+test('AI 몰림 판단은 공성병 무게까지 더한 전체에서 본다', () => {
+  const w = aiOnSide1();
+  for (const st of w.strongholds) if (st.owner === 1 && st.kind !== 'land') { blockG(w, 12, st.x - 7, st.z - 50, { type: CAVALRYG }); blockG(w, 120, st.x - 14, st.z - 60, { type: SIEGEG, cols: 20 }); }
+  for (let i = 0; i < w.soldiers.count; i++) if (w.soldiers.side[i] === 0) w.soldiers.hp[i] = 1e6;
+  w.rules.units[0][CAVALRYG].speed = 0; w.rules.units[0][SIEGEG].speed = 0;
+  for (let k = 0; k < 40 * 20; k++) stepG(w);
+  assert.notEqual(w.controllers[1].state.counterType, CAVALRYG, '공성병이 대부분인데 기병 몰림으로 봤다');
+});
+
+test('거북이 봇은 보내지 않으니 강행군도 걸지 않는다', () => {
+  const w = aiOnSide1();
+  w.controllers[1] = makeBot('turtle', 1, makeRngG(3));
+  standAt(w, 'r1L', 60); standAt(w, 'f1L', 60);
+  blockG(w, 20, 77, 577);                                        // e1L 경보 → 땅 지키기
+  assert.ok(!castsDuring(w, 6, 1).includes('march'));
+});
+
+test('AI는 맞붙은 우리가 밀리는 곳에 돌격 북을 쓴다', () => {
+  const w = createWorldG({ scenario: 'empty', seed: 1, knobs: { mirror: true, scale: 0.2 } });   // 규모 0.2 → 맞붙은 우리 20명 넘으면
+  w.controllers[1] = makeAiG(1, { personality: 'careful' }, makeRngG(3)); w.sides[1].gold = 2000;
+  blockG(w, 40, 600, 500, { side: 1 });
+  blockG(w, 120, 597, 502.5, { side: 0, cols: 15 });
+  assert.ok(castsDuring(w, 4, 1).includes('drum'));
+});
+
+test('AI는 모은 기습을 보낼 때 강행군을 건다', () => {
+  const w = createWorldG({ seed: 1, scenario: 'battle' });
+  const ai = makeAiG(1, { personality: 'raider' }, makeRngG(3));
+  w.controllers[1] = ai; stepG(w);
+  w.sides[1].gold = 1000;
+  Object.assign(ai.state.raid, { phase: 'gather', source: 'r1L', since: w.time, want: 1, siegeDone: true, land: false });
+  standAt(w, 'r1L', 30);
+  const cast = castsDuring(w, 3, 1);
+  assert.ok(cast.includes('march'), JSON.stringify(cast));
+});
+
+// ---- 투석기(계획서 2026-11-09-flood-catapult Task 4) ----
+test('AI는 자기 거점을 치는 적 투석기에 병력을 보낸다(쏜 투석기는 3초 동안 보인다)', () => {
+  const w = aiOnSide1(), s = w.soldiers;
+  const f = w.strongholds.find(x => x.id === 'f1L'); f.slots[f.slotCount] = { kind: 'wall', level: 1, hp: w.rules.buildings.wall.hp, building: false };
+  standAt(w, 'r1L', 60); standAt(w, 'f1L', 60);
+  const cats = [];
+  for (let k = 0; k < 3; k++) { const i = spawnG(s, 0, SIEGEG, f.x - 3 + k * 3, f.z - 115, w.rules); setGoalG(w, [i], { kind: 'point', x: s.x[i], z: s.z[i] }); cats.push(i); }
+  let hunted = false;
+  for (let k = 0; k < 6 * 20 && !hunted; k++) { stepG(w); hunted = w.events.some(e => e.kind === 'send' && e.side === 1 && e.target?.kind === 'foe' && cats.includes(e.target.id)); }
+  assert.ok(hunted, '투석기로 보낸 AI 병력이 없다');
+});
+
+test('AI가 투석기를 잡은 뒤 남은 병력은 거점으로 돌아간다', () => {
+  const w = aiOnSide1(), s = w.soldiers;
+  const f = w.strongholds.find(x => x.id === 'f1L'); f.slots[f.slotCount] = { kind: 'wall', level: 1, hp: w.rules.buildings.wall.hp, building: false };
+  standAt(w, 'r1L', 60); standAt(w, 'f1L', 60);
+  const cats = [];
+  for (let k = 0; k < 3; k++) { const i = spawnG(s, 0, SIEGEG, f.x - 3 + k * 3, f.z - 115, w.rules); setGoalG(w, [i], { kind: 'point', x: s.x[i], z: s.z[i] }); cats.push(i); }
+  const ai = w.controllers[1]; let hunters = null;
+  w.controllers[1] = { think: ww => { const o = ai.think(ww); for (const x of o) if (x.kind === 'send' && x.target?.kind === 'foe' && !hunters) hunters = x.from.ids; return o; } };
+  for (let k = 0; k < 6 * 20 && !hunters; k++) stepG(w);
+  assert.ok(hunters, '투석기로 보냈다');
+  for (const i of cats) killG(s, i);
+  for (let k = 0; k < 10 * 20; k++) stepG(w);
+  const home = hunters.filter(i => s.alive[i] && (s.goalKind[i] === GOALG.STRONGHOLD || (s.group[i] >= 0 && w.groups.find(g => g.id === s.group[i])?.target.kind === 'stronghold')));
+  assert.ok(home.length >= hunters.filter(i => s.alive[i]).length * 0.8, `거점으로 가는 병력 ${home.length}/${hunters.filter(i => s.alive[i]).length}`);
+});
+
+// ---- AI 투석기 쓰기(2026-11-09 사용자 "쓰게 해줘"): 기습 두 번에 한 번은 거점, 투석기는 먼저 출발 ----
+function raidAt(raidNo, prep) {
+  const w = createWorldG({ seed: 1, scenario: 'battle' });
+  const ai = makeAiG(1, { personality: 'raider' }, makeRngG(3));
+  w.controllers[1] = ai; stepG(w);
+  prep?.(w);
+  ai.state.raidNo = raidNo;
+  Object.assign(ai.state.raid, { phase: 'wait', at: w.time });
+  return { w, ai };
+}
+
+test('AI 기습은 두 번에 한 번 거점을 노린다(칠 땅이 있어도)', () => {
+  const go = n => { const { w, ai } = raidAt(n); for (let k = 0; k < 40 && ai.state.raid.phase !== 'gather'; k++) stepG(w); return ai.state.raid; };
+  const a = go(0), b = go(1);
+  assert.equal(a.phase, 'gather'); assert.equal(a.land, true, '첫 기습은 땅');
+  assert.equal(b.phase, 'gather'); assert.equal(b.land, false, '두 번째는 거점');
+});
+
+test('AI 거점 기습: 산 투석기가 나오면 본대보다 먼저 목표 거점으로 보낸다', () => {
+  const { w, ai } = raidAt(1, ww => { for (const st of ww.strongholds) if (st.kind === 'land' && st.side === 0) { st.owner = 1; st.gauge = -100; } ww.sides[1].gold = 1000; });
+  const log = [];
+  w.controllers[1] = { think: ww => { const o = ai.think(ww); for (const x of o) if (x.kind === 'send') log.push({ t: ww.time, x, siege: x.from.kind === 'ids' && x.from.ids.every(i => ww.soldiers.type[i] === SIEGEG) }); return o; } };
+  for (let k = 0; k < 60 * 20; k++) stepG(w);
+  const cat = log.find(e => e.siege), body = log.find(e => e.x.from.kind === 'stronghold' && e.x.target.kind === 'stronghold');
+  assert.ok(cat, `투석기를 따로 보내지 않았다: ${JSON.stringify(log.map(e => [Math.round(e.t), e.x.from.kind, e.x.target.kind]))}`);
+  assert.equal(cat.x.target.kind, 'stronghold');
+  assert.ok(!body || body.t > cat.t + 1, '본대는 그 뒤에 떠난다');
+});
+

@@ -2,12 +2,14 @@
 // autohold(1 = 경보 3초 뒤 막아라 — 녹화용), skip(처음 몇 초를 화면 없이 돌림), raidAt(기습이 나오는 판 시각 초, scene=raid),
 // raf(timer = 화면을 rAF 대신 타이머로 — 숨은 창에서 시험), demo(raid = sendAt초에 우리 기병이 오른쪽 가장자리로 돌아 적 뒤 거점 기습 — 녹화용, general = 장수 별동대 시연, send = sendAt초에 왼쪽 구역 병사를 적 앞 거점 f1L로 보내기 — 녹화용), commandLimit, commandCooldown.
 import { createWorld, advance, step } from '../sim/world.js';
-import { spawnClash, spawnRaid, spawnCavLab, spawnCounterLab } from '../sim/scenarios.js';
+import { spawnClash, spawnRaid, spawnCavLab, spawnCounterLab, spawnSiegeLab, siegeLabController } from '../sim/scenarios.js';
 import { makeAi } from '../sim/ai.js';
 import { makeRng } from '../sim/rng.js';
 import { arrowOf, wallStanding } from '../sim/production.js';
 import { createScene } from './scene.js';
 import { createCrowd } from './crowd.js';
+import { createCatapults } from './catapults.js';
+import { fortInfo } from './select.js';
 import { createHud } from './hud.js';
 import { createInput } from './input.js';
 import { record } from './recorder.js';
@@ -20,14 +22,16 @@ const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
 if (q.get('raf') === 'timer') window.requestAnimationFrame = cb => setTimeout(() => cb(performance.now()), 16);   // 시험용: 숨은 창에서는 rAF가 멈춘다
 const sceneName = q.get('scene') ?? 'battle';
 const knobs = { scale: num('scale', 1), production: num('production', 1), damage: num('damage', 1), mirror: q.get('mirror') === '1' || sceneName === 'cav',
-  commandLimit: num('commandLimit', 500), commandCooldown: num('commandCooldown', 60), soldierSight: num('soldierSight', 60) };
+  commandLimit: num('commandLimit', 500), commandCooldown: num('commandCooldown', 60), soldierSight: num('soldierSight', 60),
+  ...(q.has('monsterProduction') ? { monsterProduction: num('monsterProduction', 1) } : {}) };   // 몬스터 생산 배율(난이도) — 없으면 rules.js 기본
 const seed = num('seed', 1);
 let gameSpeed = num('speed', 1), paused = false;
 
-const lab = sceneName === 'clash' || sceneName === 'cav' || sceneName === 'counter';   // 시험장: 빈 세상, 안개·화살표 없음
+const lab = sceneName === 'clash' || sceneName === 'cav' || sceneName === 'counter' || sceneName === 'siege';   // 시험장: 빈 세상, 안개·화살표 없음
 const world = createWorld({ seed, knobs, scenario: lab ? 'empty' : 'battle' });
 if (sceneName === 'clash') spawnClash(world, Math.round(5000 * knobs.scale));
 else if (sceneName === 'cav') spawnCavLab(world, q.get('kind') ?? 'anvil');
+else if (sceneName === 'siege') world.controllers[0] = siegeLabController(spawnSiegeLab(world, q.get('cat') !== '0'));   // 공성 시험장: cat=0이면 투석기 없이
 else if (sceneName === 'counter') {                       // send=1이면 sendAt초에 왼쪽 구역 병사(기병)를 가운데로 보낸다
   spawnCounterLab(world);
   if (q.get('send') === '1') { let sent = false; const at = num('sendAt', 10); world.controllers[0] = { think: w => (sent || w.time < at ? [] : (sent = true, [{ kind: 'send', side: 0, from: { kind: 'sector', id: 's0-left' }, target: { kind: 'sector', id: 's0-center' } }])) }; }
@@ -39,7 +43,7 @@ else {
   const ours = [];
   if (q.get('ai') === 'both') ours.push(makeAi(0, { personality: q.get('aip0') ?? 'aggressive', difficulty: 'normal' }, makeRng(seed * 17 + 3)));
   if (q.get('autohold') === '1') ours.push({
-    think: w => w.sides[0].alerts.filter(a => a.kind === 'attacked' && w.time - a.since > 3 && !w.holds.some(h => h.side === 0 && w.strongholds[h.stronghold].id === a.stronghold))
+    think: w => w.sides[0].alerts.filter(a => a.kind === 'attacked' && w.time - a.since > 3 && w.strongholds.find(x => x.id === a.stronghold)?.kind !== 'land' && !w.holds.some(h => h.side === 0 && w.strongholds[h.stronghold].id === a.stronghold))
       .map(a => ({ kind: 'holdTheLine', side: 0, stronghold: a.stronghold })),
   });
   if (sceneName === 'raid') {
@@ -87,12 +91,14 @@ for (const until = num('skip', 0); world.time < until && !world.result;) step(wo
 const fogOn = q.get('fog') !== '0' && !lab;
 const seeAt = fogOn ? (x, z) => canSee(world, 0, x, z) : null;
 const visibleSoldier = fogOn ? i => world.soldiers.side[i] === 0 || canSee(world, 0, world.soldiers.x[i], world.soldiers.z[i]) : null;
-const drawCrowd = alpha => crowd.update(world, alpha, visibleSoldier, seeAt, input.selectedFlags(), input.preview?.() ?? null);   // 고른 병사는 밝게, 겨누는 명령에 걸릴 병사는 그 빛깔로
+const drawCrowd = alpha => { crowd.update(world, alpha, visibleSoldier, seeAt, input.selectedFlags(), input.preview?.() ?? null); catapults.update(world, alpha, visibleSoldier, seeAt, input.selectedFlags()); };   // 고른 병사는 밝게, 겨누는 명령에 걸릴 병사는 그 빛깔로
 
 const canvas = document.getElementById('view');
 const recording = q.has('record');
 const view = createScene(canvas, world.map, { preserveDrawingBuffer: recording });
 const crowd = createCrowd(view, world.rules, world.soldiers.capacity);
+const catapults = createCatapults(view, world.rules);
+if (sceneName === 'siege' && !q.has('cam')) { const f = world.strongholds.find(x => x.id === 'f1L'); Object.assign(view.cam, { tx: f.x, tz: f.z - 70, h: 170 }); }
 if (q.has('cam')) { const [tx, tz, h] = q.get('cam').split(',').map(Number); Object.assign(view.cam, { tx, tz, h }); }   // 처음 카메라: cam=x,z,높이
 if (q.has('yaw')) view.cam.yaw = num('yaw', -45) * Math.PI / 180;   // 시점 돌림(도): 기본 −45 = 대각선, 0 = 우리 쪽에서 곧게
 let hud;
@@ -112,13 +118,13 @@ hud = createHud({
   onFocus: id => { const st = world.strongholds.find(x => x.id === id); if (st) Object.assign(view.cam, { tx: st.x, tz: st.z }); },
   getSelection: () => input.selection(), onArmFlow: () => input.armFlow(),
   onMinimap: (x, z) => Object.assign(view.cam, { tx: x, tz: z }), getFootprint: () => view.footprint(), seeAt,
-  onAim: o => input.aim(o), getAim: () => input.aiming(), onSelectIds: ids => input.selectIds(ids),   // 금 명령 줄·공성병 알림
+  onAim: o => input.aim(o), getAim: () => input.aiming(), onSelectIds: ids => input.selectIds(ids),   // 금 명령 줄·투석기 알림
   onKnobs: k => reloadWith(k),
   onSpeed: v => { gameSpeed = v; },
   onPause: () => (paused = !paused),
   onRestart: () => reloadWith({ seed: seed + 1 }),
 });
-hud.setKnobs(knobs);
+hud.setKnobs({ ...knobs, monsterProduction: world.rules.knobs.monsterProduction });
 
 function syncLook() {
   if (!lab) view.setArrows(input.arrowsToDraw(world, arrowOf));
@@ -131,7 +137,7 @@ function syncLook() {
     const g = view.strongholdMeshes.get(st.id), color = [0x1D9E75, 0xD85A30][st.owner] ?? 0x888780;
     g.userData.ring.material.color.setHex(color);
     (g.userData.box ?? g.userData.flag).material.color.setHex(color);
-    if (g.userData.wallRing) g.userData.wallRing.visible = wallStanding(st) && (st.owner === 0 || !seeAt || seeAt(st.x, st.z));   // 성벽 고리(적은 보일 때만)
+    if (g.userData.wallRing) { const wl = fortInfo(st, world.rules).wall; g.userData.wallRing.visible = wallStanding(st) && (st.owner === 0 || !seeAt || seeAt(st.x, st.z)); if (wl) view.setWallDamage(st.id, wl.hp / wl.max); }   // 성벽 고리(적은 보일 때만) — 깨진 만큼 조각이 빠진다
   }
 }
 

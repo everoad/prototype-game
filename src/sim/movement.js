@@ -39,12 +39,6 @@ export function desiredVelocity(w, i) {
       s.throughX[i] = s.vx[i] / v; s.throughZ[i] = s.vz[i] / v;
       return [s.vx[i] / v * u.speed, s.vz[i] / v * u.speed];
     }
-    if (elsewhere && s.contactHold[i]) {                                     // 노리지 않은 창: 반대쪽으로 빠져나간다
-      const dx = s.x[i] - s.x[c], dz = s.z[i] - s.z[c], l = Math.hypot(dx, dz) || 1;
-      s.throughUntil[i] = w.time + w.rules.behavior.evadeSeconds;
-      s.throughX[i] = dx / l; s.throughZ[i] = dz / l;
-      return [dx / l * u.speed, dz / l * u.speed];
-    }
     return [0, 0];
   }
   if (s.wedge[i]) {                                        // 행군 중인 쐐기: 쐐기 속도 + 자리로 당김
@@ -182,3 +176,18 @@ export function nearestWalkable(map, x, z) {
       }
   return [x, z];
 }
+
+// 도는 빠르기 한계(2026-11-09): 이 틱에 어디서 보는 방향을 바꿨든(싸움·진형·투석기) 앞 틱 끝에서 1초 turn°까지만 돈다 — 기병이 제자리에서 휙휙 돌지 않게.
+export function clampTurns(w) {
+  const s = w.soldiers, T = w.rules.behavior.turn, dt = w.rules.dt, cav = T.cav * Math.PI / 180 * dt, other = T.other * Math.PI / 180 * dt;
+  for (let i = 0; i < s.count; i++) {
+    if (!s.alive[i]) continue;
+    let d = s.facing[i] - s.pfacing[i];
+    d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;              // −π ~ π
+    const max = w.rules.units[s.side[i]][s.type[i]].charges ? cav : other;
+    if (d > max) s.facing[i] = s.pfacing[i] + max;
+    else if (d < -max) s.facing[i] = s.pfacing[i] - max;
+    s.pfacing[i] = s.facing[i];
+  }
+}
+

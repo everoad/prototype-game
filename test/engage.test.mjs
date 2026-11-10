@@ -1,6 +1,6 @@
 // 맞붙는 판단(사용자 2026-11-07):
 // 1) 우리 근접이 맞붙은 적 근접을 두고 그 뒤 궁수에게 달려든다 → 바로 옆(4 m)의 적부터 친다.
-// 2) 기병이 가다가 적 창 속으로 달려들어 5초도 못 버틴다 → 노릴 게 없으면 우리 선 뒤에서 기다리고, 창에 닿으면 빠져나간다.
+// 2) 기병이 가다가 적 창 속으로 달려들어 5초도 못 버틴다 → 노릴 게 없으면 우리 선 뒤에서 기다린다(창에서 빠져나가기·물러나기는 2026-11-10에 뺐다).
 // 3) 거점으로 보낸 병사가 가는 길의 적을 안 친다 → 가는 길에도 40 m 안의 적과 싸운다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,9 +26,10 @@ test('1) 뒤 궁수를 노리던 창병도 바로 옆에 적 근접이 오면 �
   assert.equal(w.soldiers.target[ours], foe);
 });
 
-test('2) 노릴 게 없는 기병 100은 적 창 200에 박지 않는다(60초 뒤 90기 넘게 살고, 창에 막힌 기병·초 < 100)', () => {
+test('2) 노릴 게 없는 기병 100은 서 있는 적 창 200에 스스로 박지 않는다(60초 뒤 90기 넘게 살고, 창에 막힌 기병·초 < 100)', () => {
   const { w, cav } = cavLab('spears');
   const s = w.soldiers;
+  w.rules.units[1][SPEAR].speed = 0;   // 창은 제자리 — 다가오는 창에서 물러나기는 뺐다(사용자 2026-11-10, 부대 컨트롤로 피한다)
   let stuck = 0;
   for (let k = 0; k < 60 * 20; k++) { step(w); if (k % 20 === 0) for (const i of cav) if (s.alive[i] && s.inContact[i] && s.contactHold[i]) stuck++; }
   const alive = cav.filter(i => s.alive[i]).length;

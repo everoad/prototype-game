@@ -2,7 +2,7 @@
 import { spawn } from './soldiers.js';
 import { setGoal } from './world.js';
 import { spawnSectorArmy } from './production.js';
-import { SPEAR, ARCHER, CAVALRY, INFANTRY } from './rules.js';
+import { SPEAR, ARCHER, CAVALRY, INFANTRY, SIEGE } from './rules.js';
 import { STATE } from './soldiers.js';
 
 const ROW = 1.0;      // 줄 간격 m
@@ -71,4 +71,33 @@ export function spawnCounterLab(w) {
   const cav = block(0, CAVALRY, 60, 330, 350, 10, 1.6);
   setGoal(w, cav, { kind: 'sector', id: 's0-left' });
   return { ours, archers, goblins, hurlers, cav };
+}
+
+// 공성 시험장(투석기 설계서 2026-11-09 §6): 적(편 1) 앞 거점 f1L — 성벽 다 지음 + 수비대(고블린 80, 창 고블린 40, 투척꾼 30, 진형으로 선다).
+// 우리 보병 300명이 f1L 남쪽 150 m에, 투석기 3대(withCatapults)가 그 뒤에. 보내기는 siegeLabController가 한다.
+export function spawnSiegeLab(w, withCatapults = true) {
+  const s = w.soldiers, f = w.strongholds.find(x => x.id === 'f1L');
+  f.slots[f.slotCount] = { kind: 'wall', level: 1, hp: w.rules.buildings.wall.hp, building: false };
+  const gar = [];
+  for (const [type, n] of [[INFANTRY, 80], [SPEAR, 40], [ARCHER, 30]]) for (let k = 0; k < n; k++) { const a = k / n * Math.PI * 2, r = 10 + (k % 5) * 3; gar.push(spawn(s, 1, type, f.x + Math.cos(a) * r, f.z + Math.sin(a) * r, w.rules)); }
+  setGoal(w, gar, { kind: 'stronghold', id: 'f1L' }); for (const i of gar) s.state[i] = STATE.GARRISON;
+  const ours = [];
+  for (let k = 0; k < 300; k++) ours.push(spawn(s, 0, INFANTRY, f.x - 21 + (k % 30) * 1.4, f.z - 150 - Math.floor(k / 30) * 1.4, w.rules));
+  setGoal(w, ours, { kind: 'point', x: f.x, z: f.z - 150 });
+  const cats = [];
+  if (withCatapults) for (let k = 0; k < 3; k++) cats.push(spawn(s, 0, SIEGE, f.x - 6 + k * 6, f.z - 170, w.rules));
+  if (cats.length) setGoal(w, cats, { kind: 'point', x: f.x, z: f.z - 170 });
+  return { ours, cats, garrison: gar, stronghold: f };
+}
+
+// 공성 시험장의 보내기: at초에 보병은 f1L로(어택땅), 투석기는 f1L 가운데에서 115 m 남쪽 자리로(이동).
+export function siegeLabController(lab, at = 1) {
+  let sent = false;
+  return { think: w => {
+    if (sent || w.time < at) return [];
+    sent = true;
+    const f = lab.stronghold, out = [{ kind: 'send', side: 0, from: { kind: 'ids', ids: lab.ours }, target: { kind: 'stronghold', id: f.id } }];
+    if (lab.cats.length) out.push({ kind: 'send', side: 0, from: { kind: 'ids', ids: lab.cats }, target: { kind: 'point', x: f.x, z: f.z - 115 } });
+    return out;
+  } };
 }

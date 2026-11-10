@@ -6,7 +6,7 @@ import { spawn, STATE } from '../src/sim/soldiers.js';
 import { SPEAR, ARCHER, CAVALRY, INFANTRY } from '../src/sim/rules.js';
 import { applyOrder } from '../src/sim/orders.js';
 
-const empty = () => createWorld({ scenario: 'empty', seed: 1, knobs: { mirror: true } });
+const empty = () => { const w = createWorld({ scenario: 'empty', seed: 1, knobs: { mirror: true } }); w.rules.formation.enabled = true; return w; };   // 진형은 기본으로 꺼 두었다(2026-11-09) — 이 시험은 켜고 본다
 const run = (w, sec) => { for (let k = 0; k < Math.round(sec * 20); k++) step(w); };
 const st = (w, id) => w.strongholds.find(x => x.id === id);
 function standAt(w, id, n, type, side = 0) {

@@ -93,7 +93,7 @@ export function makeBot(name, side, rng) {
       return out;
     },
     turtle(w) {
-      const out = base.think(w).filter(o => o.kind !== 'send' && !(o.kind === 'arrow' && o.target.kind === 'stronghold' && w.strongholds.find(x => x.id === o.target.id)?.owner !== side));
+      const out = base.think(w).filter(o => o.kind !== 'send' && !(o.kind === 'cast' && o.order === 'march') && !(o.kind === 'arrow' && o.target.kind === 'stronghold' && w.strongholds.find(x => x.id === o.target.id)?.owner !== side));
       if (w.time >= S.next) {
         S.next = w.time + BOT.turtleEvery;
         for (const st of own(w, side)) [0, 1].forEach(u => {        // 강화 칸: 성벽, 망루

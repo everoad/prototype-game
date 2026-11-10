@@ -3,6 +3,7 @@
 import { createWorld, step } from '../src/sim/world.js';
 import { makeAi } from '../src/sim/ai.js';
 import { makeRng } from '../src/sim/rng.js';
+import { isPoint } from '../src/sim/map.js';
 
 const seeds = (process.argv[2] ?? '1,2,3').split(',').map(Number), minutes = Number(process.argv[3] ?? 12);
 for (const seed of seeds) {
@@ -21,7 +22,7 @@ for (const seed of seeds) {
       else if (e.kind === 'siegeBuy') { count[e.side].siege = (count[e.side].siege ?? 0) + 1; spentOrders[e.side] += w.rules.siegeBuy.cost; }
       else if (e.kind === 'build') spentBuild[e.side] += B[e.building].cost;
     }
-    if (slots6 === null && w.time >= 360) slots6 = [0, 1].map(side => { let f = 0, t = 0; for (const st of w.strongholds) if (st.owner === side && st.kind !== 'vp') { t += st.slots.length; f += st.slots.filter(Boolean).length; } return `${f}/${t}`; });
+    if (slots6 === null && w.time >= 360) slots6 = [0, 1].map(side => { let f = 0, t = 0; for (const st of w.strongholds) if (st.owner === side && !isPoint(st)) { t += st.slots.length; f += st.slots.filter(Boolean).length; } return `${f}/${t}`; });
   }
   console.log(`seed ${seed} · ${w.result ? `${w.result.reason} ${w.result.winner} @${Math.round(w.time)}s` : `${minutes}분 끝나지 않음`} · 6분 칸 ${slots6?.join(' ') ?? '-'}`);
   for (const side of [0, 1]) console.log(`  편 ${side}: 명령 ${JSON.stringify(count[side])} · 명령·공성 금 ${spentOrders[side]} · 새 건물 금 ${spentBuild[side]}(올리기 빼고) · 땅 먹음 ${landTaken[side]}번 · 땅 금 ${Math.round(landGold[side])} · 끝 땅 ${w.strongholds.filter(x => x.kind === 'land' && x.owner === side).length}`);

@@ -5,11 +5,12 @@ import { canSee, knownBuildings } from './vision.js';
 import { troopsAt, MAKERS } from './orders.js';
 import { FOREST } from './map.js';
 import { GOAL, STATE } from './soldiers.js';
-import { SPEAR, ARCHER, CAVALRY, SIEGE } from './rules.js';
+import { SPEAR, ARCHER, CAVALRY, SIEGE, INFANTRY } from './rules.js';
 import { wallStanding, conversionShares } from './production.js';
 import { canCast } from './casts.js';
 import { isPoint } from './map.js';
 import { forEachNear } from './soldiers.js';
+import { garrisonReach } from './defense.js';
 
 const THINK_EVERY = 10;    // 초
 // 짓기: 빈 칸이 있고 금이 되면 이 무게로 고른다
@@ -87,18 +88,19 @@ const SPECIALS = [SPEAR, ARCHER, CAVALRY];
 
 export function makeAi(side, { personality = 'aggressive', difficulty = 'normal' } = {}, rng) {
   const A = { side, personality, difficulty, rng, P: null, next: 0, mem: null, seen: {}, counterType: null, planUntil: 0, plan: new Map(),
-    raid: null, raids: [], pushAt: {}, quiet: new Map(), holdAt: new Map(), reinforced: new Map(), lastPush: -1e9, lastRegroup: -1e9, lastBuild: -1e9, chokeNext: {}, landNext: {} };
+    raid: null, raids: [], pushAt: {}, quiet: new Map(), holdAt: new Map(), reinforced: new Map(), lastPush: -1e9, lastRegroup: -1e9, lastBuild: -1e9, chokeNext: {}, landNext: {}, huntNext: {}, hunts: [], raidNo: 0 };
   return {
     state: A,
     think(w) {
       if (!A.mem) init(w, A);
       if (w.result || w.time < A.next - 1e-9) return [];
       A.next = w.time + 1;
-      A.spent = 0; A.picked = new Set();                  // 이 판단에서 보낸 병사(길목·땅 보내기가 같은 병사를 두 번 고르지 않게)                                          // 이 판단에서 기습이 낸 금(명령·공성) — 건물이 같은 금을 또 쓰지 않게
+      A.spent = 0; A.reserve = 0; A.marched = false; A.picked = new Set();   // reserve: 기습용 공성 값(긴급 징집은 꺼내 쓴다), marched: 이 판단에 강행군을 걸었나                  // 이 판단에서 보낸 병사(길목·땅 보내기가 같은 병사를 두 번 고르지 않게)                                          // 이 판단에서 기습이 낸 금(명령·공성) — 건물이 같은 금을 또 쓰지 않게
       const ai = w.rules.ai, orders = [];
       observe(w, A);
       defend(w, A, orders);
       landDefend(w, A, orders);
+      huntCatapults(w, A, orders);
       chokeThink(w, A, orders);
       raidThink(w, A, orders);
       if (w.time - A.lastBuild >= ai.buildEvery - 1e-9) { A.lastBuild = w.time; build(w, A, orders); }
@@ -154,7 +156,7 @@ function observe(w, A) {
     M.mem[k] = seen ? M.now[k] : Math.max(M.mem[k] * decay, M.now[k]);
   }
   // 몰림: 특수 병종이 보인 무게에서 시작 구성 몫 × massShare를 넘는다. 30초 넘게 이어지면(5초 넘게 끊기면 처음부터) 상성 대상.
-  const total = M.vis[0] + M.vis[1] + M.vis[2] + M.vis[3], mix = r.start.mix;
+  const total = M.vis.reduce((a, b) => a + b, 0), mix = r.start.mix;   // 투석기까지 모든 병종
   let best = null, bestRatio = 0;
   for (const t of SPECIALS) {
     const o = A.seen[t] ??= { since: null, last: -1e9, ratio: 0 };
@@ -230,10 +232,10 @@ function nearestSector(w, side, x, z) {
 // ---- 1 건물 ----
 function build(w, A, orders) {
   const r = w.rules, ai = r.ai, side = A.side, B = r.buildings;
-  let gold = w.sides[side].gold - (A.spent ?? 0);
+  let gold = w.sides[side].gold - (A.spent ?? 0) - (A.reserve ?? 0);
   const own = ownOriginal(w, side), fronts = own.filter(st => st.kind === 'front');
   const isMaker = b => b && MAKERS.includes(b.kind);
-  const pay = (cost, o) => { if (gold < cost) return false; gold -= cost; orders.push(o); return true; };
+  const pay = (cost, o, dip = 0) => { if (gold + dip < cost) return false; gold -= cost; orders.push(o); return true; };   // dip: 잡아 둔 금에서 꺼내 쓸 수 있는 몫
   // ① 상성: 몰려 보인 병종의 천적 건물을 앞 거점마다(빈 생산 칸에 더하고, 칸이 없으면 다른 생산 건물을 헐어 자리를 낸다)
   const counter = A.counterType !== null ? ai.counterBuilding[A.counterType] : null;
   if (counter) for (const st of fronts) {
@@ -278,8 +280,10 @@ function spendOrders(w, A, orders, pay) {
   for (const a of w.sides[side].alerts) {                   // 긴급 징집: 공격받는 거점이 밀릴 때
     if (a.kind !== 'attacked') continue;
     const st = byId(w, a.stronghold);
-    if (!st || (st.near?.[1 - side] ?? 0) <= (st.near?.[side] ?? 0) || !canCast(w, side, 'levy', st.id).ok) continue;
-    if (pay(O.levy.cost, { kind: 'cast', side, order: 'levy', stronghold: st.id })) break;
+    if (!st || !canCast(w, side, 'levy', st.id).ok) continue;
+    const m = weighAround(w, side, st.x, st.z, garrisonReach(w, st));   // 보이는 적만(안개 속 적은 모른다)
+    if (m.foe <= m.own) continue;
+    if (pay(O.levy.cost, { kind: 'cast', side, order: 'levy', stronghold: st.id }, A.reserve)) break;   // 거점을 잃는 것보다 낫다 — 기습용 공성 값을 꺼내 쓴다
   }
   if (canCast(w, side, 'drum').ok) { const p = drumSpot(w, A); if (p) pay(O.drum.cost, { kind: 'cast', side, order: 'drum', x: p.x, z: p.z }); }
   if (canCast(w, side, 'volley').ok) { const p = volleySpot(w, A); if (p) pay(O.volley.cost, { kind: 'cast', side, order: 'volley', x: p.x, z: p.z }); }
@@ -407,9 +411,13 @@ function raidThink(w, A, orders) {
     if (w.time < R.at) return;
     const src = raidSource(w, A);
     if (!src) { R.at = w.time + ai.raidRetry; return; }
-    // 작은 땅(2026-11-09): 먼저 목표를 골라 땅이면 작게 모으고 공성병은 사지 않는다(땅엔 성벽이 없다). 보낼 때 다시 고른다
-    const land = raidTarget(w, A, src)?.st.kind === 'land', L = ai.lands;
-    Object.assign(R, { phase: 'gather', source: src.id, since: w.time, want: land ? between(A, L.raidWeightMin, L.raidWeightMax) : between(A, ai.raidWeightMin, ai.raidWeightMax), siegeDone: land, land });
+    // 작은 땅(2026-11-09): 먼저 목표를 골라 땅이면 작게 모으고 투석기는 사지 않는다(땅엔 성벽이 없다). 보낼 때 다시 고른다
+    // 투석기(2026-11-09): raidStrongholdEvery번에 한 번은 거점만 노린다(땅이 늘 점수가 낮아 거점을 안 쳤다) — 칠 거점이 없으면 평소대로
+    const every = ai.raidStrongholdEvery, fortTurn = every > 0 && A.raidNo % every === every - 1;
+    const pick = (fortTurn ? raidTarget(w, A, src, { land: false, siege: true }) : null) ?? raidTarget(w, A, src);
+    const land = pick?.st.kind === 'land', L = ai.lands;
+    A.raidNo++;
+    Object.assign(R, { phase: 'gather', source: src.id, since: w.time, want: land ? between(A, L.raidWeightMin, L.raidWeightMax) : between(A, ai.raidWeightMin, ai.raidWeightMax), siegeDone: land, land, catSent: false, catTarget: null, catVia: null, bodyAfter: 0 });
     orders.push({ kind: 'arrow', side, from: src.id, target: { kind: 'stronghold', id: src.id } });   // 모으기 = 화살표를 그 거점 자신에게
     return;
   }
@@ -419,29 +427,52 @@ function raidThink(w, A, orders) {
     Object.assign(R, { phase: 'wait', at: w.time + retry });
   };
   if (!src || src.owner !== side || src.home) { stop(ai.raidRetry); return; }   // 빼앗겼거나 둘레가 밀리면 그만(모은 병력은 계획 구역으로)
-  // 공성병(2026-11-09): 모으는 동안 값을 잡아 두었다가(건물·명령이 그 금을 쓰지 않게) 되면 산다. 나오면 거점에 서 있다가 보내기에 같이 간다
+  // 투석기(2026-11-09): 모으는 동안 값을 잡아 두었다가(건물·명령이 그 금을 쓰지 않게) 되면 산다. 나오면 거점에 서 있다가 보내기에 같이 간다
   if (!R.siegeDone) {
     const sb = r.siegeBuy;
     if (src.siegeAt != null) R.siegeDone = true;
-    else if (w.sides[side].gold - A.spent >= sb.cost) { orders.push({ kind: 'buySiege', side, stronghold: src.id }); R.siegeDone = true; }
-    A.spent += sb.cost;
+    else if (w.sides[side].gold - A.spent >= sb.cost) { orders.push({ kind: 'buySiege', side, stronghold: src.id }); R.siegeDone = true; A.spent += sb.cost; }
+    else A.reserve += sb.cost;                                     // 아직 못 사면 잡아 둔다
+  }
+  // 투석기 먼저(2026-11-09): 나오면 바로 목표 거점으로 보낸다(사거리에 들면 선다). 본대는 투석기가 길의 (1 − 투석기/보병 빠르기)만큼 간 뒤에 — 같이 닿게
+  if (!R.land && !R.catSent && src.siegeAt == null) {
+    const cats = catapultsAt(w, side, src);
+    const cplan = cats.length ? raidTarget(w, A, src, { land: false, siege: true }) : null;
+    if (cplan) {
+      orders.push({ kind: 'send', side, from: { kind: 'ids', ids: cats }, target: { kind: 'stronghold', id: cplan.st.id }, ...(cplan.via.length ? { via: cplan.via } : {}) });
+      for (const i of cats) A.picked.add(i);
+      const U = r.units[side], pts = [src, ...cplan.via, cplan.st];
+      let d = 0; for (let j = 1; j < pts.length; j++) d += Math.hypot(pts[j].x - pts[j - 1].x, pts[j].z - pts[j - 1].z);
+      Object.assign(R, { catSent: true, catTarget: cplan.st.id, catVia: cplan.via, bodyAfter: w.time + Math.max(0, d / U[SIEGE].speed - d / U[INFANTRY].speed) });
+    }
   }
   const got = weightAt(w, side, src), late = w.time - R.since >= ai.raidGatherMax;
   if (got < R.want && !late) return;
-  if (src.siegeAt != null && !late) return;                  // 산 공성병이 나올 때까지 기다린다
-  const plan = got >= R.want * ai.raidMinShare ? raidTarget(w, A, src, { land: !!R.land }) : null;   // 땅용으로 모았으면 땅만, 거점용이면 거점만 다시 고른다
+  if (src.siegeAt != null && !late) return;                  // 산 투석기가 나올 때까지 기다린다
+  if (R.catSent && w.time < R.bodyAfter && !late) return;     // 먼저 간 투석기와 같이 닿게
+  const catSt = R.catTarget ? byId(w, R.catTarget) : null;
+  const plan = got < R.want * ai.raidMinShare ? null
+    : catSt && catSt.owner === 1 - side ? { st: catSt, via: R.catVia ?? [], route: 'siege' }   // 투석기가 간 거점으로
+    : raidTarget(w, A, src, { land: !!R.land, siege: !R.land });   // 땅용으로 모았으면 땅만, 거점용이면 거점만 다시 고른다
   if (!plan) { stop(ai.raidRetry); return; }
   const tgt = plan.st;
   // 강행군(2026-11-09): 모이던 쐐기 가운데들의 평균 자리 — 보내기 뒤에 넣어 같은 틱에 새로 행군하는 그 쐐기들을 잡는다
   const k = w.strongholds.indexOf(src), gathered = w.groups.filter(g => g.origin === k && g.side === side && g.state === 'gather' && g.members.length);
   orders.push({ kind: 'send', side, from: { kind: 'stronghold', id: src.id }, target: { kind: 'stronghold', id: tgt.id }, ...(plan.via.length ? { via: plan.via } : {}) });
   const mc = r.orders.march.cost;
-  if (gathered.length && canCast(w, side, 'march').ok && w.sides[side].gold - A.spent >= mc) {
+  if (gathered.length && !A.marched && canCast(w, side, 'march').ok && w.sides[side].gold - A.spent - A.reserve >= mc) {
     orders.push({ kind: 'cast', side, order: 'march', x: gathered.reduce((a, g) => a + g.x, 0) / gathered.length, z: gathered.reduce((a, g) => a + g.z, 0) / gathered.length });
-    A.spent += mc;
+    A.spent += mc; A.marched = true;
   }
   A.raids.push({ at: w.time, source: src.id, target: tgt.id, weight: got, route: plan.route });
   stop(between(A, ai.raidEveryMin, ai.raidEveryMax) * A.P.raidEvery);
+}
+
+// 그 거점에 서 있는(산 뒤 아직 보내지 않은) 우리 투석기.
+function catapultsAt(w, side, st) {
+  const s = w.soldiers, k = w.strongholds.indexOf(st), out = [];
+  for (let i = 0; i < s.count; i++) if (s.alive[i] && s.side[i] === side && s.type[i] === SIEGE && s.goalKind[i] === GOAL.STRONGHOLD && s.goalId[i] === k && s.group[i] < 0 && !s.order[i]) out.push(i);
+  return out;
 }
 
 // 기병을 가장 많이 내는 우리 거점(본진 빼고, 밀리거나 경보 중인 곳 빼고). 기병이 없으면 뒤 거점.
@@ -455,7 +486,7 @@ function raidSource(w, A) {
 
 // 가장 약하게 지켜진 적 거점: 기억한 둘레 위협 + 가는 길 위협 ÷ 2 + (아는 성벽) − (아는 생산 건물) + 거리, ±10%. 본진은 성벽이 무너졌을 때만.
 // 길: 곧장 또는 지도의 도는 길(경유점, 물을 건너지 않는 것만) — 길 위협과 길이를 길마다 잰다.
-// only = { land: true | false }이면 그 종류 목표만(모은 크기에 맞게 — 땅 100~200, 거점 300~500·공성)
+// only = { land: true | false, siege? }이면 그 종류 목표만(siege = 투석기를 가져가는 거점 기습 — 성벽 감점 없음)(모은 크기에 맞게 — 땅 100~200, 거점 300~500·공성)
 export function raidTarget(w, A, src, only = null) {
   const ai = w.rules.ai, side = A.side, known = knownBuildings(w, side);
   const routes = [{ name: 'direct', via: [] }, ...(ai.raidRoutes ? w.map.routes : []).map(r => ({ name: r.name, via: side === 1 ? r.via : [...r.via].reverse() }))];
@@ -467,7 +498,7 @@ export function raidTarget(w, A, src, only = null) {
     const wall = list.some(b => b && b.kind === 'wall' && !b.building), makers = list.filter(b => b && MAKERS.includes(b.kind)).length;
     const base = st.kind === 'land'                         // 작은 땅: 수비대 없음, 금이 많을수록 끌린다
       ? threatNear(w, A, st.x, st.z, st.radius + 60) - w.rules.lands.gold[st.landKind] * ai.lands.valueWeight
-      : threatNear(w, A, st.x, st.z, st.radius + 60) + (wall ? ai.raidWallPenalty : 0) - makers * ai.raidProdBonus + w.rules.garrison.stronghold;
+      : threatNear(w, A, st.x, st.z, st.radius + 60) + (wall && !only?.siege ? ai.raidWallPenalty : 0) - makers * ai.raidProdBonus + w.rules.garrison.stronghold;   // 투석기 기습(only.siege)은 성벽을 꺼리지 않는다
     for (const route of routes) {
       const pts = [src, ...route.via, st];
       let path = 0, len = 0, ok = true;
@@ -510,7 +541,7 @@ function clearPath(map, a, b) {
 
 // ---- 6 작은 땅(설계서 2026-11-09-flood-small-lands-design.md §3) ----
 // 우리 거점 src에서 무게 want까지: 거기 모이는 쐐기 멤버 먼저, 그다음 서 있는 병사(기병 먼저면 그 안에서 기병부터).
-// 수비대·공성병·이 판단에서 이미 보낸 병사(A.picked)는 고르지 않는다.
+// 수비대·투석기·이 판단에서 이미 보낸 병사(A.picked)는 고르지 않는다.
 function pickTroops(w, A, side, src, want, preferCav) {
   const s = w.soldiers, k = w.strongholds.indexOf(src), pool = [];
   for (const g of w.groups) if (g.origin === k && g.side === side && g.state === 'gather') for (const i of g.members) if (s.alive[i] && s.group[i] === g.id) pool.push(i);
@@ -545,6 +576,41 @@ function chokeThink(w, A, orders) {
 }
 
 // 땅 지키기: 우리 땅에 "공격받음"이 defendDelay초 넘으면 가까운 거점에서 보이는 적 무게 × defendRatio를 보내고, 되면 강행군. defendEvery초에 한 번.
+// 투석기 잡기(투석기 설계서 2026-11-09 §4): 우리 거점 원 + hunt.reach 안의 보이는 적 투석기 — 수비대는 원 + 40 m 밖으로 저절로 나가지 않는다.
+// 가장 가까운 우리 거점에서 기병 먼저 그 투석기들 무게 × ratio를 골라 가장 가까운 투석기로(공격 명령). 거점마다 every초에 한 번.
+function huntCatapults(w, A, orders) {
+  const s = w.soldiers, side = A.side, H = w.rules.ai.hunt, U = w.rules.units[1 - side];
+  for (const st of w.strongholds) {
+    if (st.owner !== side || isPoint(st) || (A.huntNext[st.id] ?? 0) > w.time) continue;
+    const R = st.radius + H.reach, R2 = R * R, cats = [];
+    forEachNear(s, st.x, st.z, R, j => {
+      if (s.alive[j] && s.side[j] !== side && U[s.type[j]].catapult && (s.x[j] - st.x) ** 2 + (s.z[j] - st.z) ** 2 <= R2 && canSee(w, side, s.x[j], s.z[j])) cats.push(j);
+    });
+    if (!cats.length) continue;
+    const near = cats.reduce((b, j) => (Math.hypot(s.x[j] - st.x, s.z[j] - st.z) < Math.hypot(s.x[b] - st.x, s.z[b] - st.z) ? j : b), cats[0]);
+    const want = cats.reduce((a, j) => a + U[s.type[j]].weight, 0) * H.ratio;
+    const p = { x: s.x[near], z: s.z[near] };
+    for (const src of nearestOwn(w, side, p)) {
+      const ids = pickTroops(w, A, side, src, want, true);
+      if (!ids.length) continue;
+      orders.push({ kind: 'send', side, from: { kind: 'ids', ids }, target: { kind: 'foe', id: near, serial: s.serial[near] } });
+      A.hunts.push({ ids, serials: ids.map(i => s.serial[i]), foe: near, foeSerial: s.serial[near], at: w.time });
+      break;
+    }
+    A.huntNext[st.id] = w.time + H.every;
+  }
+  for (let k = A.hunts.length - 1; k >= 0; k--) {                  // 다 잡았거나(giveUp초가 지났으면) 남은 병력은 가까운 우리 거점으로
+    const h = A.hunts[k];
+    if (s.alive[h.foe] && s.serial[h.foe] === h.foeSerial && w.time - h.at < H.giveUp) continue;
+    A.hunts.splice(k, 1);
+    const live = h.ids.filter((i, n) => s.alive[i] && s.serial[i] === h.serials[n] && s.side[i] === side);
+    if (!live.length) continue;
+    const p = { x: live.reduce((a, i) => a + s.x[i], 0) / live.length, z: live.reduce((a, i) => a + s.z[i], 0) / live.length };
+    const home = nearestOwn(w, side, p)[0];
+    if (home) orders.push({ kind: 'send', side, from: { kind: 'ids', ids: live }, target: { kind: 'stronghold', id: home.id } });
+  }
+}
+
 function landDefend(w, A, orders) {
   const L = w.rules.ai.lands, side = A.side;
   for (const a of w.sides[side].alerts) {
@@ -558,9 +624,9 @@ function landDefend(w, A, orders) {
       if (!ids.length) continue;
       orders.push({ kind: 'send', side, from: { kind: 'ids', ids }, target: { kind: 'stronghold', id: st.id } });
       const mc = w.rules.orders.march.cost, s = w.soldiers;
-      if (canCast(w, side, 'march').ok && w.sides[side].gold - A.spent >= mc) {
+      if (!A.marched && canCast(w, side, 'march').ok && w.sides[side].gold - A.spent - A.reserve >= mc) {
         orders.push({ kind: 'cast', side, order: 'march', x: ids.reduce((q, i) => q + s.x[i], 0) / ids.length, z: ids.reduce((q, i) => q + s.z[i], 0) / ids.length });
-        A.spent += mc;
+        A.spent += mc; A.marched = true;
       }
       break;
     }

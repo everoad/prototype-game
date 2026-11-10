@@ -2,7 +2,8 @@
 // 지형 칸: 0 들판, 1 숲, 2 언덕, 3 물, 4 여울.
 import { TEST_MAP } from './maps/test.js';
 
-export const FIELD = 0, FOREST = 1, HILL = 2, WATER = 3, FORD = 4;
+export { FIELD, FOREST, HILL, WATER, FORD } from './terrain.js';
+import { FOREST, HILL, WATER, FORD } from './terrain.js';
 
 // 칸·수비대·생산·성벽이 없는 "점": 승점과 작은 땅(2026-11-09). 승점만의 규칙(사기·승점 수·처음 생산 방향)은 kind === 'vp'로 따로 본다.
 export const isPoint = st => st.kind === 'vp' || st.kind === 'land';

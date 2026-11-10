@@ -9,15 +9,20 @@ import { STATE, GOAL, ORDER } from './soldiers.js';
 import { garrisonReach } from './defense.js';
 import { FM, fmMember } from './formation.js';
 import { attachedThink, BUFF } from './generals.js';
+import { buildingTarget } from './production.js';
+import { detachFromGroups } from './groups.js';
+import { isPoint } from './map.js';
 
 const SEARCH_EVERY = 8;      // 대상이 없는 병사가 새 적을 찾는 틱 간격(병사마다 엇갈림) — 반지름 40 m 찾기가 가장 비싸다
 const ORDER_ARRIVED = 10;    // 이동 명령: 자기 자리에서 이만큼 안이면 도착(명령이 풀리고 원래대로 싸운다) m
-const ORDER_ENGAGE = 25;     // 공격 명령: 그 적이 이만큼 안이면 그 적을 노리고 명령이 풀린다 m
 const ORDER_STALL = 4;       // 명령: 이만큼 동안 목표에 1 m도 가까워지지 못하면(붐빔·막힘) 도착한 것으로 보고 푼다 s
 
 export function stepBehavior(w) {
   const s = w.soldiers, b = w.rules.behavior, parity = w.tick & 1;
   if (w.tick % 10 === 0 || !w.coarse) buildCoarse(w);
+  const cw = w._chaseW && w._chaseW.length >= s.capacity ? w._chaseW : (w._chaseW = new Float32Array(s.capacity));   // 적마다 그를 노리는 우리 무게(쫓는 수 한도)
+  cw.fill(0, 0, s.count);
+  for (let i = 0; i < s.count; i++) if (s.alive[i] && s.target[i] >= 0) cw[s.target[i]] += w.rules.units[s.side[i]][s.type[i]].weight;
   for (let i = 0; i < s.count; i++) {
     if (!s.alive[i]) continue;
     if (s.fmRole[i] && !fmMember(w, i)) s.fmRole[i] = 0;              // 쐐기에 듦·거점을 잃음·진형 끔: 다음 자리 나누기를 기다리지 않는다
@@ -28,10 +33,12 @@ export function stepBehavior(w) {
     if ((i + w.tick) % b.routCheckEvery === 0 && maybeRout(w, i)) continue;
     if ((i & 1) !== parity) continue;
     if (s.state[i] === STATE.FLEE) { s.target[i] = -1; continue; }
+    if (catapultHold(w, i)) continue;                                  // 적 거점으로 가던 투석기: 사거리에 들면 선다
     if (s.order[i] && orderedThink(w, i)) continue;                  // 명령(사용자 2026-11-08 "B"): 이동 중엔 새 적을 찾지 않는다
     if (s.group[i] >= 0 && s.state[i] === STATE.MARCH) { s.target[i] = -1; s.rtarget[i] = -1; continue; }   // 행군 중인 쐐기
     if (s.state[i] === STATE.ATTACHED) { attachedThink(w, i, nearestEnemy, bestRangedTarget); continue; }   // 우선순위 1: 장수에 붙은 병사
     const u = w.rules.units[s.side[i]][s.type[i]], ranged = u.range > w.rules.melee.reach * 2;
+    if (u.catapult) { s.target[i] = -1; s.rtarget[i] = -1; continue; }   // 투석기: 쫓지도 치지도 않는다 — 과녁은 catapult.js
     if (ranged && (i + w.tick) % b.rangedScanEvery < 2) {         // 원거리: 사거리 안 맞쏘기 순서로 목표
       const rt = s.rtarget[i];
       const rng = rangeOf(w, i);
@@ -46,25 +53,25 @@ export function stepBehavior(w) {
     const sector = s.goalKind[i] === GOAL.SECTOR;
     if (u.charges && sector) { cavalryThink(w, i); continue; }
     const t = s.target[i];
-    if (!ranged) {                                                     // 1) 바로 옆의 적부터(노리던 먼 적을 버린다)
+    if (!ranged) {                                                     // 1) 바로 옆의 적부터(노리던 먼 적을 버린다) — 거점으로 가는 기병도 그대로(2026-11-10 막아 봤더니 도는 횟수는 그대로이고 선 끝 돌기가 줄었다)
       const close = nearestEnemy(s, i, b.closeSwitch);
-      if (close >= 0 && close !== t && allowed(w, i, close)) { s.target[i] = close; if (sector) s.state[i] = STATE.FRONT; s.hasPursuit[i] = 0; continue; }
+      if (close >= 0 && close !== t && allowed(w, i, close)) { aim(w, i, close); if (sector) s.state[i] = STATE.FRONT; s.hasPursuit[i] = 0; continue; }
     }
     if (s.leaveUntil[i] > w.time) {                                    // 보낸 병사가 빠지는 중: 붙은 적만 끝내고 목표로
       if (!(t >= 0 && s.alive[t] && Math.hypot(s.x[t] - s.x[i], s.z[t] - s.z[i]) <= b.closeSwitch * 1.5)) s.target[i] = -1;
       continue;
     }
-    if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && Math.hypot(s.x[t] - s.x[i], s.z[t] - s.z[i]) <= b.aggro && allowed(w, i, t)) continue;
-    if ((i + w.tick) % SEARCH_EVERY > 1) { s.target[i] = -1; continue; }
-    const e = nearestEnemy(s, i, b.aggro);
-    s.target[i] = e >= 0 && allowed(w, i, e) ? e : -1;
+    if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && Math.hypot(s.x[t] - s.x[i], s.z[t] - s.z[i]) <= b.aggro && allowed(w, i, t) && !runningCav(w, i, t)) continue;
+    if ((i + w.tick) % SEARCH_EVERY > 1) { aim(w, i, -1); continue; }
+    aim(w, i, nearestChase(w, i, b.aggro, j => allowed(w, i, j)));
     if (s.target[i] >= 0) { if (sector) s.state[i] = STATE.FRONT; s.hasPursuit[i] = 0; s.idleAt[i] = -1; }
+    else if (nearestEnemy(s, i, b.aggro) >= 0) { s.hasPursuit[i] = 0; s.idleAt[i] = -1; }   // 적은 있는데 다 차 있다(쫓는 수 한도·달리는 기병) → 제자리를 지킨다(돌아다니며 선 끝을 막지 않게)
     else if (sector && s.state[i] === STATE.FRONT) { pursue(w, i); if (s.hasPursuit[i]) s.idleAt[i] = -1; else regroup(w, i); }
   }
 }
 
 // 명령받은 병사(soldiers.js ORDER). 아직 가는 중이면 true — 새 적을 찾지도 쫓지도 않고 쏘지도 않는다(닿은 적은 싸움에서 저절로 친다;
-// 걸으며 쏘기는 같은 날 뺐다 — 사용자 "이동하면서 공격할 수 있는 게 문제"). 도착했으면(공격이면 그 적이 25 m 안, 원거리는 사거리 안) 명령을 풀고 false.
+// 걸으며 쏘기는 같은 날 뺐다 — 사용자 "이동하면서 공격할 수 있는 게 문제"). 도착했으면(공격이면 그 적과 맞붙음, 원거리는 사거리 안) 명령을 풀고 false.
 // 공격이 끝나면 그 자리가 목표가 된다 — 쓰러진 적의 한 점으로 모두 모이지 않게.
 function orderedThink(w, i) {
   const s = w.soldiers, b = w.rules.behavior, u = w.rules.units[s.side[i]][s.type[i]], ranged = u.range > w.rules.melee.reach * 2;
@@ -78,8 +85,11 @@ function orderedThink(w, i) {
   if (s.order[i] === ORDER.ATTACK) {
     const f = s.orderFoe[i], ok = f >= 0 && s.alive[f] && s.serial[f] === s.orderSerial[i];
     if (ok && loose) { s.goalX[i] = s.x[f]; s.goalZ[i] = s.z[f]; }
-    const engage = ranged ? rangeOf(w, i) : ORDER_ENGAGE;
-    if (loose && (!ok || Math.hypot(s.goalX[i] - s.x[i], s.goalZ[i] - s.z[i]) <= engage)) {
+    // 도착: 원거리는 사거리 안(멈춰 쏜다), 근접은 그 적과 맞붙었을 때(closeSwitch 안) — 25 m에서 끝내던 것은 마지막 구간에서
+    // 그 적 둘레의 다른 적에게 샜다(사용자 2026-11-09 "중간에 적군 있으면 타겟이 바뀐다"). 그 적이 죽으면 그 자리에 선다.
+    const d = Math.hypot(s.goalX[i] - s.x[i], s.goalZ[i] - s.z[i]);
+    const arrived = !ok || (ranged ? d <= rangeOf(w, i) : s.contact[i] === f || d <= b.closeSwitch);
+    if (loose && arrived) {
       s.order[i] = ORDER.NONE; s.hasPursuit[i] = 0;
       s.goalX[i] = s.x[i]; s.goalZ[i] = s.z[i];                     // 그 자리를 지킨다(적이 죽었으면 거기 선다)
       if (ok) { if (ranged) s.rtarget[i] = f; else s.target[i] = f; }
@@ -88,6 +98,64 @@ function orderedThink(w, i) {
   } else if (loose && Math.hypot(s.goalX[i] - s.x[i], s.goalZ[i] - s.z[i]) <= ORDER_ARRIVED) { s.order[i] = ORDER.NONE; return false; }
   s.target[i] = -1; s.rtarget[i] = -1; s.hasPursuit[i] = 0;
   return true;
+}
+
+// 투석기(투석기 설계서 2026-11-09 §2 "서는 자리"): 목표가 적 거점(그 거점으로 보낸 투석기 — 쐐기째든 하나하나든)이고 그 거점 가운데 구역이
+// 사거리 − holdMargin 안에 들면 쐐기에서 빠져 그 자리에 선다(목표 = 선 자리). 그 뒤 쏘기는 catapult.js. 땅·구역으로의 이동 명령(MOVE)은 그대로 간다.
+function catapultHold(w, i) {
+  const s = w.soldiers, u = w.rules.units[s.side[i]][s.type[i]];
+  if (!u.catapult || s.order[i] === ORDER.MOVE) return false;
+  const grp = s.group[i] >= 0 ? w.groups.find(g => g.id === s.group[i]) : null;
+  const id = grp ? (grp.target.kind === 'stronghold' ? grp.target.id : null) : s.goalKind[i] === GOAL.STRONGHOLD ? w.strongholds[s.goalId[i]]?.id : null;
+  const st = id ? w.strongholds.find(x => x.id === id) : null;
+  if (!st || st.owner === null || st.owner === s.side[i] || isPoint(st) || !buildingTarget(st)) return false;
+  const d = Math.hypot(st.x - s.x[i], st.z - s.z[i]);
+  if (d > st.radius * 0.5 + u.range - w.rules.catapult.holdMargin) return false;
+  if (grp) detachFromGroups(w, [i]);
+  s.goalKind[i] = GOAL.POINT; s.goalId[i] = -1; s.goalX[i] = s.x[i]; s.goalZ[i] = s.z[i];   // 선 자리가 목표(흐름장 없이)
+  s.order[i] = ORDER.NONE; s.fmRole[i] = 0; s.state[i] = STATE.FRONT;
+  s.target[i] = -1; s.rtarget[i] = -1;
+  return true;
+}
+
+// ---- 쫓기(2026-11-09) ----
+// 과녁을 바꾼다 — 적마다 노리는 무게(w._chaseW)도 같이 고친다.
+function aim(w, i, j) {
+  const s = w.soldiers, old = s.target[i];
+  if (old === j) return;
+  const wt = w.rules.units[s.side[i]][s.type[i]].weight, cw = w._chaseW;
+  if (old >= 0) cw[old] -= wt;
+  if (j >= 0) cw[j] += wt;
+  s.target[i] = j;
+}
+// 창·보병(기병 아님)이 노리기엔 달리는 기병인가: cavNear m 밖에서 제 빠르기 × cavSlow보다 빠르면.
+function runningCav(w, i, j) {
+  const s = w.soldiers, C = w.rules.behavior.chase, uj = w.rules.units[s.side[j]][s.type[j]];
+  if (!uj.charges || w.rules.units[s.side[i]][s.type[i]].charges) return false;
+  return (s.x[j] - s.x[i]) ** 2 + (s.z[j] - s.z[i]) ** 2 > C.cavNear * C.cavNear && s.vx[j] * s.vx[j] + s.vz[j] * s.vz[j] > (uj.speed * C.cavSlow) ** 2;
+}
+// 새로 노려도 되나: 달리는 기병이 아니고, 그 적을 노리는 무게가 한도(그 적 무게 × capRatio) 안 — 손에 닿는 적은 한도와 상관없이.
+function canChase(w, i, j, d) {
+  if (runningCav(w, i, j)) return false;
+  const s = w.soldiers, r = w.rules;
+  if (s.target[i] === j || d <= r.melee.reach * 1.5) return true;
+  return w._chaseW[j] + r.units[s.side[i]][s.type[i]].weight <= r.behavior.chase.capRatio * r.units[s.side[j]][s.type[j]].weight + 1e-9;
+}
+// rad m 안에서 노려도 되는 가장 가까운 적(ok(j)도 맞아야), 없으면 −1.
+function nearestChase(w, i, rad, ok) {
+  const s = w.soldiers, cs = s.cellSize, side = s.side[i];
+  let best = -1, bd = rad * rad;
+  const c0 = Math.max(0, Math.floor((s.x[i] - rad) / cs)), c1 = Math.min(s.gcols - 1, Math.floor((s.x[i] + rad) / cs));
+  const r0 = Math.max(0, Math.floor((s.z[i] - rad) / cs)), r1 = Math.min(s.grows - 1, Math.floor((s.z[i] + rad) / cs));
+  for (let rr = r0; rr <= r1; rr++)
+    for (let cc = c0; cc <= c1; cc++)
+      for (let j = s.head[rr * s.gcols + cc]; j !== -1; j = s.next[j]) {
+        if (!s.alive[j] || s.side[j] === side) continue;
+        const d2 = (s.x[j] - s.x[i]) ** 2 + (s.z[j] - s.z[i]) ** 2;
+        if (d2 >= bd || !ok(j) || !canChase(w, i, j, Math.sqrt(d2))) continue;
+        bd = d2; best = j;
+      }
+  return best;
 }
 
 // 120 m 안에 적이 없는 정면 병사: regroupSeconds 동안 서 있었고 자기 자리에서 regroupDistance m 넘게 멀면 자리(구역 선)로 걸어 돌아온다.
@@ -218,8 +286,9 @@ function maybeKite(w, i) {
 // 고른 목표는 decisionHold초 지킨다.
 function cavalryThink(w, i) {
   const s = w.soldiers, b = w.rules.behavior;
-  const t = s.target[i];
-  if (t >= 0 && s.alive[t] && w.time < s.holdUntil[i] && Math.hypot(s.x[t] - s.x[i], s.z[t] - s.z[i]) <= b.huntRange * 1.2) return;
+  const t = s.target[i];                                           // 고른 과녁과 맞붙어 있으면 끝낼 때까지 그대로 — 3초마다 다른 과녁(궁수)으로 떠나며 짓밟고 왔다갔다하지 않게(2026-11-09)
+  if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && (s.x[t] - s.x[i]) ** 2 + (s.z[t] - s.z[i]) ** 2 <= (w.rules.melee.reach * 1.5) ** 2) { s.hasPursuit[i] = 0; s.holdUntil[i] = w.time + b.decisionHold; return; }
+  if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && Math.hypot(s.x[t] - s.x[i], s.z[t] - s.z[i]) <= b.huntRange * 1.2) return;   // 고른 과녁은 죽거나 huntRange × 1.2 밖으로 갈 때까지(3초마다 다시 고르기는 뺐다 — 사용자 2026-11-10, 처음엔 컨트롤이 없어 기병이 스스로 더 좋은 과녁을 찾게 했다)
   // 고른 길(먹잇감 칸·돌기)은 decisionHold초 지킨다 — 닿았거나 40 m 안에 노릴 적이 생기면 다시 고른다(0.4초마다 본다)
   const going = t < 0 && s.hasPursuit[i] && w.time < s.holdUntil[i] && Math.hypot(s.pursuitX[i] - s.x[i], s.pursuitZ[i] - s.z[i]) > b.flankReach;
   if (going && (i + w.tick) % 8 > 1) return;
@@ -228,7 +297,6 @@ function cavalryThink(w, i) {
   if (e >= 0) { s.state[i] = STATE.FRONT; s.hasPursuit[i] = 0; s.holdUntil[i] = w.time + b.decisionHold; return; }
   if (going) return;
   s.holdUntil[i] = w.time + b.decisionHold;
-  if (evadeSpears(w, i)) return;                                  // 다가오는 창은 피한다
   const herd = preyCell(w, i);
   if (herd) { s.hasPursuit[i] = 1; s.pursuitX[i] = herd.x; s.pursuitZ[i] = herd.z; s.state[i] = STATE.FRONT; return; }
   const sec = w.map.sectors[s.goalId[i]], dir = s.side[i] === 0 ? 1 : -1;
@@ -248,28 +316,7 @@ function cavalryThink(w, i) {
   else s.hasPursuit[i] = 0;   // 다 돌았는데 노릴 게 없으면 선다(창 무리로 다가가지 않는다)
 }
 
-// 기병: 우리와 맞붙지 않은 적 버팀(창)이 evadeRange m 안에 오면 그 반대로 evadeDistance m 물러난다(궁수 물러나기와 같은 꼴).
-function evadeSpears(w, i) {
-  const s = w.soldiers, r = w.rules, b = r.behavior, rad = b.evadeRange, cs = s.cellSize;
-  let best = -1, bd = rad * rad;
-  const c0 = Math.max(0, Math.floor((s.x[i] - rad) / cs)), c1 = Math.min(s.gcols - 1, Math.floor((s.x[i] + rad) / cs));
-  const r0 = Math.max(0, Math.floor((s.z[i] - rad) / cs)), r1 = Math.min(s.grows - 1, Math.floor((s.z[i] + rad) / cs));
-  for (let rr = r0; rr <= r1; rr++)
-    for (let cc = c0; cc <= c1; cc++)
-      for (let j = s.head[rr * s.gcols + cc]; j !== -1; j = s.next[j]) {
-        if (!s.alive[j] || s.side[j] === s.side[i] || !r.units[s.side[j]][s.type[j]].holdsLine) continue;
-        if (!s.braced[j]) continue;                                      // 우리 보병과 맞붙어 버티지 못하는 창은 위협이 아니다
-        const d2 = (s.x[j] - s.x[i]) ** 2 + (s.z[j] - s.z[i]) ** 2;
-        if (d2 < bd) { bd = d2; best = j; }
-      }
-  if (best < 0) return false;
-  const dx = s.x[i] - s.x[best], dz = s.z[i] - s.z[best], l = Math.hypot(dx, dz) || 1;
-  s.target[i] = -1; s.hasPursuit[i] = 1; s.state[i] = STATE.FRONT;
-  s.pursuitX[i] = Math.max(2, Math.min(w.map.width - 2, s.x[i] + dx / l * b.evadeDistance));
-  s.pursuitZ[i] = Math.max(2, Math.min(w.map.depth - 2, s.z[i] + dz / l * b.evadeDistance));
-  s.holdUntil[i] = w.time + 1;
-  return true;
-}
+// 창 피하기(다가오는 창에서 물러나기·닿은 창에서 튕겨 나가기)는 뺐다(사용자 2026-11-10 "부대 컨트롤이 가능해져서 없어도 될 것 같다" — 2026-11-07에 컨트롤이 없어 넣었던 것).
 
 // 그 구역 앞쪽(선분 ±100 m, 적 선 너머 200 m 안)에 적 원거리·공성이 있나 — 없으면 기병은 돌아 들어갈 까닭이 없다.
 function preyAhead(w, side, sec) {
@@ -365,14 +412,14 @@ function garrisonThink(w, i) {
   const inReach = j => (s.x[j] - st.x) ** 2 + (s.z[j] - st.z) ** 2 <= r2;
   if ((s.x[i] - st.x) ** 2 + (s.z[i] - st.z) ** 2 > (reach + 20) ** 2) { s.target[i] = -1; return; }
   const t = s.target[i];
-  if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && inReach(t)) return;
-  s.target[i] = -1;
+  if (t >= 0 && s.alive[t] && s.side[t] !== s.side[i] && inReach(t) && !runningCav(w, i, t)) return;
+  aim(w, i, -1);
   if ((i + w.tick) % 4 > 1 || !st.nearIds) return;
   let best = -1, bd = Infinity;
   for (const j of st.nearIds) {
     if (!s.alive[j] || s.side[j] === s.side[i] || !inReach(j)) continue;
     const d = (s.x[j] - s.x[i]) ** 2 + (s.z[j] - s.z[i]) ** 2;
-    if (d < bd) { bd = d; best = j; }
+    if (d < bd && canChase(w, i, j, Math.sqrt(d))) { bd = d; best = j; }
   }
-  s.target[i] = best;
+  aim(w, i, best);
 }

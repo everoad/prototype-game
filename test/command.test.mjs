@@ -284,3 +284,16 @@ test('적 병사를 공격하러 가는 길을 적이 막으면 꿰뚫고 지나
   assert.ok(through <= 2, `막은 적을 지나간 병사 ${through}명`);
   assert.ok(wall.reduce((a, i) => a + (s.alive[i] ? s.hp[i] : 0), 0) < hp0, '막은 적과 싸웠다');
 });
+
+test('근접 공격 명령은 찍은 적과 맞붙을 때까지 이어진다 — 마지막 25 m에서 그 적 둘레의 다른 적에게 새지 않는다(사용자 2026-11-09 "중간에 적군 있으면 타겟이 바뀐다")', () => {
+  const w = empty(), s = w.soldiers;
+  const cav = block(w, 10, 297, 240, { type: CAVALRY, cols: 5 });
+  w.rules.units[1][ARCHER].speed = 0; w.rules.units[1][ARCHER].dps = 0;
+  const foe = block(w, 1, 300, 330, { side: 1, type: ARCHER })[0]; s.hp[foe] = 1e6;
+  for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; block(w, 1, 300 + Math.cos(a) * 6, 330 + Math.sin(a) * 6, { side: 1, type: INFANTRY }); }   // 그 적 둘레 6 m의 보병
+  assert.ok(applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids: cav }, target: { kind: 'foe', id: foe, serial: s.serial[foe] } }).ok);
+  const touched = new Set();
+  for (let k = 0; k < 12 * 20; k++) { step(w); for (const i of cav) if (s.alive[i] && s.contact[i] === foe) touched.add(i); }
+  assert.ok(touched.size >= 5, `찍은 적에 닿은 기병 ${touched.size}/10`);
+});
+

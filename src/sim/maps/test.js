@@ -2,7 +2,7 @@
 // 맵 자료: 자리·지형·구역·도는 길. 판정 코드는 이 자료를 읽기만 한다(map.js buildMap) — 맵을 더 만들 때는 이런 파일을 하나 더한다.
 // 편 0 = 낮은 z. 편 1은 위아래 뒤집기(z' = depth − z). 지형 칸: 0 들판, 1 숲, 2 언덕, 3 물, 4 여울(map.js).
 
-const FOREST = 1, HILL = 2, WATER = 3, FORD = 4;
+import { FOREST, HILL, WATER, FORD } from '../terrain.js';
 
 export const TEST_MAP = {
   name: 'test',

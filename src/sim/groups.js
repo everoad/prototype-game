@@ -239,7 +239,9 @@ export function stepGroups(w) {
       if (grp.foe && grp.cls === 'cav') { dissolve(w, grp, false); continue; }   // 기병은 하나하나 사냥한다(창 벽에 진형째 박지 않게)
       if (grp.foe) grp.charging = true;
     }
-    if (!routing && !grp.charging && Math.hypot(p.x - grp.x, p.z - grp.z) < g.arriveDistance) { dissolve(w, grp, grp.target.kind === 'foe' && !line); continue; }   // 적에게 닿으면 돌격하며 푼다
+    let arrive = g.arriveDistance;                                     // 원거리(궁수·투석기) 쐐기의 적 공격: 그 적이 사거리 안이면 서서 푼다(투석기 2026-11-09 — 20 m까지 걸어 들어갔다)
+    if (line && grp.target.kind === 'foe') for (const i of grp.members) if (s.alive[i]) arrive = Math.max(arrive, rangeOf(w, i));
+    if (!routing && !grp.charging && Math.hypot(p.x - grp.x, p.z - grp.z) < arrive) { dissolve(w, grp, grp.target.kind === 'foe' && !line); continue; }   // 적에게 닿으면 돌격하며 푼다
     let aim;
     if (grp.charging && grp.foe) aim = grp.foe;
     else if (routing) aim = p;

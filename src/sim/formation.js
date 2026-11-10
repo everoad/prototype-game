@@ -57,7 +57,7 @@ function ring(w, st, ids, r, gap, layerGap, role, faceOut) {
     const a = a0 + 2 * Math.PI * pos / inLayer, rr = Math.max(2, r - layer * layerGap);
     s.goalX[i] = st.x + Math.cos(a) * rr; s.goalZ[i] = st.z + Math.sin(a) * rr;
     s.fmRole[i] = role;
-    if (faceOut && s.target[i] < 0 && !s.inContact[i]) s.facing[i] = a;   // 바깥을 본다(방패가 바깥으로)
+    if (faceOut && s.target[i] < 0 && !s.inContact[i] && !w.rules.units[s.side[i]][s.type[i]].catapult) s.facing[i] = a;   // 바깥을 본다(방패가 바깥으로) — 투석기는 과녁 쪽 그대로
   });
   return Math.max(2, r - (L - 1) * layerGap);
 }

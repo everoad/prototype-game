@@ -3,14 +3,13 @@ import { forEachNear } from './soldiers.js';
 import { wallStanding } from './production.js';
 
 export function stepGauge(gauge, owner, weightOurs, weightTheirs, baseSeconds, dt, opts = {}) {
-  if (opts.hqLocked) return { gauge, owner };
+  if (opts.locked) return { gauge, owner };                // 성벽이 서 있는 거점(본진·앞·뒤): 점령되지 않는다(투석기 설계서 2026-11-09 §1)
   const full = 100;
   let g = gauge;
   const more = Math.max(weightOurs, weightTheirs);
   if (more > 0 && weightOurs !== weightTheirs) {
     const sign = weightOurs > weightTheirs ? 1 : -1;
     let rate = full / baseSeconds * (more - Math.min(weightOurs, weightTheirs)) / more;
-    if (opts.wallUp) rate *= 0.5;
     g += sign * rate * dt;
   } else if (more === 0 && opts.decaySeconds) {
     const home = owner === 0 ? full : owner === 1 ? -full : 0;
@@ -43,7 +42,7 @@ export function stepCapture(w, onOwnerChange) {
     const base = r.capture[st.kind];
     const wallUp = wallStanding(st);
     const res = stepGauge(st.gauge, st.owner, weight[0], weight[1], base, dt,
-      { wallUp: wallUp && st.kind !== 'hq', hqLocked: wallUp && st.kind === 'hq', decaySeconds: r.capture.decaySeconds });
+      { locked: wallUp, decaySeconds: r.capture.decaySeconds });
     const old = st.owner;
     st.gauge = res.gauge;
     st.owner = res.owner;

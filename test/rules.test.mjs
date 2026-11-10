@@ -41,8 +41,8 @@ test('건물·사기·틱 (§3.3, §7.2)', () => {
   assert.deepEqual(r.buildings.archery, { cost: 120, share: 0.5, unit: ARCHER });   // 거점 특화(사용자 2026-11-07): 하나면 80% — 사격장만 50%(사용자 2026-11-08)
   assert.deepEqual(r.buildings.stable, { cost: 150, share: 0.8, unit: CAVALRY });
   assert.deepEqual(r.buildings.pikes, { cost: 120, share: 0.8, unit: SPEAR });   // 창 막사(공방 대신)
-  assert.equal(r.buildings.wall.hp, 10000);
-  assert.equal(r.buildings.wall.hqHp, 20000);
+  assert.equal(r.buildings.wall.hp, 20000);    // 투석기 설계서(2026-11-09): 2배
+  assert.equal(r.buildings.wall.hqHp, 40000);
   assert.equal(r.morale.start, 60);
   assert.equal(r.dt, 0.05);
 });

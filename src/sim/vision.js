@@ -51,7 +51,11 @@ export function updateVision(w) {
   for (const side of [0, 1]) {
     V.open[side].fill(0); V.forest[side].fill(0); V.occupied.fill(0);
     for (let i = 0; i < s.count; i++) {                                     // 병사: 칸마다 한 번
-      if (!s.alive[i] || s.side[i] !== side) continue;
+      if (!s.alive[i]) continue;
+      if (s.side[i] !== side) {                                             // 방금 쏜 적 투석기는 보인다(돌이 어디서 오는지 — 투석기 2026-11-09)
+        if (w.time - s.fireAt[i] <= r.catapult.reveal && r.units[s.side[i]][s.type[i]].catapult) stamp(V, side, s.x[i], s.z[i], r.catapult.revealRadius, r.catapult.revealRadius);
+        continue;
+      }
       const c = Math.floor(s.x[i] / V.cell), rr = Math.floor(s.z[i] / V.cell);
       if (c < 0 || rr < 0 || c >= V.cols || rr >= V.rows) continue;
       const k = rr * V.cols + c;

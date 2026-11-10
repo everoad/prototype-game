@@ -5,7 +5,7 @@ import { makeRng } from './rng.js';
 import { buildMap, isPoint } from './map.js';
 import { createSoldiers, rebuildGrid, hash01, GOAL, STATE, ORDER } from './soldiers.js';
 import { computeField } from './flowfield.js';
-import { stepMovement } from './movement.js';
+import { stepMovement, clampTurns } from './movement.js';
 import { stepBehavior } from './behavior.js';
 import { stepCombat } from './combat.js';
 import { stepProduction, spawnStartArmies, spawnGarrisons } from './production.js';
@@ -20,6 +20,7 @@ import { UPGRADES } from './orders.js';
 import { stepCasts } from './casts.js';
 import { stepSiege } from './siege.js';
 import { stepFormation } from './formation.js';
+import { stepCatapults } from './catapult.js';
 
 const CROWD_FREE = 4;   // 한 칸(4 m)에 이만큼까지는 붐빔 비용 없음
 const CROWD_COST = 1;   // 그 위로 한 명마다 m
@@ -37,7 +38,8 @@ export function createWorld({ knobs = {}, seed = 1, scenario = 'battle' } = {}) 
   const w = {
     rules, map, rng: makeRng(seed), seed, tick: 0, time: 0, acc: 0,
     sides: [0, 1].map(() => ({ gold: rules.gold.start, morale: rules.morale.start, generals: [], arrows: new Map(), alive: 0, alerts: [], cooldowns: {} })),   // cooldowns: 금 명령마다 다시 쓸 수 있는 때(casts.js)
-    soldiers, strongholds, events: [], deaths: [], shots: [], moraleLog: [], result: null, hqLost: null, vpCount: [0, 0],
+    soldiers, strongholds, events: [], deaths: [], shots: [], boulders: [], catapultBatches: [],   // boulders·catapultBatches: 나는 투석기 돌, 산 투석기 무리(catapult.js)
+    moraleLog: [], result: null, hqLost: null, vpCount: [0, 0],
     casts: [],                                          // 건 금 명령의 원 { side, order, x, z, r, at, until }(화면이 그린다, casts.js)
     notices: [],                                        // 화면 알림 { side, kind: 'siegeReady', stronghold, ids, at }(siege.js)
     production: scenario === 'battle', pendingOrders: [], controllers: [null, null], groups: [], nextGroupId: 0, holds: [], generals: [],
@@ -103,12 +105,14 @@ export function step(w, orders = []) {
   stepGroups(w);
   stepMovement(w);                                      // ④
   rebuildGrid(w.soldiers);
+  stepCatapults(w);                                     // 투석기 돌(맞닿음은 앞 틱 싸움에서)
   stepCombat(w);                                        // ⑤
   if (!w.result) {                                      // ⑥
     stepCapture(w, (st, old, nu) => onOwnerChange(w, st, old, nu));
     stepMorale(w);
   }
   checkEnd(w);
+  clampTurns(w);                                        // 도는 빠르기 한계(movement.js)
   stepVision(w);                                        // ⑦ 시야(4틱마다)
   w.tick++;
   w.time = w.tick * w.rules.dt;

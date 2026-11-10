@@ -1,4 +1,4 @@
-// 공성병 사기(설계서 2026-11-09-flood-gold-orders-design.md §2): 우리 거점에서 금으로 사면 seconds 뒤 그 거점에 count명이 선다.
+// 투석기 사기(투석기 설계서 2026-11-09 §2, 금 명령 설계서의 공성병 사기를 바꿈): 우리 거점에서 금으로 사면 seconds 뒤 그 거점에 count대가 선다.
 // 생산 방향으로 저절로 가지 않는다 — 언제 밀지는 보내는 쪽이 정한다. 한 거점에서 한 번에 하나씩.
 import { spawn } from './soldiers.js';
 import { SIEGE } from './rules.js';
@@ -21,14 +21,19 @@ export function buySiege(w, o) {
   return { ok: true };
 }
 
-// 다 된 공성병을 그 거점에 세운다. 그 사이 주인이 바뀌었으면 아무에게도 나오지 않는다.
+// 다 된 투석기를 그 거점에 세운다. 그 사이 주인이 바뀌었으면 아무에게도 나오지 않는다.
 export function stepSiege(w) {
   const s = w.soldiers, def = w.rules.siegeBuy;
   w.strongholds.forEach((st, k) => {
     if (st.siegeAt == null || st.siegeAt > w.time + 1e-9) return;
-    const side = st.siegeSide, n = Math.round(def.count);
+    const side = st.siegeSide, n = Math.max(1, Math.round(def.count));
     st.siegeAt = null;
-    if (st.owner !== side || s.free.length + s.capacity - s.count < n) return;
+    if (st.owner !== side) return;
+    if (s.free.length + s.capacity - s.count < n) {                // 병사 자리가 꽉 찼다: 값을 돌려준다
+      w.sides[side].gold += def.cost;
+      w.events.push({ kind: 'siegeRefund', side, stronghold: st.id });
+      return;
+    }
     const ids = [];
     for (let m = 0; m < n; m++) {
       const a = w.rng.next() * Math.PI * 2, d = st.radius * 0.5 * Math.sqrt(w.rng.next());
@@ -37,7 +42,8 @@ export function stepSiege(w) {
       ids.push(i);
     }
     setGoal(w, ids, { kind: 'stronghold', id: st.id });
-    w.notices.push({ side, kind: 'siegeReady', stronghold: st.id, ids, at: w.time });
+    w.notices.push({ side, kind: 'siegeReady', stronghold: st.id, ids, serials: ids.map(i => s.serial[i]), at: w.time });
+    w.catapultBatches.push({ side, ids, serials: ids.map(i => s.serial[i]), wall: 0, buildings: 0, kills: 0, lastShot: -1e9, at: w.time });   // 결과 알림(catapult.js)   // serials: 그 사이 죽은 번호를 물려받은 병사를 고르지 않게
   });
   for (let k = w.notices.length - 1; k >= 0; k--) if (w.time - w.notices[k].at > NOTICE_SECONDS) w.notices.splice(k, 1);
 }

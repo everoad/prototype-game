@@ -13,7 +13,7 @@ const LOOK = {
   camStart: { tx: 600, tz: 370, h: 700, yaw: -Math.PI / 4 }, camMinH: 120, camMaxH: 900, pitchDeg: 45, fov: 40, maxFov: 80,   // yaw −45°: 대각선 시점(사용자 2026-11-08) — 우리 쪽이 왼쪽 아래, 적이 오른쪽 위
   treeSpacing: 8, rotateStep: Math.PI / 24, arrowWidth: 2.2, arrowOpacity: 0.55, keyPanScreens: 0.3,
   // 금 명령 원(casts.js): 거는 순간 flash초 동안 채운 원이 옅어지고, 화살 비는 끝날 때까지 테두리 호가 남은 몫만큼 남는다. 적이 건 원은 보일 때 빨갛게 번쩍만.
-  wallRing: { inset: 2, width: 5, color: 0x6b6a64, opacity: 0.9 },   // 성벽이 서 있는 거점: 원 안쪽 두꺼운 회색 고리
+  wallRing: { inset: 2, width: 5, color: 0x6b6a64, opacity: 0.9, segments: 24, drop: [6, 12, 18] },   // 성벽이 서 있는 거점: 원 안쪽 두꺼운 회색 고리 — 24조각, 체력 75·50·25% 밑에서 drop개까지 빠진다(투석기 2026-11-09)
   vpPole: { h: 22, r: 0.6, fw: 10, fh: 6 }, landPole: { h: 12, r: 0.45, fw: 6, fh: 4 },   // 승점·작은 땅 깃대
   cast: { flash: 0.6, flashOpacity: 0.35, ringOpacity: 0.9, aimOpacity: 0.95, aimFill: 0.1, pool: 32, ringWidth: 0.06 },
 };
@@ -91,7 +91,8 @@ export function createScene(canvas, map, opts = {}) {
       const size = s.kind === 'hq' ? 28 : 16;
       const box = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.4, size), new THREE.MeshLambertMaterial({ color }));
       box.position.y = size * 0.2; g.add(box); g.userData.box = box;
-      const W = LOOK.wallRing, wall = new THREE.Mesh(new THREE.RingGeometry(s.radius - W.inset - W.width, s.radius - W.inset, 64), new THREE.MeshBasicMaterial({ color: W.color, transparent: true, opacity: W.opacity, side: THREE.DoubleSide }));
+      const W = LOOK.wallRing, wall = new THREE.Group(), wallMat = new THREE.MeshBasicMaterial({ color: W.color, transparent: true, opacity: W.opacity, side: THREE.DoubleSide });
+      for (let k = 0; k < W.segments; k++) wall.add(new THREE.Mesh(new THREE.RingGeometry(s.radius - W.inset - W.width, s.radius - W.inset, 4, 1, k / W.segments * Math.PI * 2, Math.PI * 2 / W.segments * 0.96), wallMat));   // 조각(체력이 줄면 빠진다)
       wall.rotation.x = -Math.PI / 2; wall.position.y = 0.35; wall.visible = false; g.add(wall); g.userData.wallRing = wall;   // 성벽이 서 있는 동안(main.js)
     }
     g.userData.ring = ring;
@@ -360,7 +361,15 @@ export function createScene(canvas, map, opts = {}) {
 
   function render() { panByKeys(); resize(); placeCamera(); renderer.render(scene, camera); }
   resize(); placeCamera();
-  return { renderer, scene, camera, cam, controls, strongholdMeshes, heightAt, worldToScreen, screenToGround, footprint, resize, render, pan, setArrows, setPreview, setBuildings, setGenerals, setFog, setHover, setAim, setCasts };
+  // 성벽 체력 몫(0~1) → 빠진 조각. 빠지는 차례는 고르게 흩어 둔다.
+  const DROP_ORDER = [0, 12, 6, 18, 3, 15, 9, 21, 1, 13, 7, 19, 4, 16, 10, 22, 2, 14, 8, 20, 5, 17, 11, 23];
+  function setWallDamage(id, frac) {
+    const ring = strongholdMeshes.get(id)?.userData.wallRing, D = LOOK.wallRing.drop;
+    if (!ring) return;
+    const gone = frac < 0.25 ? D[2] : frac < 0.5 ? D[1] : frac < 0.75 ? D[0] : 0;
+    ring.children.forEach((m, k) => { m.visible = DROP_ORDER.indexOf(k) >= gone; });
+  }
+  return { renderer, scene, camera, cam, controls, strongholdMeshes, setWallDamage, heightAt, worldToScreen, screenToGround, footprint, resize, render, pan, setArrows, setPreview, setBuildings, setGenerals, setFog, setHover, setAim, setCasts };
 }
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }

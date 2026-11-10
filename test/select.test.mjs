@@ -150,12 +150,14 @@ test('오른쪽 클릭 목표(사용자 2026-11-08): 누른 그 자리로 — �
   assert.deepEqual(rightClickTarget(w, 0, { x: 520, z: sec.z - 60 }, 80), { kind: 'sector', id: 's0-center' }, '생산 방향은 넓게(80 m) 잡는다');
 });
 
-test('오른쪽 클릭 목표(사용자 2026-11-08 "승점을 고르고 적 본진·거점을 누르면 맞으면서 그냥 걷는다"): 거점·승점 원 안이면 밑에 적 병사가 있어도 그 거점(어택땅), 원 밖의 적만 그 적 공격', async () => {
+test('오른쪽 클릭 목표(사용자 2026-11-08 "승점을 고르고 적 본진·거점을 누르면 맞으면서 그냥 걷는다", 2026-11-09 "거점 안의 적을 찍으면 근처 적을 따라간다"): 가운데 건물 둘레를 누르면 밑에 적 병사가 있어도 그 거점(어택땅), 그 밖은 원 안이어도 찍은 적 공격', async () => {
   const { sendTarget } = await import('../src/view/select.js');
   const w = empty();
   const hq = w.strongholds.find(x => x.id === 'hq1');
   const guard = spawn(w.soldiers, 1, SPEAR, hq.x + 2, hq.z, w.rules);   // 본진 가운데의 수비대 — 전에는 이 병사 "공격"이 되어 가는 길의 적을 다 무시했다
-  assert.deepEqual(sendTarget(w, 0, { x: hq.x, z: hq.z }, guard), { kind: 'stronghold', id: 'hq1' });
+  assert.deepEqual(sendTarget(w, 0, { x: hq.x, z: hq.z }, guard, hq), { kind: 'stronghold', id: 'hq1' }, '가운데 건물 둘레(core)');
+  const inner = spawn(w.soldiers, 1, SPEAR, hq.x + 50, hq.z, w.rules);   // 본진 원 안, 건물 둘레 밖
+  assert.deepEqual(sendTarget(w, 0, { x: hq.x + 50, z: hq.z }, inner, null), { kind: 'foe', id: inner, serial: w.soldiers.serial[inner] }, '원 안이어도 찍은 적');
   const loose = spawn(w.soldiers, 1, SPEAR, 520, 320, w.rules);         // 거점·승점 원 밖의 적
   assert.deepEqual(sendTarget(w, 0, { x: 521, z: 320 }, loose), { kind: 'foe', id: loose, serial: w.soldiers.serial[loose] });
   assert.deepEqual(sendTarget(w, 0, { x: 600, z: 400 }, -1), { kind: 'stronghold', id: 'vpC' }, '적이 없으면 원래 목표');
@@ -165,10 +167,10 @@ test('오른쪽 클릭 목표(사용자 2026-11-08 "승점을 고르고 적 본�
 test('fortInfo: 본진 처음 성벽과 건물, 올린 성벽, 성벽 없는 거점', () => {
   const w = createWorld({ seed: 1, scenario: 'battle' }), st = id => w.strongholds.find(x => x.id === id);
   const hq = fortInfo(st('hq0'), w.rules);
-  assert.deepEqual(hq.wall, { hp: 20000, max: 20000 });
+  assert.deepEqual(hq.wall, { hp: 40000, max: 40000 });
   assert.deepEqual(hq.buildings.map(b => [b.kind, b.hp, b.max]), [['archery', 2000, 2000], ['stable', 2000, 2000]]);
   const f = st('f0L'); f.slots[f.slotCount] = { kind: 'wall', level: 2, hp: 15000 };
-  assert.deepEqual(fortInfo(f, w.rules).wall, { hp: 15000, max: 20000 });
+  assert.deepEqual(fortInfo(f, w.rules).wall, { hp: 15000, max: 40000 });
   const r = st('f0R');
   assert.equal(fortInfo(r, w.rules).wall, null); assert.deepEqual(fortInfo(r, w.rules).buildings, []);
   r.slots[r.slotCount] = { kind: 'wall', level: 1, hp: 10000, building: true };

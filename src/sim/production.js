@@ -142,7 +142,7 @@ export function stepProduction(w) {
     w.sides[st.owner].gold += income / 60 * dt;   // 수입
     if (isPoint(st)) continue;                         // 점(승점·땅)은 생산하지 않는다
     for (const b of st.slots) if (b && b.building && w.time >= b.doneAt) b.building = false;   // 짓기 마침
-    const perMin = st.kind === 'hq' ? r.levy.hq : r.levy.stronghold;
+    const perMin = (st.kind === 'hq' ? r.levy.hq : r.levy.stronghold) * (r.sideProduction?.[st.owner] ?? 1);   // 몬스터 편 생산 배율(난이도)
     const gain = perMin / 60 * dt, shares = conversionShares(st.slots, r);
     st.typeAcc ??= [0, 0, 0, 0];
     for (const type of TYPES) {

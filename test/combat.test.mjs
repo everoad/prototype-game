@@ -37,7 +37,7 @@ test('투척꾼 범위 피해는 splashMax가 있으면 둘레에서 가장 가�
   const { createWorld, step, setGoal } = await import('../src/sim/world.js');
   const { spawn } = await import('../src/sim/soldiers.js');
   const w = createWorld({ scenario: 'empty', seed: 1 }), s = w.soldiers;
-  w.rules.units[1][ARCHER].splashMax = 2;
+  w.rules.units[1][ARCHER].splashMax = 2; w.rules.units[0][INFANTRY].speed = 0;   // 맞는 쪽은 제자리(쫓는 수 한도로 일부만 걸어 나가면 무리가 흩어진다)
   const center = spawn(s, 0, INFANTRY, 600, 380, w.rules), ring = [];
   for (let k = 0; k < 6; k++) ring.push(spawn(s, 0, INFANTRY, 600 + Math.cos(k) * (0.9 + k * 0.15), 380 + Math.sin(k) * (0.9 + k * 0.15), w.rules));
   const hurler = spawn(s, 1, ARCHER, 600, 410, w.rules);

@@ -9,7 +9,7 @@ const LOOK = {
     () => new THREE.ConeGeometry(0.55, 1.9, 6).translate(0, 0.95, 0),
     () => new THREE.BoxGeometry(2.4, 1.7, 0.85).translate(0, 0.85, 0),
     () => new THREE.CylinderGeometry(0.5, 0.5, 1.4, 4).translate(0, 0.7, 0),   // 보병: 낮은 네모 기둥
-    () => new THREE.BoxGeometry(1.5, 1.5, 1.5).translate(0, 0.75, 0),          // 공성(사람 공성병·몬스터 오거)
+    () => new THREE.BoxGeometry(1.5, 1.5, 1.5).translate(0, 0.75, 0),          // 공성(투석기) — 자리만 맞추고 그리지 않는다(catapults.js가 그린다)
   ],
   brightness: [0.8, 1.3, 0.72, 1.12, 0.55],
   selectedTint: 2.6,   // 고른 병사 색 배율(사용자 2026-11-08 PC 조작)
@@ -75,6 +75,7 @@ export function createCrowd(view, rules, capacity) {
     for (let i = 0; i < s.count; i++) {
       if (!s.alive[i]) continue;
       if (visible && !visible(i)) continue;
+      if (rules.units[s.side[i]][s.type[i]].catapult) continue;   // 투석기는 catapults.js가 그린다
       const side = s.side[i], type = s.type[i], k = side * NT + type;
       const x = s.px[i] + (s.x[i] - s.px[i]) * alpha, z = s.pz[i] + (s.z[i] - s.pz[i]) * alpha;
       m4.makeRotationY(s.facing[i]);

@@ -193,7 +193,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     if (!p || w.result) return;
     if (e.ctrlKey || ctrlHeld || arrowMode) { setFlow(w, p); arrowMode = false; return; }
     if (!sel.ids.length) { toast('먼저 병력을 고르세요 — 거점·쐐기를 누르거나 빈 땅에서 끌어 네모'); return; }
-    const f0 = foeAt(w, e.clientX, e.clientY, p), f = sendTarget(w, side, p, f0)?.kind === 'foe' ? f0 : -1;   // 거점·승점 원 안이면 밑의 적 병사보다 그 거점(어택땅)
+    const f0 = foeAt(w, e.clientX, e.clientY, p), f = sendTarget(w, side, p, f0, coreAt(w, e.clientX, e.clientY, p))?.kind === 'foe' ? f0 : -1;   // 가운데 건물 둘레를 눌렀으면 밑의 적 병사보다 그 거점(어택땅)
     const t = f >= 0 ? { target: { kind: 'foe', id: f, serial: w.soldiers.serial[f] }, name: foeName(w, f), attack: true } : targetAt(w, p);
     if (!t) { toast('갈 수 없는 곳(물)'); return; }
     const stop = t.attack ? { x: w.soldiers.x[f], z: w.soldiers.z[f] } : { x: p.x, z: p.z };
@@ -267,7 +267,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     if (!pk) { if (!add) select([], null, false); return; }
     const ids = troopsOf(w, pk);
     select(ids, pk, add);
-    if (!ids.length && !(pk.kind === 'stronghold' && pk.st.owner === side)) toast(`${pk.kind === 'stronghold' ? placeName(pk.st) : '쐐기'}에 고를 우리 병사가 없다`);
+    if (!ids.length && !(pk.kind === 'stronghold' && pk.st.owner === side && !isPoint(pk.st))) toast(`${pk.kind === 'stronghold' ? placeName(pk.st) : '쐐기'}에 고를 우리 병사가 없다`);
   }
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.pointerId) { drag = null; boxEl.style.display = 'none'; } });
@@ -319,7 +319,7 @@ export function createInput(view, canvas, getWorld, side, hooks) {
     if (aim) { aimHover(w, now); return; }
     const pk = pickAt(w, pointer.x, pointer.y);
     const gp = view.screenToGround(pointer.x, pointer.y), f0 = sel.ids.length && !pk && !ctrlHeld && !arrowMode ? foeAt(w, pointer.x, pointer.y, gp) : -1;
-    const foe = f0 >= 0 && sendTarget(w, side, gp, f0)?.kind === 'foe' ? f0 : -1;   // 오른쪽 클릭과 같은 판단(원 안이면 적 병사를 빛내지 않는다)
+    const foe = f0 >= 0 && sendTarget(w, side, gp, f0, coreAt(w, pointer.x, pointer.y, gp))?.kind === 'foe' ? f0 : -1;   // 오른쪽 클릭과 같은 판단(가운데 건물 둘레면 적 병사를 빛내지 않는다)
     view.setHover(pk ? { x: pk.x, z: pk.z, r: pk.r } : foe >= 0 ? { x: w.soldiers.x[foe], z: w.soldiers.z[foe], r: 4 } : null);
     const lines = [];
     if (pk) {

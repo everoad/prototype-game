@@ -21,6 +21,7 @@ export const STATS = {
 export function makeStats({ seed = 0 } = {}) {
   let nextSample = 0, nextSeries = 0, emptySamples = 0, morale5 = null;
   const alive = [], fighting = [], empty = {}, raids = [], captures = [], lifetimes = [];
+  let landRaids = 0;                                    // 경유점으로 적 땅에 보낸 것(거점 기습과 따로)
   const firstContact = new Map();                       // 병사 번호 → { serial, t }
   const builds = [{}, {}], unitTime = [[0, 0, 0, 0], [0, 0, 0, 0]], pending = [], decisions = [0, 0];
 
@@ -37,7 +38,8 @@ export function makeStats({ seed = 0 } = {}) {
       else if (e.kind === 'send') {
         decision(w, e.side, null);
         const tgt = e.target.kind === 'stronghold' && w.strongholds.find(x => x.id === e.target.id);
-        if (e.routed && tgt && tgt.kind !== 'vp' && tgt.owner === 1 - e.side) raids.push({ side: e.side, target: tgt.id, at: w.time, m0: moraleDiff(w, e.side), won: false, swing: null });
+        if (e.routed && tgt && tgt.kind === 'land' && tgt.owner === 1 - e.side) landRaids++;
+        else if (e.routed && tgt && !isPoint(tgt) && tgt.owner === 1 - e.side) raids.push({ side: e.side, target: tgt.id, at: w.time, m0: moraleDiff(w, e.side), won: false, swing: null });
       } else if (e.kind === 'captured') {
         captures.push({ at: w.time, stronghold: e.stronghold, from: e.from, to: e.to });
         for (const r of raids) if (!r.won && r.target === e.stronghold && e.to === r.side && w.time - r.at <= STATS.raidWindow) r.won = true;
@@ -91,7 +93,7 @@ export function makeStats({ seed = 0 } = {}) {
       seed, winner: r ? r.winner : null, reason: r ? r.reason : 'timeout', endTime: Math.round(endTime * 100) / 100,
       endedBeforePressure: !!r && endTime < STATS.pressureAt, draw: !!r && r.winner === null,
       morale5min: morale5,
-      raids: raids.length, raidWins: raids.filter(x => x.won).length, raidMoraleSwing: swings.length ? swings.reduce((p, q) => p + q, 0) / swings.length : null,
+      raids: raids.length, landRaids, raidWins: raids.filter(x => x.won).length, raidMoraleSwing: swings.length ? swings.reduce((p, q) => p + q, 0) / swings.length : null,
       raidList: raids.map(x => ({ side: x.side, target: x.target, at: Math.round(x.at), won: x.won })),
       collapses, alive, fighting,
       emptyFrontPct: Object.fromEntries(w.map.sectors.map(sec => [sec.id, emptySamples ? Math.round(1000 * (empty[sec.id] ?? 0) / emptySamples) / 10 : 0])),

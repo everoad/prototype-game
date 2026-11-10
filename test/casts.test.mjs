@@ -105,7 +105,7 @@ test('강행군: 쐐기 밖 병사도 빠르고, 20초 뒤 원래대로', () => 
   run(w, 18.1); assert.ok(w.soldiers.marchUntil[i] <= w.time);
 });
 
-test('돌격 북: 걸린 병사의 화력 ×1.3', () => {
+test('돌격 북: 걸린 병사의 화력 × damageMult(1.5)', () => {
   const dealt = drum => {                                        // 첫 타(1초에 한 번)만 — 밀어내기 전에 잰다
     const w = empty(); w.sides[0].gold = 500;
     block(w, 10, 300, 300); const foes = block(w, 10, 300, 301, { side: 1 });   // 닿는 거리(1.2 m) 안
@@ -115,7 +115,7 @@ test('돌격 북: 걸린 병사의 화력 ×1.3', () => {
     return hp0 - foes.reduce((a, i) => a + Math.max(0, w.soldiers.hp[i]), 0);
   };
   const ratio = dealt(true) / dealt(false);
-  assert.ok(Math.abs(ratio - 1.3) < 0.05, `비 ${ratio.toFixed(2)}`);
+  assert.ok(Math.abs(ratio - 1.5) < 0.05, `비 ${ratio.toFixed(2)}`);   // 2026-11-09 ×1.3 → ×1.5
 });
 
 test('돌격 북: 근접으로 맞은 적이 밀려나 줄이 앞으로 나간다', () => {
@@ -213,14 +213,14 @@ test('긴급 징집: 경보가 없는 거점이면 거절', () => {
   assert.equal(castOrder(w, { kind: 'cast', side: 0, order: 'levy', stronghold: 'f1L' }).reason, '우리 거점이 아니다');
 });
 
-test('긴급 징집: 경보가 뜬 거점에 보병 150명이 서고, 다시 쓰기는 편마다', () => {
+test('긴급 징집: 경보가 뜬 거점에 보병 200명이 서고, 다시 쓰기는 편마다', () => {
   const w = empty(); w.sides[0].gold = 500;
   for (const id of ['f0L', 'f0R']) w.sides[0].alerts.push({ kind: 'attacked', stronghold: id, since: w.time, last: w.time });
   const before = w.soldiers.count, r = castOrder(w, { kind: 'cast', side: 0, order: 'levy', stronghold: 'f0L' });
-  assert.ok(r.ok); assert.equal(r.count, 150);
+  assert.ok(r.ok); assert.equal(r.count, 200);
   const st = w.strongholds.find(x => x.id === 'f0L'), s = w.soldiers, made = [];
   for (let i = before; i < s.count; i++) if (s.alive[i]) made.push(i);
-  assert.equal(made.length, 150);
+  assert.equal(made.length, 200);
   assert.ok(made.every(i => s.type[i] === INFANTRY && s.goalKind[i] === GOAL.STRONGHOLD && Math.hypot(s.x[i] - st.x, s.z[i] - st.z) <= st.radius));
   assert.match(castOrder(w, { kind: 'cast', side: 0, order: 'levy', stronghold: 'f0R' }).reason, /^다시 쓰기/);
 });
@@ -295,4 +295,33 @@ test('결과 알림: 강행군 — 평소보다 더 간 거리', () => {
   run(w, 20.2);
   const n = resultOf(w, 'march'), u = w.rules.units[0][SPEAR].speed;   // 20초 동안 (×2 − ×1) × 빠르기
   assert.ok(n && n.count === 1 && Math.abs(n.extra - u * 20) < u * 3, JSON.stringify(n));
+});
+
+// ---- 리뷰에서 미룬 작은 것(2026-11-09) ----
+test('Shift 이어 가기가 거절되면(경유점 3개 넘음) 서 있는 궁수의 화살 비가 그대로다', () => {
+  const w = empty(); w.sides[0].gold = 500;
+  const ar = block(w, 5, 300, 300, { type: ARCHER });
+  castOrder(w, { kind: 'cast', side: 0, order: 'volley', x: 300, z: 340 });
+  const inf = block(w, 20, 200, 200, { type: INFANTRY });
+  applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids: inf }, target: { kind: 'point', x: 200, z: 600 }, via: [{ x: 210, z: 300 }, { x: 220, z: 400 }, { x: 230, z: 500 }] });
+  run(w, 1);
+  const r = applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids: [...ar, ...inf] }, target: { kind: 'point', x: 400, z: 600 }, append: true });
+  assert.equal(r.ok, false, JSON.stringify(r));
+  assert.ok(ar.every(i => w.soldiers.volleyUntil[i] > w.time), '화살 비가 풀리지 않는다');
+});
+
+test('강행군: 쐐기가 다 와서 풀린 뒤에도 남은 시간 동안 빠르다', () => {
+  const w = empty(); w.sides[0].gold = 500;
+  const ids = block(w, 20, 300, 200, { type: INFANTRY });
+  applyOrder(w, { kind: 'send', side: 0, from: { kind: 'ids', ids }, target: { kind: 'point', x: 300, z: 260 } });
+  run(w, 0.5); const c = centroid(w, ids);
+  assert.ok(castOrder(w, { kind: 'cast', side: 0, order: 'march', x: c.x, z: c.z }).ok);
+  for (let k = 0; k < 200 && ids.some(i => w.soldiers.group[i] >= 0); k++) step(w);
+  assert.ok(ids.every(i => w.soldiers.group[i] < 0), '쐐기가 풀렸다');
+  const i = ids[0], s = w.soldiers;
+  assert.ok(s.marchUntil[i] > w.time + 1, '강행군이 남았다');
+  setGoal(w, [i], { kind: 'point', x: s.x[i], z: 700 });
+  run(w, 1); let z = s.z[i]; run(w, 1); const fast = s.z[i] - z;
+  s.marchUntil[i] = 0; z = s.z[i]; run(w, 1); const base = s.z[i] - z;
+  assert.ok(fast / base > 1.8, `빠르기 ${(fast / base).toFixed(2)}`);
 });

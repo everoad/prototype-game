@@ -17,19 +17,19 @@ const UNIT_TABLE = [
     { name: '궁수', hp: 360, dps: 4, range: 40, speed: 2.6, holdsLine: false, splash: 0, siege: false },   // 창병(3)보다 느리게 — 물러나는 궁수를 따라잡도록(사용자 2026-11-07)
     { name: '기병', hp: 960, dps: 22, range: 1.2, speed: 9, holdsLine: false, splash: 0, siege: false, charges: true },   // 화력 14 → 22(무게당 궁수와 같게), 빠르기 7 → 9(보병의 세 배, 사용자 2026-11-07: 기병이 빨리 닿게)
     { name: '보병', hp: 600, dps: 10, range: 1.2, speed: 3, holdsLine: false, shield: true, splash: 0, siege: false },   // 무난한 병종: 창병과 같은 수치와 앞쪽 방패, 버티기·기병 상성은 없음
-    { name: '공성병', hp: 480, dps: 3, range: 45, speed: 3, holdsLine: false, splash: 0, siege: true },   // 9322f5e의 수치, 빠르기만 1.8 → 3(보병과 같이 닿게, 2026-11-09)
+    { name: '투석기', hp: 1500, dps: 0, range: 100, minRange: 12, speed: 2, holdsLine: false, splash: 0, siege: true, catapult: true },   // 투석기 설계서(2026-11-09): 맞붙어 싸우지 않고 catapult.js가 돌을 쏜다(공성병 대신)
   ],
   [
     { name: '창 고블린', hp: 360, dps: 6, range: 1.2, speed: 3.3, holdsLine: true, shield: true, splash: 0, siege: false, spacing: 0.6 },   // 떼(간격 0.6 m). 체력 300 → 360, 화력 5 → 6: 정면에서 기병을 막게(사용자 2026-11-07)
     { name: '투척꾼', hp: 400, dps: 3, range: 40, speed: 2.4, holdsLine: false, splash: 2, splashShare: 0.3, splashMax: 6, siege: false },   // 둘레 2 m의 가까운 6명까지 30%(사용자 2026-11-07: 조금 줄여 보자 — 제한이 없으면 빽빽한 줄에서 바위 하나가 열 명 넘게 쳤다)
     { name: '늑대 기수', hp: 700, dps: 12, range: 1.2, speed: 10, holdsLine: false, splash: 0, siege: false, charges: true },   // 빠르기 8 → 10(사람 기병과 같은 비율로)
     { name: '고블린', hp: 300, dps: 5, range: 1.2, speed: 3.3, holdsLine: false, shield: true, splash: 0, siege: false, spacing: 0.6 },
-    { name: '오거', hp: 1500, dps: 8, range: 1.5, speed: 3.3, holdsLine: false, splash: 0, siege: true },   // 9322f5e의 수치, 빠르기만 1.6 → 3.3(고블린과 같이)
+    { name: '고블린 투석기', hp: 1500, dps: 0, range: 100, minRange: 12, speed: 2, holdsLine: false, splash: 0, siege: true, catapult: true },   // 사람 투석기와 같은 규칙(1:1 대전, 오거는 뺐다)
   ],
 ];
 
 export function makeRules(knobs = {}) {
-  const k = { scale: 1, production: 1, damage: 1, commandLimit: 500, commandCooldown: 60, speed: 1.25, mirror: false, soldierSight: 60, ...knobs };   // speed: 모든 이동 배율(사용자 2026-11-08: 조금 빠르게 1 → 1.25)
+  const k = { scale: 1, production: 1, damage: 1, commandLimit: 500, commandCooldown: 60, speed: 1.25, mirror: false, soldierSight: 60, monsterProduction: 1.05, ...knobs };   // monsterProduction: 몬스터 편 생산 배율(난이도, mirror면 1) — 2026-11-10 AI 대 AI(쫓기 규칙·기병 창 피하기·3초 다시 고르기 뺀 뒤): ×1.05 몬스터 2/3, ×1.12 3/3 → 1.05   // speed: 모든 이동 배율(사용자 2026-11-08: 조금 빠르게 1 → 1.25)
   const s = k.scale;
   // mirror: 편 1도 사람 병종 표를 쓴다(대칭 시험·1:1 대칭 판)
   const table = k.mirror ? [UNIT_TABLE[0], UNIT_TABLE[0]] : UNIT_TABLE;
@@ -62,6 +62,7 @@ export function makeRules(knobs = {}) {
 
     cap: 10000 * s,
     levy: { hq: 600 * s * k.production, stronghold: 350 * s * k.production }, // 무게/분
+    sideProduction: [1, k.mirror ? 1 : k.monsterProduction],          // 편마다 생산 배율(편 1 = 몬스터)
     start: {
       armyWeight: 2000 * s,
       mix: { [INFANTRY]: 0.4, [SPEAR]: 0.15, [ARCHER]: 0.27, [CAVALRY]: 0.18 },   // 공성은 뺐다(사용자 2026-11-07: 역할이 애매, 나중에 금으로 산다)
@@ -75,12 +76,17 @@ export function makeRules(knobs = {}) {
     // 금 명령(설계서 2026-11-09-flood-gold-orders-design.md): 땅에 반지름 radius m 원을 찍어 건다. cost 금, cooldown 초(명령마다·편마다), seconds 효과 초.
     orders: {
       radius: 50,
-      march: { cost: 60, cooldown: 90, seconds: 20, speedMult: 2 },   // 2026-11-09 놀아 본 뒤: 60초 ×1.3은 안 보였다 → 20초 ×2(쐐기가 치고 나가는 게 보이게)
-      drum: { cost: 80, cooldown: 120, seconds: 15, damageMult: 1.3, knockback: 3 },   // 돌격 북: 화력 ×1.3, 근접 타격마다 맞은 적 3 m 밀려남(1.5면 15초에 줄이 6 m, 3이면 9 m — 2026-11-09 잼), 안 무너짐(전에는 받는 피해 ×0.7 30초 — 안 보였다)
+      // 2026-11-09 사용자 "스킬 쿨타임이 너무 길고 영향력이 적다": 다시 쓰기를 줄여 금이 제약이 되게(강행군 90 → 45, 돌격 북 120 → 60, 징집 120 → 90), 북 ×1.3 → ×1.5, 징집 150 → 200명. 화살 비는 그대로
+      march: { cost: 60, cooldown: 45, seconds: 20, speedMult: 2 },   // 2026-11-09 놀아 본 뒤: 60초 ×1.3은 안 보였다 → 20초 ×2(쐐기가 치고 나가는 게 보이게)
+      drum: { cost: 80, cooldown: 60, seconds: 15, damageMult: 1.5, knockback: 3 },   // 돌격 북: 화력 ×1.3, 근접 타격마다 맞은 적 3 m 밀려남(1.5면 15초에 줄이 6 m, 3이면 9 m — 2026-11-09 잼), 안 무너짐(전에는 받는 피해 ×0.7 30초 — 안 보였다)
       volley: { cost: 30, cooldown: 30, seconds: 10, fireMult: 2 },   // 화살 비: 원 안 적만, 쏘는 간격 ÷ fireMult(한 발 피해는 그대로)
-      levy: { cost: 100, cooldown: 120, count: 150 * s },           // 긴급 징집: "공격받음" 경보가 뜬 우리 거점에만
+      levy: { cost: 100, cooldown: 90, count: 200 * s },           // 긴급 징집: "공격받음" 경보가 뜬 우리 거점에만
     },
-    siegeBuy: { cost: 150, count: 10 * s, seconds: 20 },             // 공성병 사기: 거점에서 사면 seconds 뒤 그 거점에 count명
+    siegeBuy: { cost: 150, count: 3 * s, seconds: 20 },              // 투석기 사기: 거점에서 사면 seconds 뒤 그 거점에 count대(적어도 1대)
+    // buildingHit 1000 → 350(사용자 2026-11-09 영상을 보고 "성벽이 너무 빨리 무너진다" — 3대로 앞 거점 성벽 약 78초, 쏘는 사이 적 기병이 잡으러 올 틈)
+    // 투석기(catapult.js): reload초에 한 발, 돌은 flight초 날아 떨어진 자리에 — 건물·성벽에 buildingHit, 병사는 둘레 splash m의 가까운 splashMax명에게 soldierHit(방패·방향·상성 곱).
+    // 과녁: 사거리 안 적 거점(가운데 구역) 먼저, 아니면 보이는 적 aimSample명 가운데 둘레 aimRadius m에 적이 가장 많은 자리. arc = 화면 돌 높이 m.
+    catapult: { reload: 4, flight: 2, arc: 15, buildingHit: 350, splash: 3, splashMax: 6, soldierHit: 40, aimRadius: 4, aimSample: 12, reveal: 3, revealRadius: 10, still: 0.5, retry: 0.5, holdMargin: 5 },   // still: 이보다 빨리 움직이면 쏘지 않는다 m/s, retry: 과녁이 없으면 이만큼 뒤에 다시 본다 s, holdMargin: 적 거점이 사거리 − 이만큼 안에 들면 선다 m   // reveal: 쏜 투석기는 이만큼 적에게 보인다(둘레 revealRadius m) — 돌이 어디서 오는지 보인다
     buildings: {
       archery: { cost: 120, share: 0.5, unit: ARCHER },   // 사격장만 50%(사용자 2026-11-08: 궁수가 늘 절반쯤 남는다 — 많이 나오고 덜 죽어서)
       stable: { cost: 150, share: 0.8, unit: CAVALRY },
@@ -88,19 +94,20 @@ export function makeRules(knobs = {}) {
       // 생산 건물(칸): 하나면 그 거점 징집의 80%, 서로 다른 둘이면 40%씩 — 합은 maxShare까지(사용자 2026-11-07: 거점 특화)
       pikes: { cost: 120, share: 0.8, unit: SPEAR },   // 창 막사
       tower: { cost: 80, range: 250, range2: 300 },
-      wall: { cost: 120, hp: 10000, hqHp: 20000, taken: 0.7 },
+      wall: { cost: 120, hp: 20000, hqHp: 40000 },   // 투석기 설계서(2026-11-09): 체력 2배 — 병사 300명 약 2분, 투석기 3대 약 27초
       hp: 2000,
       buildSeconds: 25,
       upgradeCost: 1.5,
       demolishRefund: 0.5,
       maxShare: 0.8,
     },
-    capture: { vp: 15, land: 15, front: 60, rear: 60, hq: 120, wallMult: 2, decaySeconds: 30 },
+    capture: { vp: 15, land: 15, front: 60, rear: 60, hq: 120, decaySeconds: 30 },   // 성벽이 서 있으면 잠김(capture.js)
     // 작은 땅(설계서 2026-11-09-flood-small-lands-design.md): 원 반지름 m, 주인에게 1분 금(거점 금에 더한다), 주인 시야 m
     lands: { radius: 30, gold: { edge: 30, deep: 40, choke: 20 }, sight: { owned: 100, choke: 200 } },
     // 거점 수비 진형(설계서 2026-11-09-flood-stronghold-formation-design.md): 고리 반지름 = 거점 반지름 × 비율(궁수는 바깥 고리 − archerBehind m), 간격·겹 m,
     // reslotEvery초마다 자리 다시 나누기, 바깥 고리는 outerReach m 안 적만 친다, 꽂힘 = 달려온 기병 피해·못 치는 초·창마다 다시 꽂는 초. enabled = 켜고 끄기(견줘 재기)
-    formation: { enabled: true, outer: 0.8, archerBehind: 2, inner: 0.55, middle: 0.4, gap: { outer: 1.2, archer: 1.2, inner: 1.3, middle: 2 }, layer: { outer: 1.4, archer: 1.4, inner: 1.5, middle: 2 },
+    // enabled: 사용자 2026-11-09 "거점에 선 병사 진형은 일단 빼자 — 몇 명 없을 때 서 있는 게 너무 없어 보인다" → 끔(코드는 남김, true면 다시 선다)
+    formation: { enabled: false, outer: 0.8, archerBehind: 2, inner: 0.55, middle: 0.4, gap: { outer: 1.2, archer: 1.2, inner: 1.3, middle: 2 }, layer: { outer: 1.4, archer: 1.4, inner: 1.5, middle: 2 },
       reslotEvery: 2, outerReach: 3, impale: { damage: 60, stagger: 1, cooldown: 2 } },
     morale: {
       start: 60,
@@ -137,11 +144,12 @@ export function makeRules(knobs = {}) {
       rangedScanEvery: 10, kiteMelee: 10, kiteFriend: 8, kiteSeconds: 2, kiteDistance: 15, kiteCooldown: 6,   // 궁수 물러나기: 한 번 물러난 뒤 kiteCooldown초는 못 물러난다
       flankOutside: 20, flankBeyond: 30, flankReach: 15, throughSeconds: 1.5, cavFriendPush: 0.2,
       huntRange: 100, lineBlock: 1.5, lineCell: 8,   // 기병: 100 m 안 원거리·공성을 먼저(기다리는 자리에서 적 궁수 줄까지 닿게), 가는 길(8 m 칸)에 적 버팀 무게가 이만큼 넘으면 막힌 길
+      // 쫓기(2026-11-09 사용자 "벌레처럼 뭉치고 창·보병이 기병을 따라다닌다"): 창·보병은 cavNear m 밖에서 제 빠르기의 cavSlow배보다 빨리 달리는 기병을 쫓지 않는다,
+      // 한 적을 쫓는 병사 무게 합은 그 적 무게 × capRatio까지(맞붙은 병사는 빼고 — 먼저 고른 순서). turn: 1초에 도는 각도(도) — 제자리에서 휙휙 돌지 않게
+      chase: { cavNear: 3, cavSlow: 0.3, capRatio: 5 }, turn: { cav: 180, other: 360 },   // capRatio 3이면 뒷줄이 서 버려 기병이 선 끝으로 못 돌았다(roles 시험 0.46) → 5(0.91)
       closeSwitch: 2,   // 근접: 이 거리 안에 적이 오면 노리던 적을 버리고 그 적부터(사용자 2026-11-07: 맞붙은 적을 두고 뒤 궁수에게 달려든다) m
-      evadeSeconds: 1,  // 기병: 노리지 않은 창에 닿으면 이만큼 반대쪽으로 빠져나간다 s
       leaveSeconds: 20,   // 맞붙어 있다 보낸 병사: 이 동안은 바로 옆(closeSwitch) 적만 치고 목표로 간다(사용자 2026-11-07 "A") s
       regroupSeconds: 5, regroupDistance: 30,   // 정면 병사: 120 m 안에 적이 없이 이만큼 서 있고 자기 자리에서 이만큼 넘게 멀면 구역 선으로 돌아온다(사용자 2026-11-07: 구석에 남은 병사)
-      evadeRange: 20, evadeDistance: 25,   // 기병: 우리와 맞붙지 않은 적 창이 이 안에 오면 반대로 이만큼 물러난다 m
     },
     movement: { spacing: 0.8, maxPush: 0.3, damping: 0.6, neighborCap: 24, cellSize: 4 },
     vision: { soldier: k.soldierSight,   // 병사 시야 m(사용자 2026-11-07: 30 → 60, 궁수·공성 사거리보다 넓게)
@@ -160,12 +168,13 @@ export function makeRules(knobs = {}) {
       buildEvery: 1,                                             // 건물 판단 주기 s(상성 건물은 보고 나서 2초 안에)
       vpValue: 150 * s,                                          // 우리 것이 아닌 승점 하나 = 위협 무게 이만큼(성향 vp 배율)
       pushFrom: 60, pushEvery: 10, pushMinWeight: 100 * s, pushCooldown: 90,   // 밀어 넣기: 이 판 시각부터, 구역 병력이 앞 적 × 성향 push 넘고 이 무게 넘으면 깃발에서 보낸다
-      raidGatherMax: 120, raidMinShare: 0.5, raidRetry: 30, raidSweep: 10, raidWallPenalty: 200 * s, raidProdBonus: 50 * s, raidDistPenalty: 50 * s, raidRoutes: true, raidFrontPenalty: 1000 * s, raidPassPenalty: 300 * s,   // raidDistPenalty: 100 m마다 더하는 무게(지도 반대편 대각선 기습 방지)
+      raidGatherMax: 120, raidMinShare: 0.5, raidRetry: 30, raidSweep: 10, raidWallPenalty: 200 * s, raidStrongholdEvery: 2,   /* raidStrongholdEvery: 기습 이만큼에 한 번은 거점만 노리고 투석기를 산다(사용자 2026-11-09 — 땅만 노려 투석기를 안 썼다) */ raidProdBonus: 50 * s, raidDistPenalty: 50 * s, raidRoutes: true, raidFrontPenalty: 1000 * s, raidPassPenalty: 300 * s,   // raidDistPenalty: 100 m마다 더하는 무게(지도 반대편 대각선 기습 방지)
       regroupSeconds: 30, regroupEvery: 10,                      // 승점·빼앗은 거점에 선 병력: 적 없이 이만큼 지나면 가까운 구역으로
       // 금 명령(2026-11-09): 돌격 북은 둘레 50 m에 맞붙은 우리 병사가 drumMinOwn명 넘고 보이는 적 무게가 더 클 때, 화살 비는 둘레 50 m 보이는 적 무게가 volleyMinWeight 넘을 때.
       // 후보는 병사 sample명에 하나, 판단마다 maxCandidates개까지(1초마다 도는 AI가 무겁지 않게)
       casts: { drumMinOwn: 100 * s, volleyMinWeight: 30 * s, sample: 8, maxCandidates: 40 },
       // 작은 땅(2026-11-09): 길목 먹기(판 시각 chokeAt초부터, chokeRetry초마다 무게 chokeWeight), 땅 기습 무게, 땅 지키기(경보 defendDelay초 뒤 보이는 적 × defendRatio, defendEvery초에 한 번), 기습 점수에서 땅 금/분 1당 빼는 무게
+      hunt: { reach: 130, ratio: 3, every: 30, giveUp: 90 },   // giveUp: 잡으러 간 지 이만큼 지나면(또는 그 투석기가 부서지면) 남은 병력을 가까운 거점으로 돌려보낸다 s   // 투석기 잡기(2026-11-09): 우리 거점 원 + reach m 안의 보이는 적 투석기에 가까운 거점에서 그 무게 × ratio(기병 먼저), 거점마다 every초에 한 번
       lands: { chokeAt: 30, chokeRetry: 60, chokeWeight: 100 * s, raidWeightMin: 100 * s, raidWeightMax: 200 * s, defendRatio: 1.5, defendEvery: 30, defendDelay: 2, valueWeight: 5 * s },
       holdLate: 15, holdLateGauge: 50, holdSpeed: 3 * k.speed,             // 막아라 뒤 이만큼 지나도 밀리고 게이지가 이 밑이면 다른 곳 병력도 · 끌려오는 걸음 m/s
       personality: {

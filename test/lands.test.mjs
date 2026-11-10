@@ -7,6 +7,7 @@ import { INFANTRY } from '../src/sim/rules.js';
 import { applyOrder } from '../src/sim/orders.js';
 import { updateVision, canSee } from '../src/sim/vision.js';
 import { rightClickTarget } from '../src/view/select.js';
+import { makeStats } from '../src/sim/stats.js';
 import { isPoint, FOREST, WATER, FORD } from '../src/sim/map.js';
 
 const empty = () => createWorld({ scenario: 'empty', seed: 1, knobs: { mirror: true } });
@@ -70,7 +71,7 @@ test('경보: 적이 우리 땅에 들어오면 공격받음, 땅에는 징집·
   assert.equal(applyOrder(w, { kind: 'cast', side: 0, order: 'levy', stronghold: 'e0L' }).reason, '우리 거점이 아니다');
   assert.equal(applyOrder(w, { kind: 'holdTheLine', side: 0, stronghold: 'e0L' }).ok, false);
   assert.equal(applyOrder(w, { kind: 'buySiege', side: 0, stronghold: 'e0L' }).ok, false);
-  assert.equal(applyOrder(w, { kind: 'build', side: 0, stronghold: 'e0L', slot: 0, building: 'archery' }).ok, false);
+  assert.equal(applyOrder(w, { kind: 'build', side: 0, stronghold: 'e0L', slot: 0, building: 'archery' }).reason, '거점이 아니다');   // 칸이 없어서(없는 칸)가 아니라 땅이라서
 });
 
 test('땅을 잃어도 사기·승점 수가 그대로', () => {
@@ -103,4 +104,16 @@ test('아무도 명령하지 않으면 60초 뒤에도 두 길목은 중립이�
     const c = st(w, id), x = Math.max(s.x0, Math.min(s.x1, c.x));
     assert.ok(Math.hypot(c.x - x, c.z - s.z) > c.radius + 30, `${s.id}가 ${id}에서 ${Math.hypot(c.x - x, c.z - s.z).toFixed(0)} m`);
   }
+});
+
+// ---- 리뷰에서 미룬 작은 것(2026-11-09) ----
+test('통계: 경유점으로 적 땅에 보낸 것은 거점 기습과 따로 센다', () => {
+  const w = createWorld({ seed: 1, scenario: 'battle' });
+  w.metrics = makeStats({ seed: 1 });
+  const s = w.soldiers, ids = [];
+  for (let i = 0; i < s.count && ids.length < 20; i++) if (s.alive[i] && s.side[i] === 0 && s.state[i] !== STATE.GARRISON) ids.push(i);
+  const land = w.strongholds.find(x => x.kind === 'land' && x.owner === 1);
+  step(w, [{ kind: 'send', side: 0, from: { kind: 'ids', ids }, target: { kind: 'stronghold', id: land.id }, via: [{ x: land.x, z: land.z - 60 }] }]);
+  const rep = w.metrics.finish(w);
+  assert.equal(rep.raids, 0); assert.equal(rep.landRaids, 1);
 });

@@ -52,6 +52,7 @@ const REASON_SIDE = ['우리', '적'];
 
 import { slotKinds } from '../sim/orders.js';
 import { CASTS, canCast } from '../sim/casts.js';
+import { noticeTroops } from './select.js';
 const NAMES = { pikes: ['창 막사', '창 고블린 굴'], archery: ['사격장', '바위터'], stable: ['마구간', '늑대 우리'], tower: ['망루', '토템'], wall: ['성벽', '목책'] };
 const WHAT = { pikes: '창병 80%', archery: '궁수 80%', stable: '기병 80%', tower: '시야 250 m', wall: '수비' };
 const UPGRADE_NAME = ['성벽', '망루'];
@@ -69,8 +70,8 @@ export const CAST_TEXT = {
 };
 const PLACE_NAME = { hq: '본진', front: '앞 거점', rear: '뒤 거점' };
 const LAND_NAME = { edge: '가장자리 땅', deep: '깊은 땅', choke: '길목' };   // 작은 땅(2026-11-09)
-const placeLabel = st => (st.kind === 'land' ? LAND_NAME[st.landKind] : PLACE_NAME[st.kind] ?? '');
-const NOTICE_SHOW = 15;   // 공성병 준비 알림을 보이는 초
+const placeLabel = st => (st.kind === 'land' ? '땅' : PLACE_NAME[st.kind] ?? '');   // 경보 줄: "공격받음 · 땅 e0L"(설계서 §5)
+const NOTICE_SHOW = 15;   // 투석기 준비 알림을 보이는 초
 const RESULT_TOAST_MS = 6000;   // 금 명령 결과 알림을 보이는 ms
 
 export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFocus = () => {}, getSelection = () => [], onArmFlow = () => {}, onMinimap = () => {}, getFootprint = () => null, seeAt = null, onAim = () => {}, getAim = () => null, onSelectIds = () => {} }) {
@@ -96,12 +97,13 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
       <label>지휘 한도 <input id="k-limit" type="number" step="50" min="50" style="width:70px"></label>
       <label>명령 쿨(초) <input id="k-cool" type="number" step="5" min="0" style="width:70px"></label>
       <label>병사 시야(m) <input id="k-sight" type="number" step="10" min="10" style="width:70px"></label>
+      <label>몬스터 생산 × <input id="k-monster" type="number" step="0.05" min="0.5" style="width:70px" title="난이도: 몬스터 편 생산 배율 — 1.05면 AI끼리 반반, 높을수록 어렵다"></label>
       <label>판 속도 <select id="k-speed"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
       <label><button id="k-pause">일시정지</button><button id="k-restart">다시 시작</button></label>
       <div class="muted" style="font-size:12px;margin-top:6px">규모·배율을 바꾸면 새 판으로 다시 시작한다.</div>
     </details>
     <div class="help" id="help"><b>왼쪽</b> 고르기: 거점 가운데·승점 깃대·쐐기를 누르거나 빈 땅에서 끌어 네모(Shift = 더하기, Esc = 풀기). 우리 거점을 누르면 짓기 판.
-      <b>오른쪽</b> 고른 병력 보내기 — 거점·승점을 누르면 싸우며 간다, 땅·구역 선을 누르면 이동만(가는 길엔 싸우지 않고 닿은 적만 친다): 거점·승점 원 → 그 거점, 구역 선 위 → 그 구역, 그 밖 → 그 자리. <b>적 병사를 오른쪽 클릭 = 그 적 공격. Alt+오른쪽 = 어택땅(빈 땅으로도 싸우며 간다).</b> Shift+오른쪽 = 누를 때마다 길을 이어 간다(바로 출발, 경유점 3개까지), Ctrl+오른쪽 = 고른 우리 거점의 새 병사 방향.
+      <b>오른쪽</b> 고른 병력 보내기 — 거점·승점을 누르면 싸우며 간다, 땅·구역 선을 누르면 이동만(가는 길엔 싸우지 않고 닿은 적만 친다): 거점·승점 원 → 그 거점, 구역 선 위 → 그 구역, 그 밖 → 그 자리. <b>적 병사를 오른쪽 클릭 = 그 적 공격(거점 원 안이어도 — 가운데 건물 둘레를 누르면 그 거점). Alt+오른쪽 = 어택땅(빈 땅으로도 싸우며 간다).</b> Shift+오른쪽 = 누를 때마다 길을 이어 간다(바로 출발, 경유점 3개까지), Ctrl+오른쪽 = 고른 우리 거점의 새 병사 방향.
       경보를 누르면 그 자리로, "막아라"는 가까운 구역에서 500을 돌려 막는다. <b>화면</b> 가운데 버튼 끌기·WASD·방향키·화면 가장자리·미니맵, 휠 = 확대, Q/E = 회전.
       <b>명령</b> 아래 줄 단추나 1~4 → 땅에 원을 찍어 건다(징집은 경보 뜬 거점). 오른쪽·Esc = 그만두기.</div>
     <canvas class="mini" id="mini" width="192" height="128"></canvas>
@@ -115,10 +117,10 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
 
   function setKnobs(k) {
     $('k-scale').value = String(k.scale); $('k-prod').value = String(k.production); $('k-dmg').value = String(k.damage);
-    $('k-limit').value = String(k.commandLimit); $('k-cool').value = String(k.commandCooldown); $('k-sight').value = String(k.soldierSight);
+    $('k-limit').value = String(k.commandLimit); $('k-cool').value = String(k.commandCooldown); $('k-sight').value = String(k.soldierSight); $('k-monster').value = String(k.monsterProduction ?? 1);
   }
-  const knobsNow = () => ({ scale: Number($('k-scale').value), production: Number($('k-prod').value), damage: Number($('k-dmg').value), commandLimit: Number($('k-limit').value), commandCooldown: Number($('k-cool').value), soldierSight: Number($('k-sight').value) });
-  for (const id of ['k-scale', 'k-prod', 'k-dmg', 'k-limit', 'k-cool', 'k-sight']) $(id).addEventListener('change', () => onKnobs(knobsNow()));
+  const knobsNow = () => ({ scale: Number($('k-scale').value), production: Number($('k-prod').value), damage: Number($('k-dmg').value), commandLimit: Number($('k-limit').value), commandCooldown: Number($('k-cool').value), soldierSight: Number($('k-sight').value), monsterProduction: Number($('k-monster').value) });
+  for (const id of ['k-scale', 'k-prod', 'k-dmg', 'k-limit', 'k-cool', 'k-sight', 'k-monster']) $(id).addEventListener('change', () => onKnobs(knobsNow()));
   $('k-speed').addEventListener('change', () => onSpeed(Number($('k-speed').value)));
   $('k-pause').addEventListener('click', () => { $('k-pause').textContent = onPause() ? '계속' : '일시정지'; });
   $('k-restart').addEventListener('click', () => onRestart());
@@ -163,17 +165,17 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
       }
       html += '</div>';
     });
-    const sb = w.rules.siegeBuy;                              // 공성병 사기(siege.js): 한 번에 하나, 사는 동안 남은 초
-    html += `<div class="slot"><span>공성</span>${open.siegeAt != null ? `<b>공성병 사는 중 ${Math.max(0, open.siegeAt - w.time).toFixed(0)}초</b>` : `<button data-kind="buySiege" class="${gold < sb.cost ? 'poor' : ''}" title="${sb.seconds}초 뒤 이 거점에 서서 기다린다 — 성벽·건물을 ×10으로 친다">공성병 ${Math.round(sb.count)}명 · 금 ${sb.cost}</button>`}</div>`;
+    const sb = w.rules.siegeBuy;                              // 투석기 사기(siege.js): 한 번에 하나, 사는 동안 남은 초
+    html += `<div class="slot"><span>공성</span>${open.siegeAt != null ? `<b>투석기 사는 중 ${Math.max(0, open.siegeAt - w.time).toFixed(0)}초</b>` : `<button data-kind="buySiege" class="${gold < sb.cost ? 'poor' : ''}" title="${sb.seconds}초 뒤 이 거점에 서서 기다린다 — 사거리 ${w.rules.units[0][4].range} m, 성벽·건물을 먼저 치고 없으면 적 무리를 친다">투석기 ${Math.max(1, Math.round(sb.count))}대 · 금 ${sb.cost}</button>`}</div>`;
     $('build').innerHTML = html;
   }
 
   // 경보(§7.3): 우리 거점이 공격받음·생산 막힘·망루가 적 발견. 줄을 누르면 그 자리로, "막아라"는 공격·막힘에만.
   let alertKey = '';
-  let noticeIds = [];
+  let noticeNotes = [], noticeWorld = null;
   $('alerts').addEventListener('click', e => {
     const b = e.target.closest('button');
-    if (b && b.dataset.pick !== undefined) { onSelectIds(noticeIds[Number(b.dataset.pick)] ?? []); return; }   // 알림 [고르기]
+    if (b && b.dataset.pick !== undefined) { const n = noticeNotes[Number(b.dataset.pick)]; onSelectIds(n && noticeWorld ? noticeTroops(noticeWorld, n) : []); return; }   // 알림 [고르기]
     if (b && b.dataset.levy) { const r = onOrder({ kind: 'cast', side: 0, order: 'levy', stronghold: b.dataset.levy }); toast(r && r.ok ? `징집 — ${r.count}명` : r.reason); alertKey = ''; return; }
     if (b) { const r = onOrder({ kind: 'holdTheLine', side: 0, stronghold: b.dataset.hold }); if (r && !r.ok) toast(r.reason); alertKey = ''; return; }
     const row = e.target.closest('.alert');
@@ -187,13 +189,13 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     const key = list.map(a => a.kind + a.stronghold).join() + '|' + [...holding].join() + '|' + notes.map(n => n.at).join();
     if (key === alertKey) { levyButtons(w); return; }   // 줄은 그대로 두고 징집 단추만 고친다(통째로 다시 그리면 그 사이 누른 클릭이 사라진다)
     alertKey = key;
-    noticeIds = notes.map(n => n.ids);
+    noticeNotes = notes; noticeWorld = w;
     $('alerts').innerHTML = list.map(a => {
       const st = w.strongholds.find(x => x.id === a.stronghold);
       let act = a.kind === 'sighted' || st.kind === 'land' ? '' : holding.has(a.stronghold) ? '<span class="muted">막는 중</span>' : `<button data-hold="${a.stronghold}">막아라</button>`;   // 땅에는 막아라·징집 없음
       if (a.kind === 'attacked' && st.kind !== 'land') act += ` <button data-levy="${a.stronghold}">징집 ${cost}</button>`;   // 금 명령 긴급 징집(casts.js) — 상태는 levyButtons가
       return `<div class="alert ${a.kind}" data-st="${a.stronghold}"><span>${ALERT_NAME[a.kind]} · ${placeLabel(st)} ${a.stronghold}</span><span>${act}</span></div>`;
-    }).join('') + notes.map((n, k) => `<div class="alert notice" data-st="${n.stronghold}"><span>공성병 ${n.ids.length}명 준비됨 · ${n.stronghold}</span><button data-pick="${k}">고르기</button></div>`).join('');
+    }).join('') + notes.map((n, k) => `<div class="alert notice" data-st="${n.stronghold}"><span>투석기 ${n.ids.length}대 준비됨 · ${n.stronghold}</span><button data-pick="${k}">고르기</button></div>`).join('');
     levyButtons(w);
   }
   // 경보 줄 징집 단추: 쓸 수 없으면 흐리게, 다시 쓰기 중이면 남은 초(설계서 §1.3) — 바뀐 것만 고친다
@@ -309,6 +311,7 @@ export function createHud({ onKnobs, onSpeed, onPause, onRestart, onOrder, onFoc
     const name = CAST_TEXT[n.order]?.name ?? n.order, dmg = Math.round(n.damage);
     if (n.order === 'volley') return `${name} 결과: 적 ${n.kills}명 쓰러뜨림 · 피해 ${dmg}(명령 몫 ${Math.round(n.damage * (1 - 1 / r.orders.volley.fireMult))}) · 궁수 ${n.count}명`;
     if (n.order === 'drum') return `${name} 결과: 적 ${n.kills}명 쓰러뜨림 · ${n.pushed}번 밀어냄 · 피해 ${dmg}(명령 몫 ${Math.round(n.damage * (1 - 1 / r.orders.drum.damageMult))}) · ${n.count}명`;
+    if (n.order === 'catapult') return `투석기 결과: 성벽 ${Math.round(n.wall).toLocaleString('ko-KR')} · 건물 ${Math.round(n.buildings).toLocaleString('ko-KR')} · 쓰러뜨림 ${n.kills}명 · ${n.count}대`;
     if (n.order === 'march') return `${name} 결과: ${n.count}명이 평균 ${n.count ? Math.round(n.extra / n.count) : 0} m 더 감`;
     return `${name} 끝`;
   }

@@ -8,6 +8,7 @@ import { spawnGarrisons, arrowOf as arrowOfStronghold } from '../src/sim/product
 import { addGeneral as addGeneralOf } from '../src/sim/generals.js';
 import { makeAi as makeAiOf } from '../src/sim/ai.js';
 import { makeRng as makeRngOf } from '../src/sim/rng.js';
+import { isPoint } from '../src/sim/map.js';
 
 // ---- Task 5: 징집·사기 ----
 
@@ -59,7 +60,7 @@ export function nearestOwnStronghold(w, side, sectorId) {
   const mx = (sec.x0 + sec.x1) / 2;
   let best = null, bd = Infinity;
   for (const st of w.strongholds) {
-    if (st.owner !== side || st.kind === 'vp') continue;
+    if (st.owner !== side || isPoint(st)) continue;
     const d = Math.hypot(st.x - mx, st.z - sec.z);
     if (d < bd) { bd = d; best = st; }
   }
