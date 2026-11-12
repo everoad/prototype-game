@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>영지 전쟁 시험판</title>
+<style>
+  :root { --bg: #cfdde6; color-scheme: light; }
+  html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; touch-action: none; overscroll-behavior: none; user-select: none; }
+  #view, #over { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #over { pointer-events: none; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }
+</script>
+<canvas id="view"></canvas>
+<canvas id="over"></canvas>
+<script type="module" src="src/view/main.js"></script>
