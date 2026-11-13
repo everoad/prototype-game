@@ -13,7 +13,7 @@ import { remember, stillSelected, sendTarget, byType, clickTroops, boxUnits, sam
 import { crewMates } from '../sim/workers.js';
 import { STATE } from '../sim/soldiers.js';
 import { buildingAt, canPlace, buildingName } from '../sim/buildings.js';
-import { costText } from './panel.js';
+import { costText, buildButtons } from './panel.js';
 import { keyAction, shouldPrevent } from './keys.js';
 import { createGroups } from './controlGroups.js';
 import { miniSendCheck } from './minimap.js';
@@ -79,6 +79,14 @@ export function createInput(view, canvas, getWorld, side, hooks) {
       groups.add(a.n, live); toast(`부대 ${a.n}에 더함 — ${groups.get(getWorld(), side, a.n).ids.length}명`);
     },
     groupSelect: a => selectGroup(a.n),
+    build: a => {                                                // Q·W·E·R·A·D = 짓기(광부 조를 골랐을 때만 — 짓기 단추를 누른 것과 같다)
+      const w = getWorld();
+      if (w.result || !workersIn(sel.ids).length || !w.buildings?.length) return;
+      const type = w.rules.buildMenu[a.slot], btn = buildButtons(w, side).find(x => x.type === type);
+      if (!btn) return;
+      if (!btn.ok) { toast(`${btn.name}: ${btn.why}`); return; }
+      startPlace(type);
+    },
     stop: () => {                                                // S = 멈춤(4단계)
       if (!sel.ids.length) { toast('먼저 병력을 고르세요'); return; }
       const r = onOrder({ kind: 'stop', side, ids: sel.ids });

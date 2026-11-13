@@ -1,6 +1,6 @@
 // 싸움(설계서 §6.1·§6.2): 피해 계산(순수 함수), 원거리 목표 고르기, 한 틱의 때리기·쏘기.
 import { kill, STATE } from './soldiers.js';
-import { ARCHER, CAVALRY } from './rules.js';
+import { ARCHER, CAVALRY, MAGE } from './rules.js';
 import { activeCast } from './casts.js';
 
 const DEG = 180 / Math.PI;
@@ -12,12 +12,13 @@ export function damagePerSecond(o, rules) {
 }
 
 // 화력에 곱하는 배율(돌격·상성·방패·옆뒤) — 투석기 돌(catapult.js)은 한 발 피해에 이것만 곱한다.
+// 상성은 병종 번호가 아니라 갈래(cls)로 본다(6-1단계: 마법사 = 궁수, 기사 = 기병 — 기본 병종은 갈래 = 번호).
 export function damageMult(o, rules) {
-  const a = rules.units[o.atkSide][o.atkType];
+  const a = rules.units[o.atkSide][o.atkType], ac = a.cls ?? o.atkType, tc = rules.units[o.tgtSide][o.tgtType].cls ?? o.tgtType;
   let dps = 1;
-  if (o.charging) dps *= rules.charge.mult;
+  if (o.charging) dps *= a.chargeMult ?? rules.charge.mult;   // 기사 ×3(6-1단계), 그 밖 ×2
   if (!(o.unbraced && a.holdsLine)) for (const [atk, tgt, m] of rules.counters) {   // 버티지 못하는 창은 상성 없음
-    if (atk !== o.atkType || tgt !== o.tgtType) continue;
+    if (atk !== ac || tgt !== tc) continue;
     dps *= o.tgtElite && a.holdsLine && tgt === CAVALRY ? rules.elite.spearCounter : (m ?? rules.counterMult);   // 중기병은 창 벽에 덜 다친다
   }
   const ang = Math.abs(o.angleDeg ?? 0);
@@ -30,15 +31,25 @@ export function damageMult(o, rules) {
   return dps;
 }
 
-// 원거리 목표: 적 궁수 > 기병 > 그 밖(투석기 포함), 같으면 가까운 쪽(맞쏘기 우선, §6.1).
+// 원거리 목표: 적 궁수 > 기병 > 그 밖(투석기 포함), 같으면 가까운 쪽(맞쏘기 우선, §6.1). 차례는 갈래로(마법사 = 궁수, 기사 = 기병).
 const PRIORITY = { [ARCHER]: 0, [CAVALRY]: 2 };
 export function pickRangedTarget(cands, rules) {
   let best = -1, bp = Infinity, bd = Infinity;
   cands.forEach((c, k) => {
-    const p = PRIORITY[c.type] ?? 3;
+    const p = PRIORITY[c.cls ?? c.type] ?? 3;
     if (p < bp || (p === bp && c.dist < bd)) { best = k; bp = p; bd = c.dist; }
   });
   return best;
+}
+
+// 맞은 적이 밀려나는 거리 m(6-1단계 — 밀어내기 규칙 한곳). 모루(골렘)는 밀리지 않는다.
+// 돌격: 병종의 chargeKnock(기사 3), 없으면 쐐기 충격 거리 · 쐐기 충격 · 돌격 북 · 그 밖은 병종의 knock(골렘 타격 3, 기본 병종 0).
+export function pushDistance(rules, atkU, tgtU, { impact = false, charge = false, drum = false } = {}) {
+  if (tgtU.anvil) return 0;
+  if (charge) return atkU.chargeKnock ?? rules.group.knockback;
+  if (impact) return rules.group.knockback;
+  if (drum) return rules.orders.drum.knockback;
+  return atkU.knock ?? 0;
 }
 
 // 맞는 쪽이 보는 방향과, 맞는 쪽에서 때리는 쪽으로 가는 방향 사이의 각(도, 0~180).
@@ -80,7 +91,7 @@ export function nearestEnemy(s, i, r) {
 
 // 반지름 r 안 적 가운데 원거리 순서로 가장 좋은 목표(없으면 −1). circle = { x, z, r }이면 그 원 안 적만(화살 비, casts.js).
 export function bestRangedTarget(w, i, r, circle = null) {
-  const s = w.soldiers, side = s.side[i], xi = s.x[i], zi = s.z[i], r2 = r * r, cs = s.cellSize, cr2 = circle ? circle.r * circle.r : 0;
+  const s = w.soldiers, units = w.rules.units, side = s.side[i], xi = s.x[i], zi = s.z[i], r2 = r * r, cs = s.cellSize, cr2 = circle ? circle.r * circle.r : 0;
   const c0 = Math.max(0, Math.floor((xi - r) / cs)), c1 = Math.min(s.gcols - 1, Math.floor((xi + r) / cs));
   const r0 = Math.max(0, Math.floor((zi - r) / cs)), r1 = Math.min(s.grows - 1, Math.floor((zi + r) / cs));
   let best = -1, bp = Infinity, bd = Infinity;
@@ -91,7 +102,7 @@ export function bestRangedTarget(w, i, r, circle = null) {
         const dx = s.x[j] - xi, dz = s.z[j] - zi, d2 = dx * dx + dz * dz;
         if (d2 > r2) continue;
         if (circle && (s.x[j] - circle.x) ** 2 + (s.z[j] - circle.z) ** 2 > cr2) continue;
-        const p = PRIORITY[s.type[j]] ?? 3;
+        const p = PRIORITY[units[s.side[j]][s.type[j]].cls] ?? 3;
         if (p < bp || (p === bp && d2 < bd)) { best = j; bp = p; bd = d2; }
       }
   return best;
@@ -109,6 +120,8 @@ export const rangeOf = (w, i) => {
 // 피해는 모았다가 한꺼번에 깎는다. 쐐기 충격·기병 돌격의 첫 타는 바로 들어가 ×2, 맞은 적은 밀려난다.
 export function stepCombat(w) {
   const s = w.soldiers, r = w.rules, dt = r.dt, reach = r.melee.reach, interval = r.melee.interval;
+  // 몸(6-1단계 골렘): 몸 병종이 살아 있는 틱에만 닿음 거리에 몸을 더한다 — 없으면 지금 계산 그대로(황금·clash5k)
+  const B = bodyTable(w), bodies = anyBody(w, B);
   const dmg = w._dmg && w._dmg.length >= s.capacity ? w._dmg : (w._dmg = new Float32Array(s.capacity));
   dmg.fill(0, 0, s.count);
   // 지휘 스킬 결과(casts.js, 개발용 알림): 화살 비·돌격 북이 낸 피해·밀어냄, 이 틱에 맞은 병사를 누가 쳤나(1 화살 비, 2 돌격 북) — 쓰러지면 그 명령 몫
@@ -119,16 +132,18 @@ export function stepCombat(w) {
     if (!s.alive[i]) continue;
     if (s.state[i] === STATE.ROUT) { s.inContact[i] = 0; continue; }   // 달아나는 병사는 치지 않는다
     const u = r.units[s.side[i]][s.type[i]];
-    if (u.worker) { s.inContact[i] = 0; s.contact[i] = -1; continue; }   // 광부(3단계): 맞붙지 않는다 — 적이 닿아도 일터로 간다(맞기는 한다)
+    if (u.noncombat) { s.inContact[i] = 0; s.contact[i] = -1; continue; }   // 광부(3단계)·사제(6-1단계): 맞붙지 않는다 — 적이 닿아도 제 일을 한다(맞기는 한다)
     const drum = s.drumUntil[i] > w.time;
     const aura = drum ? r.orders.drum.damageMult : 1;   // 돌격 북(casts.js)
-    let t = nearestEnemy(s, i, reach);
+    const bi = bodies ? B.of[s.side[i] * B.nt + s.type[i]] : 0;
+    let t = bodies ? nearestTouching(s, i, reach + bi, B) : nearestEnemy(s, i, reach);
     const tg = s.target[i];                                          // 고른 과녁이 손에 닿으면 그 적을 친다(가장 가까운 적이 바뀔 때마다 휙휙 돌지 않게)
-    if (t >= 0 && tg >= 0 && tg !== t && s.alive[tg] && s.side[tg] !== s.side[i] && (s.x[tg] - s.x[i]) ** 2 + (s.z[tg] - s.z[i]) ** 2 <= reach * reach) t = tg;
+    if (t >= 0 && tg >= 0 && tg !== t && s.alive[tg] && s.side[tg] !== s.side[i] && (s.x[tg] - s.x[i]) ** 2 + (s.z[tg] - s.z[i]) ** 2 <= (reach + bi + (bodies ? B.of[s.side[tg] * B.nt + s.type[tg]] : 0)) ** 2) t = tg;
     s.inContact[i] = t >= 0 ? 1 : 0;
     s.contact[i] = t;
     if (u.holdsLine) s.braced[i] = infantryNear(w, i, r.melee.brace) ? 0 : 1;
-    s.contactHold[i] = t >= 0 && r.units[s.side[t]][s.type[t]].holdsLine && s.braced[t] ? 1 : 0;   // 버티는 창에만 막힌다
+    const tu0 = t >= 0 ? r.units[s.side[t]][s.type[t]] : null;
+    s.contactHold[i] = tu0 && ((tu0.holdsLine && s.braced[t]) || tu0.anvil) ? 1 : 0;   // 버티는 창과 모루(골렘)에만 막힌다
     if (u.catapult) continue;                                         // 투석기: 맞닿음만 센다(쏘지 못하게) — 치기·쏘기는 catapult.js
     s.hitTimer[i] += dt;
     if (s.staggerUntil[i] > w.time) { s.hitTimer[i] = Math.min(s.hitTimer[i], interval); continue; }   // 돌격에 흔들려 못 친다
@@ -146,11 +161,12 @@ export function stepCombat(w) {
       s.hitTimer[i] -= shotEvery;
       const tu = r.units[s.side[rt]][s.type[rt]];
       const dodge = tu.charges && s.vx[rt] * s.vx[rt] + s.vz[rt] * s.vz[rt] > (tu.speed * 0.6) ** 2 ? r.charge.dodge : 1;   // 달리는 기병은 반만 맞는다
-      const hit = dodge * interval * damagePerSecond({ atkSide: s.side[i], atkType: s.type[i], tgtSide: s.side[rt], tgtType: s.type[rt], angleDeg: hitAngleDeg(s, i, rt), guardDeg: guardAngleDeg(s, i, rt), ranged: true, charging: false, building: false, aura, tgtElite: s.elite[rt] === 1 }, r);
+      const hit = dodge * (tu.rangedTaken ?? 1) * interval * damagePerSecond({ atkSide: s.side[i], atkType: s.type[i], tgtSide: s.side[rt], tgtType: s.type[rt], angleDeg: hitAngleDeg(s, i, rt), guardDeg: guardAngleDeg(s, i, rt), ranged: true, charging: false, building: false, aura, tgtElite: s.elite[rt] === 1 }, r);   // rangedTaken: 돌 몸(골렘 ×0.5)
       dmg[rt] += hit;
       { const a = act[s.side[i]]; if (rain && a.volley) { a.volley.stats.damage += hit; credit[rt] = 1 + s.side[i] * 2; } else if (drum && a.drum) { a.drum.stats.damage += hit; credit[rt] = 2 + s.side[i] * 2; } }
       if (w.stats) note(w, i, rt, hit, true);
       if (u.splash > 0) splash(w, dmg, i, rt, interval * (u.splashShare ?? 1), aura);
+      if (s.type[i] === MAGE && w.fx.length < 8000) w.fx.push({ kind: 'fire', x: s.x[rt], z: s.z[rt], r: u.splash, t: w.time });   // 마법사 불덩이(화면 효과, 6-1단계)
       if (w.shots.length < 8000) w.shots.push({ x1: s.x[i], z1: s.z[i], x2: s.x[rt], z2: s.z[rt], side: s.side[i], t: w.time });
       continue;
     }
@@ -163,18 +179,20 @@ export function stepCombat(w) {
     const impact = s.chargeHit[i] === 1 || charge;
     if (!impact && s.hitTimer[i] + 1e-9 < interval) continue;
     s.hitTimer[i] = impact ? 0 : s.hitTimer[i] - interval;
-    if (charge) { s.lastCharge[i] = w.time; s.runDist[i] = 0; s.staggerUntil[t] = w.time + r.charge.staggerSeconds; }
+    if (charge) { s.lastCharge[i] = w.time; s.runDist[i] = 0; if (!tu0.anvil) s.staggerUntil[t] = w.time + r.charge.staggerSeconds; }   // 모루는 비틀거리지 않는다
     const mhit = interval * (ranged ? r.melee.caughtRanged : 1) * damagePerSecond({
       atkSide: s.side[i], atkType: s.type[i], tgtSide: s.side[t], tgtType: s.type[t],
       angleDeg: hitAngleDeg(s, i, t), ranged: false, charging: impact, building: false, aura, unbraced: !s.braced[i], tgtElite: s.elite[t] === 1,
     }, r);
     dmg[t] += mhit;
+    if (u.splash > 0 && !ranged) splash(w, dmg, i, t, interval * (u.splashShare ?? 1), aura, true);   // 골렘: 근접 범위 타격(6-1단계)
     const drumCast = drum ? act[s.side[i]].drum : null;
     if (drumCast) { drumCast.stats.damage += mhit; credit[t] = 2 + s.side[i] * 2; }
     if (w.stats) note(w, i, t, mhit, false);
-    if (impact || drum) {                                            // 맞은 적은 밀려난다(쐐기 충격·돌격, 돌격 북은 타격마다)
-      s.chargeHit[i] = 0;
-      const dx = s.x[t] - s.x[i], dz = s.z[t] - s.z[i], l = Math.hypot(dx, dz) || 1, k = impact ? r.group.knockback : r.orders.drum.knockback;
+    if (impact) s.chargeHit[i] = 0;
+    const k = pushDistance(r, u, r.units[s.side[t]][s.type[t]], { impact, charge, drum });
+    if (k > 0) {                                                     // 맞은 적은 밀려난다(쐐기 충격·돌격, 돌격 북·골렘은 타격마다 — pushDistance)
+      const dx = s.x[t] - s.x[i], dz = s.z[t] - s.z[i], l = Math.hypot(dx, dz) || 1;
       const nx = s.x[t] + dx / l * k, nz = s.z[t] + dz / l * k;
       if (w.map.walkable(nx, nz)) { s.x[t] = nx; s.z[t] = nz; if (!impact && drumCast) drumCast.stats.pushed++; }
     }
@@ -201,7 +219,7 @@ export function killSoldier(w, i) {
 // 투척꾼 바위: 목표 둘레 반지름 안의 다른 적에게도 피해(splashShare만큼).
 // 범위 피해: 맞은 자리 둘레 splash m의 가까운 splashMax명(사용자 2026-11-07: 빽빽한 줄에서 바위 하나가 열 명 넘게 쳤다)에게
 // scale(= 간격 × splashShare)만큼. 맞는 사람마다 자기 방패·방향·상성·달리는 기병 피하기를 따진다(사용자 2026-11-07: 방패벽 창이 옆 궁수 몫의 바위를 방패 없이 맞았다).
-function splash(w, dmg, from, center, scale, aura) {
+function splash(w, dmg, from, center, scale, aura, melee = false) {   // melee: 근접 범위 타격(골렘) — 방패·피하기·돌 몸은 원거리에만
   const s = w.soldiers, r = w.rules, u = r.units[s.side[from]][s.type[from]], side = s.side[from], rad = u.splash, max = u.splashMax ?? Infinity;
   const cs = s.cellSize, x = s.x[center], z = s.z[center], r2 = rad * rad;
   const c0 = Math.max(0, Math.floor((x - rad) / cs)), c1 = Math.min(s.gcols - 1, Math.floor((x + rad) / cs));
@@ -217,8 +235,9 @@ function splash(w, dmg, from, center, scale, aura) {
   if (near.length > max) near.sort((a, b) => a[0] - b[0]);
   for (let k = 0; k < Math.min(max, near.length); k++) {
     const j = near[k][1], tu = r.units[s.side[j]][s.type[j]];
-    const dodge = tu.charges && s.vx[j] * s.vx[j] + s.vz[j] * s.vz[j] > (tu.speed * 0.6) ** 2 ? r.charge.dodge : 1;
-    const hit = scale * dodge * damagePerSecond({ atkSide: side, atkType: s.type[from], tgtSide: s.side[j], tgtType: s.type[j], angleDeg: hitAngleDeg(s, from, j), guardDeg: guardAngleDeg(s, from, j), ranged: true, charging: false, building: false, aura, tgtElite: s.elite[j] === 1 }, r);
+    const dodge = !melee && tu.charges && s.vx[j] * s.vx[j] + s.vz[j] * s.vz[j] > (tu.speed * 0.6) ** 2 ? r.charge.dodge : 1;
+    const skin = melee ? 1 : tu.rangedTaken ?? 1;
+    const hit = scale * dodge * skin * damagePerSecond({ atkSide: side, atkType: s.type[from], tgtSide: s.side[j], tgtType: s.type[j], angleDeg: hitAngleDeg(s, from, j), guardDeg: melee ? undefined : guardAngleDeg(s, from, j), ranged: !melee, charging: false, building: false, aura, tgtElite: s.elite[j] === 1 }, r);
     dmg[j] += hit;
     if (w.stats) note(w, from, j, hit, true);
   }
@@ -231,6 +250,37 @@ function note(w, i, t, hit, ranged) {
   st.dmg[key] = (st.dmg[key] ?? 0) + hit;
   st.lastHit[t] = s.side[i] * 4 + s.type[i] + (ranged ? 8 : 0);
   if (st.dealt) st.dealt[i] += hit;
+}
+
+// 몸 표(6-1단계): of[편 × nt + 병종] = 몸 m, max = 가장 큰 몸. rules가 바뀌지 않으니 한 번 만든다.
+export function bodyTable(w) {
+  if (!w._bodyT) { const of = w.rules.units.flatMap(side => side.map(u => u.body ?? 0)); w._bodyT = { of, nt: w.rules.units[0].length, max: Math.max(0, ...of) }; }
+  return w._bodyT;
+}
+// 몸 병종이 살아 있나(틱마다 한 번 세어 기억 — 없으면 닿음 계산을 지금 그대로 둔다).
+export function anyBody(w, B = bodyTable(w)) {
+  if (B.max <= 0) return false;
+  if (w._bodyTick === w.tick) return w._bodyAny;                   // 걸음·싸움이 같은 틱에 한 번만 센다
+  const s = w.soldiers;
+  let any = false;
+  for (let i = 0; i < s.count; i++) if (s.alive[i] && B.of[s.side[i] * B.nt + s.type[i]] > 0) { any = true; break; }
+  w._bodyTick = w.tick; w._bodyAny = any;
+  return any;
+}
+// 몸이 있는 판의 닿음: 겉끼리 거리(가운데 거리 − 상대 몸) ≤ r(= reach + 내 몸)인 가장 가까운 적, 없으면 −1.
+function nearestTouching(s, i, r, B) {
+  let best = -1, bd = Infinity;
+  const xi = s.x[i], zi = s.z[i], side = s.side[i], R = r + B.max, cs = s.cellSize;
+  const c0 = Math.max(0, Math.floor((xi - R) / cs)), c1 = Math.min(s.gcols - 1, Math.floor((xi + R) / cs));
+  const r0 = Math.max(0, Math.floor((zi - R) / cs)), r1 = Math.min(s.grows - 1, Math.floor((zi + R) / cs));
+  for (let rr = r0; rr <= r1; rr++)
+    for (let cc = c0; cc <= c1; cc++)
+      for (let j = s.head[rr * s.gcols + cc]; j !== -1; j = s.next[j]) {
+        if (s.side[j] === side || !s.alive[j]) continue;
+        const gap = Math.hypot(s.x[j] - xi, s.z[j] - zi) - B.of[s.side[j] * B.nt + s.type[j]];
+        if (gap <= r && gap < bd) { bd = gap; best = j; }
+      }
+  return best;
 }
 
 // 반지름 r 안에 기병이 아닌 적이 있나(버팀이 버티지 못하는가).

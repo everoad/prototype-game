@@ -4,6 +4,7 @@
 // 자리: 홍수 시험 지도의 빈 들판 x 470–730, z 150–340(거점·승점·땅에서 110 m 넘게).
 
 const SPEAR = 0, ARCHER = 1, CAV = 2, INF = 3, SIEGE = 4;
+const MAGE = 6, PRIEST = 7, KNIGHT = 8, GOLEM = 9;   // 특수 병종(6-1단계, 편 1은 같은 번호의 몬스터 짝) — 군단 영지 모듈에서만 돈다(황금 아님)
 
 export function makeApi(mods) {
   const alive = (w, ids) => ids.filter(i => w.soldiers.alive[i]);
@@ -120,6 +121,42 @@ export const LABS = {
     return [act(0.5, () => {
       for (const side of [0, 1]) parts[side].forEach((ids, p) => must(a.send(w, side, ids, a.point(200 + (p + 0.5) * 800 / PARTS, side === 0 ? 560 : 240))));
     })];
+  } },
+  // 특수 병종(6-1단계 계획 Task 9): 값어치를 재는 장면 다섯과 사진·영상용 한 판. 황금 시험에서는 뺀다(편 1 = 몬스터 짝).
+  mages: { seconds: 60, golden: false, setup(w, a) {   // 마법사 20 대 고블린 300(보병 한 쐐기 무게)
+    a.block(w, 0, MAGE, 20, 600, 205, 10, 1.4);
+    const goblins = a.block(w, 1, INF, 300, 600, 300, 20, 1.2);
+    return [act(0.5, () => must(a.send(w, 1, goblins, a.point(600, 180))))];
+  } },
+  priestsOn: { seconds: 60, golden: false, setup(w, a) {   // 서 있는 보병 150 + 뒤의 사제 10, 고블린 300이 덮친다
+    a.block(w, 0, INF, 150, 600, 240, 15, 1.2); a.block(w, 0, PRIEST, 10, 600, 222, 10, 1.4);
+    const goblins = a.block(w, 1, INF, 300, 600, 300, 20, 1.2);
+    return [act(0.5, () => must(a.send(w, 1, goblins, a.point(600, 200))))];
+  } },
+  priestsOff: { seconds: 60, golden: false, setup(w, a) {   // 같은 싸움, 사제 없음
+    a.block(w, 0, INF, 150, 600, 240, 15, 1.2);
+    const goblins = a.block(w, 1, INF, 300, 600, 300, 20, 1.2);
+    return [act(0.5, () => must(a.send(w, 1, goblins, a.point(600, 200))))];
+  } },
+  knights: { seconds: 60, golden: false, setup(w, a) {   // 기사 40이 늑대 기수 86(기병 한 쐐기 무게 100 ÷ 늑대 1.17)에 돌격
+    const knights = a.block(w, 0, KNIGHT, 40, 520, 230, 10, 2);
+    a.block(w, 1, CAV, 86, 600, 300, 10, 2);
+    return [act(3, () => must(a.send(w, 0, knights, a.point(600, 300), true)))];
+  } },
+  golems: { seconds: 60, golden: false, setup(w, a) {   // 골렘 4 대 고블린 300
+    a.block(w, 0, GOLEM, 4, 600, 230, 4, 4);
+    const goblins = a.block(w, 1, INF, 300, 600, 300, 20, 1.2);
+    return [act(0.5, () => must(a.send(w, 1, goblins, a.point(600, 180))))];
+  } },
+  specials: { seconds: 60, golden: false, setup(w, a) {   // 사진·영상: 양쪽 보병 + 특수 넷(몬스터는 거울 짝 — 수가 더 많다)
+    const ours = [...a.block(w, 0, GOLEM, 4, 600, 250, 4, 4), ...a.block(w, 0, INF, 150, 600, 238, 15, 1.2), ...a.block(w, 0, MAGE, 20, 600, 222, 10, 1.4)];
+    const ourPriests = a.block(w, 0, PRIEST, 10, 600, 212, 10, 1.4), knights = a.block(w, 0, KNIGHT, 40, 510, 232, 10, 2);
+    const theirs = [...a.block(w, 1, GOLEM, 7, 600, 290, 7, 3), ...a.block(w, 1, INF, 300, 600, 303, 20, 1.2), ...a.block(w, 1, MAGE, 33, 600, 322, 11, 1.4)];
+    const theirPriests = a.block(w, 1, PRIEST, 17, 600, 330, 17, 1.4), boars = a.block(w, 1, KNIGHT, 67, 690, 305, 12, 2);
+    return [
+      act(0.5, () => { must(a.send(w, 0, ours, a.point(600, 285), true)); must(a.send(w, 0, ourPriests, a.point(600, 258))); must(a.send(w, 1, theirs, a.point(600, 245), true)); must(a.send(w, 1, theirPriests, a.point(600, 275))); }),
+      act(4, () => { must(a.send(w, 0, knights, a.point(650, 325), true)); must(a.send(w, 1, boars, a.point(550, 215), true)); }),
+    ];
   } },
 };
 

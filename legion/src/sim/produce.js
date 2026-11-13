@@ -9,6 +9,7 @@ import { removeBuilding } from './buildings.js';
 import { spawnCrew } from './workers.js';
 import { costOf, canPay, pay, lack } from './economy.js';
 import { newUnit } from './units.js';
+import { landWhy, pauseWhy } from './lands.js';
 
 const fail = reason => ({ ok: false, reason });
 const POP_ALERT = 10;   // 인구 가득 알림 간격 s
@@ -79,8 +80,14 @@ export function stepQueues(w) {
   for (const b of [...w.buildings]) {
     if (!b.alive || !b.done) continue;
     const item = b.queue[0];
-    if (!item) continue;
+    if (!item) { b.pausedWhy = ''; continue; }
     const S = w.sides[b.side];
+    const why = pauseWhy(w, b, item);                                // 땅을 잃거나 건물 땅이 끊기면 멈춤(6-1단계) — 시작 전이면 인구도 잡지 않는다
+    if (why !== b.pausedWhy) {
+      b.pausedWhy = why;
+      if (why && b.side === 0) w.notices.push({ side: 0, kind: 'paused', text: `${itemName(R, b.side, item)} 멈춤 — ${why}`, at: w.time, x: b.x, z: b.z });
+    }
+    if (why) continue;
     if (item.kind === 'unit' && !item.started) {
       const batch = batchOf(R, b.side, item.key), room = s.free.length + s.capacity - s.count >= batch.n;
       if (S.pop + batch.weight > S.popCap + 1e-9 || !room) {
@@ -97,6 +104,7 @@ export function stepQueues(w) {
   }
 }
 
+const itemName = (R, side, item) => (item.kind === 'unit' ? R.units[side][R.train[item.key].type].name : R.research[item.key].name);
 const own = (w, o) => { const b = w.buildingById.get(o.building); return b && b.alive && b.side === o.side ? b : null; };
 
 // { kind: 'train', side, building, unit }
@@ -105,6 +113,8 @@ export function trainOrder(w, o) {
   if (!b) return fail('건물이 없다');
   if (!b.done) return fail('아직 짓는 중이다');
   if (!R.train[o.unit] || !b.def.trains?.includes(o.unit)) return fail('여기서 못 뽑는다');
+  const lw = landWhy(w, o.side, o.unit);                             // 땅 = 병종(6-1단계)
+  if (lw) return fail(lw);
   if (b.queue.length >= R.queueMax) return fail('생산 줄이 가득 찼다');
   const S = w.sides[o.side], c = costOf(R.train[o.unit]);
   if (!canPay(S, c)) return fail(lack(S, c));

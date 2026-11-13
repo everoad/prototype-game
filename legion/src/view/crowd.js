@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { SIDE_COLORS, CAST_COLORS } from './scene.js';
 import { SHOT_COLORS } from './colors.js';
+import { MAGE, PRIEST } from '../sim/rules.js';
+import { fxMarks } from './fx.js';
 
 const LOOK = {
   // 창 = 원기둥, 궁 = 원뿔, 기병 = 길쭉한 상자(앞이 +x), 보병 = 낮은 네모 기둥, 공성 = 정육면체(병종 번호 차례 — rules.js)
@@ -12,8 +14,17 @@ const LOOK = {
     () => new THREE.CylinderGeometry(0.5, 0.5, 1.4, 4).translate(0, 0.7, 0),   // 보병: 낮은 네모 기둥
     () => new THREE.BoxGeometry(1.5, 1.5, 1.5).translate(0, 0.75, 0),          // 공성(투석기) — 자리만 맞추고 그리지 않는다(catapults.js가 그린다)
     () => new THREE.CylinderGeometry(0.4, 0.4, 1.35, 6).translate(0, 0.675, 0),   // 광부 몸(편 색) — 노란 모자는 hats가 따로 그린다(사용자 2026-11-13: 보통 크기 10명 한 조)
+    // 특수 병종(6-1단계, 설계서 "화면"): 마법사 = 뾰족 원뿔(+ 지팡이 빛), 사제 = 밝은 긴 옷(+ 머리 위 고리), 기사 = 기병보다 큰 상자, 골렘 = 사람 키 2.5배 돌덩이
+    () => new THREE.ConeGeometry(0.5, 2.3, 6).translate(0, 1.15, 0),
+    () => new THREE.CylinderGeometry(0.32, 0.5, 1.9, 8).translate(0, 0.95, 0),
+    () => new THREE.BoxGeometry(2.8, 2.0, 1.0).translate(0, 1.0, 0),
+    () => new THREE.BoxGeometry(2.2, 4.4, 2.0).translate(0, 2.2, 0),
   ],
-  brightness: [0.8, 1.3, 0.72, 1.12, 0.55, 1.0],
+  brightness: [0.8, 1.3, 0.72, 1.12, 0.55, 1.0, 1.25, 1.65, 0.6, 0.42],
+  halo: { color: 0xfff3b0, radius: 0.34, tube: 0.07, y: 2.2 },          // 사제 머리 위 고리
+  glow: { color: 0xffa040, radius: 0.2, x: 0.4, y: 2.25 },            // 마법사 지팡이 끝 빛(앞쪽)
+  // 효과(fx.js): 불꽃 = 바닥 고리가 반지름 r까지 커지며 옅어짐, 고치기 = 병사 위 초록 반짝이 떠오름
+  fxMax: 3000, fire: { color: 0xff7a1a, start: 0.35 }, heal: { color: 0x5dff7a, size: 0.32, y: 2.6, rise: 1.2 },
   hat: { color: 0xf2c14e, radius: 0.46, y: 1.5 },   // 광부 노란 모자
   selectedTint: 2.6,   // 고른 병사 색 배율(사용자 2026-11-08 PC 조작)
   // 지휘 스킬 효과 빛깔: 병사 색을 그 명령 색(scene.js CAST_COLORS — 강행군 하늘색·돌격 북 금빛·화살 비 보라) 쪽으로 effectMix만큼 섞는다
@@ -64,12 +75,46 @@ export function createCrowd(view, rules, capacity) {
     return out;
   }));
   const m4 = new THREE.Matrix4(), counts = new Int32Array(3 * NT), ELITE_SCALE = new THREE.Vector3(1.3, 1.3, 1.3);
+  // 효과 그리기(6-1단계): 불꽃 고리·고치기 반짝
+  function drawFx(world, seeAt) {
+    let nf = 0, nl = 0;
+    for (const f of fxMarks(world.fx, world.time)) {
+      if (seeAt && !seeAt(f.x, f.z)) continue;
+      const y = view.heightAt(f.x, f.z);
+      if (f.kind === 'fire' && nf < LOOK.fxMax) {
+        const sc = f.r * (LOOK.fire.start + (1 - LOOK.fire.start) * (1 - f.a));
+        m4.makeScale(sc, 1, sc).setPosition(f.x, y + 0.15, -f.z);
+        fires.setMatrixAt(nf, m4); fires.instanceColor.setXYZ(nf, fireColor.r * f.a, fireColor.g * f.a, fireColor.b * f.a); nf++;
+      } else if (f.kind === 'heal' && nl < LOOK.fxMax) {
+        m4.makeRotationY(f.a * 3).setPosition(f.x, y + LOOK.heal.y + (1 - f.a) * LOOK.heal.rise, -f.z);
+        heals.setMatrixAt(nl, m4); heals.instanceColor.setXYZ(nl, healColor.r * f.a, healColor.g * f.a, healColor.b * f.a); nl++;
+      }
+    }
+    for (const [m, n] of [[fires, nf], [heals, nl]]) { m.count = n; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }
+  }
   // 광부 노란 모자(모든 편 하나로) — 몸과 같은 자리 위
   const hats = new THREE.InstancedMesh(new THREE.SphereGeometry(LOOK.hat.radius, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, LOOK.hat.y, 0), new THREE.MeshLambertMaterial({ color: LOOK.hat.color }), capacity);
   hats.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   hats.frustumCulled = false;
   hats.count = 0;
   view.scene.add(hats);
+  const extra = (geo, color) => {                                   // 몸 위에 얹는 표시(모든 편 하나로) — 사제 고리·마법사 빛
+    const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color }), capacity);
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.count = 0; view.scene.add(m);
+    return m;
+  };
+  const halos = extra(new THREE.TorusGeometry(LOOK.halo.radius, LOOK.halo.tube, 5, 14).rotateX(Math.PI / 2).translate(0, LOOK.halo.y, 0), LOOK.halo.color);
+  const glows = extra(new THREE.SphereGeometry(LOOK.glow.radius, 6, 4).translate(LOOK.glow.x, LOOK.glow.y, 0), LOOK.glow.color);
+  // 효과: 더하기 섞기라 색을 a만큼 줄이면 옅어진다
+  const fxMesh = (geo) => {
+    const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), LOOK.fxMax);
+    m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(LOOK.fxMax * 3), 3).setUsage(THREE.DynamicDrawUsage);
+    m.frustumCulled = false; m.count = 0; view.scene.add(m);
+    return m;
+  };
+  const fires = fxMesh(new THREE.RingGeometry(0.82, 1, 28).rotateX(-Math.PI / 2)), heals = fxMesh(new THREE.OctahedronGeometry(LOOK.heal.size));
+  const fireColor = new THREE.Color(LOOK.fire.color), healColor = new THREE.Color(LOOK.heal.color);
   let tinted = false;   // 지난 화면에 밝힌 병사가 있었나(고른 것이 없어지면 한 번 되돌린다)
 
   // visible(i): 그릴 병사인가(안개), seeAt(x, z): 그 자리가 보이나(화살·흔적).
@@ -81,7 +126,7 @@ export function createCrowd(view, rules, capacity) {
     const pv = preview && LOOK.effectOrders.includes(preview.order) ? preview : null;
     const tint = !!selected || !!pv || effects || tinted;
     counts.fill(0);
-    let nh = 0;
+    let nh = 0, nhalo = 0, nglow = 0;
     for (let i = 0; i < s.count; i++) {
       if (!s.alive[i]) continue;
       if (visible && !visible(i)) continue;
@@ -94,6 +139,8 @@ export function createCrowd(view, rules, capacity) {
       const mesh = meshes[side][type], n = counts[k]++;
       mesh.setMatrixAt(n, m4);
       if (rules.units[side][type].worker) hats.setMatrixAt(nh++, m4);
+      else if (type === PRIEST) halos.setMatrixAt(nhalo++, m4);
+      else if (type === MAGE) glows.setMatrixAt(nglow++, m4);
       if (tint) {
         const c = mesh.instanceColor.array;
         const T = tintOf[side][type];
@@ -112,6 +159,9 @@ export function createCrowd(view, rules, capacity) {
       }
     hats.count = nh;
     hats.instanceMatrix.needsUpdate = true;
+    halos.count = nhalo; halos.instanceMatrix.needsUpdate = true;
+    glows.count = nglow; glows.instanceMatrix.needsUpdate = true;
+    drawFx(world, seeAt);
     tinted = !!selected || !!pv || effects;
 
     let ns = 0;

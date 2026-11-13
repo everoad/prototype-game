@@ -18,7 +18,7 @@ const gold = w => w.map.deposits.find(d => Math.hypot(d.x - 550, d.z - 62) < 0.5
 const build = (w, ids, type, x, z, side = 0) => applyOrder(w, { kind: 'build', side, type, x, z, workers: ids });
 
 test('사람 편 이름은 다종족, 번호와 수치는 그대로', () => {
-  const r = makeRules(), names = r.units[0].map(u => u.name);
+  const r = makeRules(), names = r.units[0].slice(0, 6).map(u => u.name);   // 기본 병종 여섯(6~9 특수 병종은 specials-rules.test)
   assert.equal(WORKER, 5);
   assert.deepEqual(names, ['드워프 방패병', '엘프 궁수', '인간 기병', '인간 보병', '드워프 투석기', '드워프 광부']);
   assert.deepEqual(r.units[1].slice(0, 4).map(u => u.name), ['창 고블린', '투척꾼', '늑대 기수', '고블린']);

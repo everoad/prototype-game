@@ -1,7 +1,7 @@
 // HUD(군단 영지 1단계 — 시험 장면 화면): 위쪽 상태 줄(시간·병사 수·FPS·장면·속도), 지휘 스킬 단추, 고른 병력 판, 미니맵, 도움말, 알림.
 // 홍수 HUD에서 옛 판 부분(사기·승점·금·건물 판·경보·거점 목록·손잡이)을 뺐다. 화면 글은 한국어.
 import { CASTS, canCast } from '../sim/casts.js';
-import { CAST_KEYS } from './keys.js';
+import { CAST_KEYS, BUILD_KEYS } from './keys.js';
 import { regionPolygon } from '../sim/regions.js';
 import { crewMarks } from './crewMarks.js';
 import { miniToWorld } from './minimap.js';
@@ -31,6 +31,7 @@ const CSS = `
 #hud .res { flex-basis: 100%; display: flex; gap: 10px; align-items: center; font-weight: 600; }
 #hud .gens .card button.act { font: inherit; font-size: 13px; min-height: 30px; padding: 3px 8px; margin: 4px 4px 0 0; border-radius: 8px; border: 1px solid #999; background: #fff; cursor: pointer; text-align: left; }
 #hud .gens .card button.act .g { display: block; font-size: 11px; color: #5f5e5a; }
+#hud .gens .card button.act .k { opacity: .55; margin-right: 4px; }
 #hud .gens .card button.act:disabled { opacity: .55; cursor: default; }
 #hud .gens .card button.act.on { outline: 3px solid #4caf50; }
 #hud .cgroups { position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: auto; }
@@ -85,7 +86,7 @@ export function createHud({ labs = [], scene = '', speed = 1, onScene = () => {}
   const root = document.createElement('div'); root.id = 'hud'; document.body.appendChild(root);
   root.innerHTML = `
     <div class="bar">
-      <b>군단 영지</b><span class="muted">4단계 조작과 화면</span>
+      <b>군단 영지</b><span class="muted">6-1단계 땅 병종과 땅 규칙</span>
       <label class="muted">장면 <select id="scene">${labs.map(n => `<option${n === scene ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
       <button id="restart" title="같은 장면을 처음부터">다시</button>
       <span class="muted" id="time"></span>
@@ -100,7 +101,7 @@ export function createHud({ labs = [], scene = '', speed = 1, onScene = () => {}
     <div class="help" id="help"><b>왼쪽</b> 고르기: 병사를 누르면 그 부대, 두 번 누르면 화면 안 같은 병종 모두, 빈 땅에서 끌면 닿은 부대 전체(Shift = 더하기, Esc = 풀기).
       <b>오른쪽</b> 고른 병력 보내기 — 땅이면 이동만(가는 길엔 싸우지 않고 닿은 적만 친다), <b>적 병사 위면 그 적 공격</b>. Alt+오른쪽 = 어택땅(싸우며 간다). Shift+오른쪽 = 누를 때마다 길을 이어 간다(바로 출발, 경유점 3개까지).
       <b>지휘 스킬</b> 아래 단추나 Z·X·C → 땅에 원을 찍어 건다(금 없음, 다시 쓰기 시간만). 오른쪽·Esc = 그만두기.
-      <b>경제</b> 망치 표식(광부 조)을 누르고 아래 짓기 단추 → 땅에 놓기. 우리 건물을 누르면 생산·연구 판, 오른쪽 = 집결지. 짓는 우리 건물에 광부로 오른쪽 = 돕기, 적 건물에 오른쪽 = 공격.
+      <b>경제</b> 망치 표식(광부 조)을 누르고 아래 짓기 단추나 Q·W·E·R·A·D·F → 땅에 놓기. 우리 건물을 누르면 생산·연구 판, 오른쪽 = 집결지. 짓는 우리 건물에 광부로 오른쪽 = 돕기, 적 건물에 오른쪽 = 공격.
       <b>화면</b> 가운데 버튼 끌기 = 회전·기울기, 휠 = 확대, 화면 가장자리·방향키·미니맵 = 이동.</div>
     <canvas class="mini" id="mini" width="192" height="128"></canvas>
     <div class="gens" id="gens"></div>
@@ -195,8 +196,8 @@ export function createHud({ labs = [], scene = '', speed = 1, onScene = () => {}
     const pick = `<div class="card">고른 병력 <b class="tot">${n}명</b> ${by.map((k, t) => (k ? `<button class="type" data-type="${t}">${w.rules.units[0][t].name} <span class="cnt" data-t="${t}">${k}</span></button>` : '')).join('')}${cmds}<br><span class="muted">병종 누르기 = 그 병종만 · Shift+누르기 = 그 병종 빼기<br>오른쪽 = 보내기(적 위 = 공격) · Alt+오른쪽 = 어택땅 · Shift+오른쪽 = 길 이어 가기 · Esc = 풀기</span></div>`;
     if (!crew || !w.buildings?.length) return pick;
     const placing = getPlacing();
-    const btns = buildButtons(w, 0).map(x => `<button class="act${placing === x.type ? ' on' : ''}" data-kind="place" data-key="${x.type}" ${x.ok ? '' : 'disabled'} title="${esc(x.why || costText(x.cost))}">${esc(x.name)}<span class="g">${esc(x.ok ? `${costText(x.cost)} · ${w.rules.buildings[x.type].time}초` : x.why)}</span></button>`).join('');
-    return `${pick}<div class="card">짓기(광부 <span class="crw">${crew}</span>명) ${btns}<br><span class="muted">단추 → 땅에 놓기(Shift = 이어서), 오른쪽·Esc = 그만 · 짓는 우리 건물에 오른쪽 = 돕기</span></div>`;
+    const btns = buildButtons(w, 0).map((x, k) => `<button class="act${placing === x.type ? ' on' : ''}" data-kind="place" data-key="${x.type}" ${x.ok ? '' : 'disabled'} title="${esc(x.why || costText(x.cost))}"><span class="k">${BUILD_KEYS[k] ?? ''}</span>${esc(x.name)}<span class="g">${esc(x.ok ? `${costText(x.cost)} · ${w.rules.buildings[x.type].time}초` : x.why)}</span></button>`).join('');
+    return `${pick}<div class="card">짓기(광부 <span class="crw">${crew}</span>명) ${btns}<br><span class="muted">단추나 Q·W·E·R·A·D·F → 땅에 놓기(Shift = 이어서), 오른쪽·Esc = 그만 · 짓는 우리 건물에 오른쪽 = 돕기</span></div>`;
   }
   function buildingCardHtml(w, c) {
     const btns = c.buttons.map(x => `<button class="act" data-kind="${x.kind}" data-key="${x.key}" ${x.ok ? '' : 'disabled'} title="${esc(x.why || `${costText(x.cost)} · ${x.time}초`)}">${esc(x.name)}${x.n ? ` ${x.n}` : ''}<span class="g">${esc(x.ok ? `${costText(x.cost)} · ${x.time}초` : x.why)}</span></button>`).join('');

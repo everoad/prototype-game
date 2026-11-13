@@ -8,6 +8,7 @@ import { campAlive } from '../sim/camps.js';
 import { makeRng } from '../sim/rng.js';
 import { SIDE_COLORS } from './scene.js';
 import { dashSegments, ribbonPoints } from './landShapes.js';
+import { siegeText } from './panel.js';
 
 const LOOK = {
   rock: { colors: [0x8b8780, 0x6f6b64], minPieces: 3, maxPieces: 7, perRadius: 3, minH: 3, maxH: 9 },   // 바위 덩어리: 반지름 perRadius m마다 한 조각
@@ -145,8 +146,9 @@ export function createLand(view, world) {
   for (const it of items) {
     const el = document.createElement('div');
     el.style.cssText = 'position:absolute;transform:translate(-50%,-100%);text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;white-space:nowrap;';
-    el.innerHTML = it.g.name + (it.g.land ? `<br><span style="font-weight:500;font-size:12px;color:#5a2d82">→ ${LAND_UNITS[it.g.land]}</span>` : '');
-    box.appendChild(el); it.label = el;
+    it.labelHtml = it.g.name + (it.g.land ? `<br><span style="font-weight:500;font-size:12px;color:#5a2d82">→ ${LAND_UNITS[it.g.land]}</span>` : '');
+    el.innerHTML = it.labelHtml;
+    box.appendChild(el); it.label = el; it.siegeText = '';
   }
 
   function setArc(it, frac, color) {
@@ -181,7 +183,9 @@ export function createLand(view, world) {
       else if (t.owner >= 0) setArc(it, t.hold, SIDE_COLORS[t.owner]);   // 적이 깎는 중이면 남은 몫
       else setArc(it, t.capturer >= 0 ? t.prog : 0, t.capturer >= 0 ? SIDE_COLORS[t.capturer] : 0xffffff);
       if (it.camp && it.campUp && !campAlive(w, it.g.id)) { it.camp.userData.fall(); it.campUp = false; }
-      const show = view.cam.h < LOOK.label.maxH, p = show ? view.worldToScreen(it.g.x, it.g.z, H(it.g.x, it.g.z) + LOOK.label.lift) : null;
+      const st = siegeText(t, w.rules);                              // 포위 남은 초(6-1단계) — 바뀔 때만 글을 고친다
+      if (st !== it.siegeText) { it.siegeText = st; it.label.innerHTML = it.labelHtml + (st ? `<br><span style="font-weight:700;color:#b3261e">${st}</span>` : ''); }
+      const show = view.cam.h < LOOK.label.maxH || !!st, p = show ? view.worldToScreen(it.g.x, it.g.z, H(it.g.x, it.g.z) + LOOK.label.lift) : null;
       if (!p || p.behind) it.label.style.display = 'none';
       else { it.label.style.display = ''; it.label.style.left = `${p.x}px`; it.label.style.top = `${p.y}px`; }
     }

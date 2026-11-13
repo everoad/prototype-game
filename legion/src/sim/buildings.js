@@ -53,6 +53,7 @@ export function addBuilding(w, side, type, x, z, { done = false, deposit = -1 } 
   const b = {
     id: w.nextBuildingId++, side, type, def, x, z, r: def.r, maxHp: def.hp, hp: done ? def.hp : def.hp * w.rules.build.startHp, done, progress: done ? 1 : 0,
     builders: 0, deposit, region: w.map.regionAt ? w.map.regionAt(x, z) : -1, queue: [], rally: null, alive: true, lastHit: -1e9, gate: null,
+    pausedWhy: '',                                                   // 줄 맨 앞이 멈춘 까닭(6-1단계 lands.js pauseWhy — 땅을 잃음·끊김)
   };
   w.map.block(x, z, def.r, 1);
   b.gate = (() => { const [gx, gz] = nearestWalkable(w.map, x, z); return { x: gx, z: gz }; })();   // 건물 밖 가장 가까운 걸을 수 있는 칸(일꾼이 가는 곳)

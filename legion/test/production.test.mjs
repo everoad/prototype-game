@@ -8,6 +8,7 @@ import { spawnCrew } from '../src/sim/workers.js';
 import { recount } from '../src/sim/economy.js';
 import { batchOf } from '../src/sim/produce.js';
 import { INFANTRY, CAVALRY, ARCHER, SIEGE, WORKER } from '../src/sim/rules.js';
+import { relink } from '../src/sim/territory.js';
 
 const run = (w, sec) => { const n = Math.round(sec / w.rules.dt); for (let k = 0; k < n; k++) step(w); };
 function base(side = 0) {
@@ -122,6 +123,7 @@ test('둘레가 막혀도 걸을 수 있는 칸에만 선다', () => {
   const w = createWorld({ map: 'legion' }), s = w.soldiers;
   addBuilding(w, 0, 'citadel', 600, 48, { done: true });
   const b = addBuilding(w, 0, 'barracks', 462, 118, { done: true });   // 바위 등성이 (492, 118)·(470, 150) 사이
+  Object.assign(w.territory[b.region], { owner: 0, hold: 1 }); relink(w);   // 남의 땅 건물은 생산이 멈춘다(6-1단계) — 그 땅을 우리 것으로
   applyOrder(w, { kind: 'rally', side: 0, building: b.id, x: 530, z: 118 });   // 바위 너머 — 쐐기 끝이 바위에 걸린다
   train(w, b, 'infantry');
   run(w, 25.5);

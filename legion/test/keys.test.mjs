@@ -1,7 +1,8 @@
 // 키 해석(4단계 계획 Task 1, 설계서 §4 키 배치 — 사용자 2026-11-13): 숫자 = 부대, Z·X·C = 지휘 스킬, S 멈춤, ` 쉬는 광부 조, Space 알림, Esc 그만.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { keyAction, CAST_KEYS } from '../src/view/keys.js';
+import { keyAction, CAST_KEYS, BUILD_KEYS } from '../src/view/keys.js';
+import { makeRules } from '../src/sim/rules.js';
 import { CASTS } from '../src/sim/casts.js';
 
 const k = (code, mods = {}) => keyAction({ code, ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, repeat: false, tag: 'BODY', ...mods });
@@ -35,8 +36,16 @@ test('수정 키가 섞인 글자 키는 아무것도(Ctrl+C 복사 등)', () =>
   assert.equal(k('Space', { ctrlKey: true }), null);
 });
 
-test('없앤 키: WASD·Q·E와 방향키는 아무것도(방향키는 화면이 맡는다)', () => {
-  for (const code of ['KeyW', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'ArrowUp', 'ArrowLeft']) assert.equal(k(code), null, code);
+test('방향키와 비어 있는 글자 키는 아무것도(방향키는 화면이 맡는다)', () => {
+  for (const code of ['KeyG', 'KeyT', 'KeyH', 'ArrowUp', 'ArrowLeft']) assert.equal(k(code), null, code);
+});
+
+test('짓기 단축키: Q·W·E·R·A·D·F = 짓기 메뉴 차례(사용자 2026-11-13 "일꾼 건물 생성 단축키", 6-1단계 마법탑 F)', () => {
+  assert.deepEqual(BUILD_KEYS, ['Q', 'W', 'E', 'R', 'A', 'D', 'F']);
+  ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyA', 'KeyD', 'KeyF'].forEach((code, slot) => assert.deepEqual(k(code), { kind: 'build', slot }, code));
+  assert.equal(BUILD_KEYS.length, makeRules().buildMenu.length);
+  for (const mods of [{ ctrlKey: true }, { shiftKey: true }, { altKey: true }, { repeat: true }, { tag: 'INPUT' }]) assert.equal(k('KeyQ', mods), null, JSON.stringify(mods));
+  assert.deepEqual(k('KeyS'), { kind: 'stop' }, 'S는 그대로 멈춤');
 });
 
 test('글 칸에서는 아무것도', () => {

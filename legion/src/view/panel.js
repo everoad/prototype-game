@@ -2,6 +2,7 @@
 import { RES, RES_NAMES, costOf, lack } from '../sim/economy.js';
 import { buildingName } from '../sim/buildings.js';
 import { batchOf } from '../sim/produce.js';
+import { landWhy } from '../sim/lands.js';
 
 export function resourceText(w, side) {
   const S = w.sides[side];
@@ -26,7 +27,7 @@ export function buildingButtons(w, b) {
   if (!b.done) return [];
   const R = w.rules, S = w.sides[b.side], full = b.queue.length >= R.queueMax ? '생산 줄이 가득 찼다' : '';
   const train = (b.def.trains ?? []).map(key => {
-    const t = R.train[key], cost = costOf(t), why = full || lack(S, cost);
+    const t = R.train[key], cost = costOf(t), why = full || landWhy(w, b.side, key) || lack(S, cost);   // 땅 = 병종(6-1단계)
     return { kind: 'train', key, name: R.units[b.side][t.type].name, n: batchOf(R, b.side, key).n, cost, time: t.time, ok: !why, why };
   });
   const research = (b.def.research ?? []).map(key => {
@@ -36,12 +37,18 @@ export function buildingButtons(w, b) {
   return [...train, ...research];
 }
 
+// 포위 남은 초(6-1단계 — 땅 이름표 밑 붉은 글): 시계가 돌면 '포위 N초', 아니면 ''.
+export function siegeText(t, rules) {
+  return t.siege > 0 ? `포위 ${Math.max(1, Math.ceil(rules.siege.seconds - t.siege - 1e-9))}초` : '';
+}
+
 // 생산 줄 글: 맨 앞은 남은 초(인구가 모자라 시작 못 했으면 '(인구 대기)'), 나머지는 이름만.
 export function queueText(w, b) {
   const R = w.rules;
   return b.queue.map((it, k) => {
     const name = it.kind === 'unit' ? R.units[b.side][R.train[it.key].type].name : R.research[it.key].name;
     if (k > 0) return name;
+    if (b.pausedWhy) return `${name} (멈춤: ${b.pausedWhy})`;          // 땅을 잃음·끊김(6-1단계)
     return it.kind === 'unit' && !it.started ? `${name} (인구 대기)` : `${name} ${Math.ceil(it.left - 1e-9)}초`;
   });
 }

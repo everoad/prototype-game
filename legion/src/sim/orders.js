@@ -54,6 +54,16 @@ function send(w, o) {
   if (!ids.length) { w.events.push({ kind: 'send', side: o.side, from: { kind: 'ids', count: crew.length }, target: { ...to }, count: crew.length, routed: false }); return { ok: true, count: crew.length }; }
   for (const i of ids) s.volleyUntil[i] = 0;   // 보내면 화살 비가 풀린다
   detachFromGroups(w, ids);                            // 행군 중인 쐐기에서 고른 병사(사용자 2026-11-08)
+  if (t.kind === 'foe') {                              // 사제(싸우지 않는 병종, 6-1단계 최종 검토): 적에게 걸어가지 않고 그 적에서 고칠 거리만큼 뒤로 간다
+    const support = ids.filter(i => w.rules.units[s.side[i]][s.type[i]].noncombat);
+    if (support.length) {
+      const spot = behindFoe(w, picked, to, w.rules.units[s.side[support[0]]][s.type[support[0]]].healRange ?? 15), pt = pointTarget(w, spot, support.length);
+      dropFromSquads(w, support); sendTroops(w, support, pt, via, true); orderAll(w, support, pt);
+      const rest = ids.filter(i => !support.includes(i));
+      if (!rest.length) { w.events.push({ kind: 'send', side: o.side, from: { kind: 'ids', count: support.length }, target: { ...pt }, count: support.length + crew.length, routed: !!via }); return { ok: true, count: support.length + crew.length }; }
+      ids.length = 0; ids.push(...rest);
+    }
+  }
   if (t.kind === 'foe') startSquad(w, ids, to); else dropFromSquads(w, ids);   // 공격 무리(squads.js): 적이 다 쓰러지면 진형으로 선다
   if (t.kind === 'foe') { sendTroops(w, ids, to, via, true); orderAll(w, ids, to); }   // 적 공격은 어떻게 골랐든 명령
   else {
@@ -147,6 +157,21 @@ const foeTarget = (w, t) => ({ kind: 'foe', id: t.id, serial: t.serial, x: w.sol
 
 // "그 자리" 목표: 무리 크기에 맞춘 원(한 명당 POINT_AREA m²)과 그 점의 흐름장.
 const POINT_AREA = 2.5, POINT_MIN_R = 4;
+// 적 공격으로 보낸 사제가 설 곳: 고른 병사 가운데에서 그 적 쪽으로, 가운데에 가장 가까운 적(적 맨 앞)보다 back − 1 m 앞
+// (이미 그만큼 가까우면 가운데, 걸을 수 없으면 가운데). 뒷줄 적을 노려도 적 무리 안으로 들어가지 않게.
+function behindFoe(w, picked, to, back) {
+  const s = w.soldiers, f = targetPoint(w, to), side = s.side[picked[0]];
+  let cx = 0, cz = 0;
+  for (const i of picked) { cx += s.x[i]; cz += s.z[i]; }
+  cx /= picked.length; cz /= picked.length;
+  let front = Math.hypot(f.x - cx, f.z - cz);
+  for (let j = 0; j < s.count; j++) if (s.alive[j] && s.side[j] !== side) front = Math.min(front, Math.hypot(s.x[j] - cx, s.z[j] - cz));   // 명령 한 번에 한 번 — 다 훑어도 싸다
+  const dx = f.x - cx, dz = f.z - cz, d = Math.hypot(dx, dz) || 1, go = front - (back - 1);
+  if (go <= 0) return { x: cx, z: cz };
+  const x = cx + dx / d * go, z = cz + dz / d * go;
+  return w.map.walkable(x, z) ? { x, z } : { x: cx, z: cz };
+}
+
 function pointTarget(w, t, n) {
   return { kind: 'point', x: t.x, z: t.z, r: Math.max(POINT_MIN_R, Math.sqrt(n * POINT_AREA / Math.PI)), field: pointFieldId(w, t.x, t.z), ...(t.ring ? { ring: t.ring } : {}) };
 }

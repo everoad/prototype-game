@@ -6,7 +6,7 @@ import { spawn } from '../sim/soldiers.js';
 import { applyOrder } from '../sim/orders.js';
 import { canSee } from '../sim/vision.js';
 import { LABS, makeApi, actionRunner } from '../sim/labs.js';
-import { setupGame, demoActions } from '../sim/game.js';
+import { setupGame, demoActions, showcaseActions } from '../sim/game.js';
 import { createLand } from './land.js';
 import { createBuildings } from './buildings.js';
 import { idleCrews } from './select.js';
@@ -34,7 +34,7 @@ const api = makeApi({ createWorld, step, spawn, applyOrder });
 let hud;
 const failToast = reason => (hud ? hud.toast(reason) : console.warn(reason));   // 사용자가 먼저 건 스킬과 겹쳐 장면 행동이 거절되면 알리고 이어 간다
 if (GAME) setupGame(world);
-const actions = GAME ? (q.get('demo') === '1' ? demoActions(world, api) : []) : LABS[sceneName].setup(world, api);
+const actions = GAME ? (q.get('demo') === '1' ? demoActions(world, api) : q.get('showcase') === '1' ? showcaseActions(world, api) : []) : LABS[sceneName].setup(world, api);   // showcase: 특수 병종 보여 주기(6-1단계)
 const due = actionRunner(actions, failToast);
 if (actions.length) world.controllers[0] = { think: w => { due(w, api); return []; } };
 for (const until = num('skip', 0); world.time < until;) step(world);   // 녹화 앞부분 건너뛰기

@@ -22,7 +22,7 @@ export function stepBehavior(w) {
       if (w.time >= s.routUntil[i]) { s.state[i] = STATE.FRONT; s.target[i] = -1; }
       continue;
     }
-    if (w.rules.units[s.side[i]][s.type[i]].worker) { if (s.order[i]) orderedThink(w, i); s.target[i] = -1; s.rtarget[i] = -1; continue; }   // 광부(3단계): 적을 노리지 않고 달아나지도 않는다
+    if (w.rules.units[s.side[i]][s.type[i]].noncombat) { if (s.order[i]) orderedThink(w, i); s.target[i] = -1; s.rtarget[i] = -1; continue; }   // 광부(3단계)·사제(6-1단계): 적을 노리지 않고 달아나지도 않는다
     if ((i + w.tick) % b.routCheckEvery === 0 && maybeRout(w, i)) continue;
     if ((i & 1) !== parity) continue;
     if (s.state[i] === STATE.FLEE) { s.target[i] = -1; continue; }
@@ -37,7 +37,7 @@ export function stepBehavior(w) {
       const rain = s.volleyUntil[i] > w.time ? { x: s.volleyX[i], z: s.volleyZ[i], r: w.rules.orders.radius } : null;
       const keep = rt >= 0 && s.alive[rt] && (s.x[rt] - s.x[i]) ** 2 + (s.z[rt] - s.z[i]) ** 2 <= rng * rng && (!rain || (s.x[rt] - rain.x) ** 2 + (s.z[rt] - rain.z) ** 2 <= rain.r * rain.r);
       if (!keep) { const inRain = rain ? bestRangedTarget(w, i, rng, rain) : -1; s.rtarget[i] = inRain >= 0 ? inRain : bestRangedTarget(w, i, rng); }
-      if (s.type[i] === ARCHER && maybeKite(w, i)) continue;   // 거점 진형 궁수는 물러나지 않는다
+      if (u.cls === ARCHER && maybeKite(w, i)) continue;   // 궁수 갈래(궁수·마법사)는 물러난다
     }
     const t = s.target[i];
     if (!ranged) {                                                     // 1) 바로 옆의 적부터(노리던 먼 적을 버린다) — 거점으로 가는 기병도 그대로(2026-11-10 막아 봤더니 도는 횟수는 그대로이고 선 끝 돌기가 줄었다)
@@ -131,6 +131,7 @@ const homeDir = side => (side === 0 ? -1 : side === 1 ? 1 : 0);
 function maybeRout(w, i) {
   const s = w.soldiers, b = w.rules.behavior;
   if (s.state[i] === STATE.FLEE || s.wedge[i] || s.drumUntil[i] > w.time) return false;   // 버텨라·돌격 북: 물러나지 않음
+  if (w.rules.units[s.side[i]][s.type[i]].noRout) return false;   // 골렘(6-1단계): 달아나지 않는다
   const maxHp = w.rules.units[s.side[i]][s.type[i]].hp;
   if (s.hp[i] >= maxHp * b.routHp) return false;
   if (w.time < s.routUntil[i] + b.routCooldown) return false;   // 돌아온 뒤 잠깐은 다시 달아나지 않는다
@@ -172,7 +173,7 @@ function maybeKite(w, i) {
       for (let j = s.head[rr * s.gcols + cc]; j !== -1; j = s.next[j]) {
         if (!s.alive[j] || j === i) continue;
         const d = Math.hypot(s.x[j] - s.x[i], s.z[j] - s.z[i]);
-        const uj = r.units[s.side[j]][s.type[j]], melee = !uj.worker && uj.range <= r.melee.reach * 2;   // 광부는 위협도 지킴도 아니다(3단계 최종 검토)
+        const uj = r.units[s.side[j]][s.type[j]], melee = !uj.noncombat && uj.range <= r.melee.reach * 2;   // 광부·사제는 위협도 지킴도 아니다(3단계 최종 검토)
         if (s.side[j] !== s.side[i] && melee && d <= rad) foe = j;
         if (s.side[j] === s.side[i] && melee && d <= b.kiteFriend) friend = true;
       }

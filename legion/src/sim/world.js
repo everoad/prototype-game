@@ -9,6 +9,7 @@ import { stepMovement, clampTurns, nearestWalkable } from './movement.js';
 import { stepSquads } from './squads.js';
 import { stepBehavior } from './behavior.js';
 import { stepCombat } from './combat.js';
+import { stepHeal } from './heal.js';
 import { applyOrder } from './orders.js';
 import { stepGroups } from './groups.js';
 import { stepVision } from './vision.js';
@@ -35,6 +36,7 @@ export function createWorld({ knobs = {}, seed = 1, map: mapName = 'lab' } = {})
     rules, map, rng: makeRng(seed), seed, tick: 0, time: 0, acc: 0,
     sides: [0, 1].map(() => makeSide(rules)),            // 자원·수입률·인구(economy.js), 지휘 스킬 다시 쓰기(casts.js)
     soldiers, events: [], deaths: [], shots: [], boulders: [],   // boulders: 나는 투석기 돌(catapult.js)
+    fx: [],                                             // 화면 효과 { kind: 'fire'|'heal', x, z, r, t }(마법사 불덩이·사제 고치기, 6-1단계)
     result: null,
     casts: [],                                          // 건 지휘 스킬의 원 { side, order, x, z, r, at, until }(화면이 그린다, casts.js)
     notices: [],                                        // 화면 알림 { side, kind, at, … }(catapult.js 결과 알림)
@@ -59,6 +61,7 @@ export function step(w, orders = []) {
   if (w.result) return;                                 // 끝난 판(성채가 무너졌다)
   w.events.length = 0;
   while (w.shots.length && w.shots[0].t < w.time - 0.5) w.shots.shift();
+  while (w.fx.length && w.fx[0].t < w.time - 0.6) w.fx.shift();
   for (const c of w.controllers) if (c) w.pendingOrders.push(...c.think(w));
   for (const o of [...orders, ...w.pendingOrders]) {    // ① 명령
     const r = applyOrder(w, o);
@@ -76,6 +79,7 @@ export function step(w, orders = []) {
   rebuildGrid(w.soldiers);
   stepCatapults(w);                                     // 투석기 돌(맞닿음은 앞 틱 싸움에서)
   stepCombat(w);                                        // ⑤
+  stepHeal(w);                                          // 사제 고치기·움직임(heal.js, 6-1단계)
   stepStrikes(w);                                       // 건물 피해(strikes.js)
   clampTurns(w);                                        // 도는 빠르기 한계(movement.js)
   stepVision(w);                                        // ⑦ 시야(4틱마다)
@@ -118,6 +122,7 @@ export function setGoal(w, ids, target) {
       if (!w.map.walkable(gx, gz)) { gx = target.x; gz = target.z; }
       s.goalKind[i] = GOAL.POINT; s.goalId[i] = target.field ?? -1; s.goalX[i] = gx; s.goalZ[i] = gz;
     }
+    s.postX[i] = s.goalX[i]; s.postZ[i] = s.goalZ[i];               // 자리(사제가 끈의 가운데로 쓴다, 6-1단계)
     if (s.state[i] === STATE.FRONT) s.state[i] = STATE.MARCH;
   }
 }

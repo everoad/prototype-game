@@ -8,6 +8,11 @@ export const INFANTRY = 3; // 보병: 상성 없음 (몬스터: 고블린) — �
 export const TYPES = [SPEAR, ARCHER, CAVALRY, INFANTRY];   // 싸움 병종 넷(투석기는 따로)
 export const SIEGE = 4;    // 투석기 (몬스터: 고블린 투석기)
 export const WORKER = 5;   // 광부(3단계 — 싸우지 않고 짓고 고친다, 10명 한 조) (몬스터: 잡역 고블린)
+// 특수 병종(6-1단계, 설계서 §7 "6단계 설계"): 짝마다 같은 규칙(거울), 몬스터는 체력·화력 ×0.6·간격 ×0.75의 떼
+export const MAGE = 6;     // 화염 마법사 — 원거리 범위, 궁수 갈래 (몬스터: 고블린 주술사)
+export const PRIEST = 7;   // 사제 — 싸우지 않고 고친다 (몬스터: 오크 무당)
+export const KNIGHT = 8;   // 기사 — 기병 갈래, 돌격 ×3 (몬스터: 멧돼지 기수)
+export const GOLEM = 9;    // 룬 골렘 — 큰 몸·모루·범위 타격·돌 몸 (몬스터: 트롤)
 
 const SPEAR_HP = 600; // 무게 = 체력 ÷ 창병 체력 (§1.4)
 
@@ -20,7 +25,12 @@ const UNIT_TABLE = [
     { name: '인간 기병', hp: 960, dps: 22, range: 1.2, speed: 9, holdsLine: false, splash: 0, siege: false, charges: true },   // 화력 14 → 22(무게당 궁수와 같게), 빠르기 7 → 9(보병의 세 배, 사용자 2026-11-07: 기병이 빨리 닿게)
     { name: '인간 보병', hp: 600, dps: 10, range: 1.2, speed: 3.5, holdsLine: false, shield: true, splash: 0, siege: false },   // 무난한 병종: 창병과 같은 수치와 앞쪽 방패, 버티기·기병 상성은 없음. 빠르기 3 → 3.5(사용자 2026-11-10, 창병과 같이)
     { name: '드워프 투석기', hp: 1500, dps: 0, range: 100, minRange: 12, speed: 2, holdsLine: false, splash: 0, siege: true, catapult: true },   // 투석기 설계서(2026-11-09): 맞붙어 싸우지 않고 catapult.js가 돌을 쏜다(공성병 대신)
-    { name: '드워프 광부', hp: 150, dps: 0, range: 1.2, speed: 4, holdsLine: false, splash: 0, siege: false, worker: true },   // 광부(3단계 workers.js): 적을 노리지 않고 맞붙지도 않는다
+    { name: '드워프 광부', hp: 150, dps: 0, range: 1.2, speed: 4, holdsLine: false, splash: 0, siege: false, worker: true, noncombat: true },   // 광부(3단계 workers.js): 적을 노리지 않고 맞붙지도 않는다
+    // 특수 병종(6-1단계 시작값 — 시험 장면과 영상으로 고친다). cls = 갈래(상성·원거리 목표 순서·물러나기·기병 밀기를 이것으로 본다, 없으면 제 번호)
+    { name: '엘프 화염 마법사', hp: 300, dps: 8, range: 35, speed: 2.6, holdsLine: false, splash: 4, splashShare: 0.6, splashMax: 10, siege: false, cls: ARCHER },   // 투척꾼의 범위 규칙 그대로, 수치만 크게
+    { name: '인간 사제', hp: 300, dps: 0, range: 1.2, speed: 3, holdsLine: false, splash: 0, siege: false, noncombat: true, heal: 20, healRange: 16 },   // heal.js: 둘레 healRange m의 가장 다친 우리 편을 초당 heal
+    { name: '인간 기사', hp: 1440, dps: 26, range: 1.2, speed: 8, holdsLine: false, splash: 0, siege: false, charges: true, chargeMult: 3, chargeKnock: 3, cls: CAVALRY },   // 기병 규칙 + 돌격 ×3, 돌격에 맞은 적 3 m
+    { name: '드워프 룬 골렘', hp: 15000, dps: 60, range: 1.2, speed: 2.2, holdsLine: false, splash: 2, splashShare: 0.5, splashMax: 3, siege: false, spacing: 2.5, knock: 3, rangedTaken: 0.5, noRout: true, anvil: true },   // 근접 범위 타격·밀어냄, 원거리 반감, 안 달아남, 모루. 체력 6,000 → 15,000(6-1단계 값어치 장면: 값 600에 보병 쐐기(값 300)의 1/6 몫이었다)
   ],
   [
     { name: '창 고블린', hp: 360, dps: 6, range: 1.2, speed: 3.3, holdsLine: true, shield: true, splash: 0, siege: false, spacing: 0.6 },   // 떼(간격 0.6 m). 체력 300 → 360, 화력 5 → 6: 정면에서 기병을 막게(사용자 2026-11-07)
@@ -28,7 +38,12 @@ const UNIT_TABLE = [
     { name: '늑대 기수', hp: 700, dps: 12, range: 1.2, speed: 10, holdsLine: false, splash: 0, siege: false, charges: true },   // 빠르기 8 → 10(사람 기병과 같은 비율로)
     { name: '고블린', hp: 300, dps: 5, range: 1.2, speed: 3.3, holdsLine: false, shield: true, splash: 0, siege: false, spacing: 0.6 },
     { name: '고블린 투석기', hp: 1500, dps: 0, range: 100, minRange: 12, speed: 2, holdsLine: false, splash: 0, siege: true, catapult: true },   // 사람 투석기와 같은 규칙(1:1 대전, 오거는 뺐다)
-    { name: '잡역 고블린', hp: 150, dps: 0, range: 1.2, speed: 4, holdsLine: false, splash: 0, siege: false, worker: true },   // 광부와 같은 수치
+    { name: '잡역 고블린', hp: 150, dps: 0, range: 1.2, speed: 4, holdsLine: false, splash: 0, siege: false, worker: true, noncombat: true },   // 광부와 같은 수치
+    // 특수 병종 거울 짝: 사람 편과 같은 규칙, 체력·화력 ×0.6, 간격 ×0.75(기본 0.8 → 0.6, 골렘 2.5 → 1.875)
+    { name: '고블린 주술사', hp: 180, dps: 4.8, range: 35, speed: 2.6, holdsLine: false, splash: 4, splashShare: 0.6, splashMax: 10, siege: false, cls: ARCHER, spacing: 0.6 },
+    { name: '오크 무당', hp: 180, dps: 0, range: 1.2, speed: 3, holdsLine: false, splash: 0, siege: false, noncombat: true, heal: 20, healRange: 16, spacing: 0.6 },   // 고치기는 그대로(맞는 쪽 체력이 작아 몫으로는 크다)
+    { name: '멧돼지 기수', hp: 864, dps: 15.6, range: 1.2, speed: 8, holdsLine: false, splash: 0, siege: false, charges: true, chargeMult: 3, chargeKnock: 3, cls: CAVALRY, spacing: 0.6 },
+    { name: '트롤', hp: 9000, dps: 36, range: 1.2, speed: 2.2, holdsLine: false, splash: 2, splashShare: 0.5, splashMax: 3, siege: false, spacing: 1.875, knock: 3, rangedTaken: 0.5, noRout: true, anvil: true },
   ],
 ];
 
@@ -37,8 +52,11 @@ export function makeRules(knobs = {}) {
   const s = k.scale;
   // mirror: 편 1도 사람 병종 표를 쓴다(대칭 시험·1:1 대칭 판)
   const table = [...(k.mirror ? [UNIT_TABLE[0], UNIT_TABLE[0]] : UNIT_TABLE), UNIT_TABLE[1]];   // 편 2 = 중립 괴물 소굴(몬스터 표, 군단 영지 2단계)
-  const units = table.map(side => side.map(u => ({
+  const move = { spacing: 0.8, maxPush: 0.3, damping: 0.6, neighborCap: 24, cellSize: 4 };
+  const units = table.map(side => side.map((u, t) => ({
     ...u,
+    cls: u.cls ?? t,                                                   // 갈래(6-1단계): 기본 병종은 제 번호 — 황금 시험 그대로
+    body: Math.max(0, ((u.spacing ?? move.spacing) - move.spacing) / 2),   // 몸(m): 근접 닿음 거리에 더한다(골렘 0.85, 트롤 0.54)
     dps: u.dps * k.damage,
     speed: u.speed * k.speed,
     weight: u.hp / SPEAR_HP,
@@ -101,10 +119,11 @@ export function makeRules(knobs = {}) {
       lumbermill: { name: ['벌목소', '벌목터'], hp: 1200, r: 4, gold: 60, wood: 0, mana: 0, time: 12, sight: 30, on: 'wood', income: { wood: 2.5 } },
       manawell: { name: ['마나 우물', '마나 구덩이'], hp: 1200, r: 4, gold: 100, wood: 50, mana: 0, time: 15, sight: 30, on: 'mana', income: { mana: 1.5 } },
       barracks: { name: ['병영', '고블린 막사'], hp: 3000, r: 8, gold: 150, wood: 150, mana: 0, time: 25, sight: 40, trains: ['infantry', 'spear', 'archer'], research: ['shieldwall', 'longbow'] },
-      stable: { name: ['마구간', '늑대 우리'], hp: 2800, r: 8, gold: 150, wood: 200, mana: 0, time: 25, sight: 40, trains: ['cav'], research: ['heavycav'] },
-      workshop: { name: ['공방', '고블린 공방'], hp: 2800, r: 8, gold: 150, wood: 250, mana: 0, time: 30, sight: 40, needs: 'barracks', trains: ['siege'] },
+      stable: { name: ['마구간', '늑대 우리'], hp: 2800, r: 8, gold: 150, wood: 200, mana: 0, time: 25, sight: 40, trains: ['cav', 'knight'], research: ['heavycav'] },
+      workshop: { name: ['공방', '고블린 공방'], hp: 2800, r: 8, gold: 150, wood: 250, mana: 0, time: 30, sight: 40, needs: 'barracks', trains: ['siege', 'golem'] },
+      magetower: { name: ['마법탑', '주술 움막'], hp: 2500, r: 7, gold: 150, wood: 100, mana: 100, time: 30, sight: 40, needs: 'barracks', trains: ['mage', 'priest'] },   // 6-1단계: 마법사(마나 샘 땅)·사제
     },
-    buildMenu: ['goldmine', 'lumbermill', 'manawell', 'barracks', 'stable', 'workshop'],
+    buildMenu: ['goldmine', 'lumbermill', 'manawell', 'barracks', 'stable', 'workshop', 'magetower'],
     // 생산(3단계, produce.js): 한 번에 쐐기 하나 = 무게 group.weightByClass[열쇠](count가 있으면 그 수) — 값·time은 그 쐐기 몫(사용자 "한 번에 많이 나온다고 너무 비싸게만 하지 말아 줘")
     train: {
       infantry: { type: INFANTRY, gold: 200, wood: 100, mana: 0, time: 25 },
@@ -113,6 +132,11 @@ export function makeRules(knobs = {}) {
       cav: { type: CAVALRY, gold: 300, wood: 150, mana: 0, time: 32 },
       siege: { type: SIEGE, gold: 150, wood: 200, mana: 0, time: 35, count: 3 },
       worker: { type: WORKER, gold: 100, wood: 0, mana: 0, time: 12, count: 10 },   // 광부 조 하나
+      // 특수 병종(6-1단계): land = 그 역할 땅을 가졌고 성채와 이어져야 뽑는다(설계서 "땅 = 병종"), 사제는 땅이 필요 없다
+      mage: { type: MAGE, gold: 150, wood: 50, mana: 150, time: 30, land: 'ley' },
+      priest: { type: PRIEST, gold: 100, wood: 0, mana: 120, time: 25 },
+      knight: { type: KNIGHT, gold: 400, wood: 150, mana: 100, time: 40, land: 'ranch' },
+      golem: { type: GOLEM, gold: 300, wood: 100, mana: 200, time: 45, land: 'ruins' },
     },
     // 연구(3단계 — 홍수의 강화 병종 셋): 끝나면 그 편의 type 병사 모두와 그 뒤 뽑는 병사가 강화(elite — 방패벽·장궁 사거리·중기병, combat.js)
     research: {
@@ -141,13 +165,17 @@ export function makeRules(knobs = {}) {
       closeSwitch: 2,   // 근접: 이 거리 안에 적이 오면 노리던 적을 버리고 그 적부터(사용자 2026-11-07: 맞붙은 적을 두고 뒤 궁수에게 달려든다) m
       leaveSeconds: 20,   // 맞붙어 있다 보낸 병사: 이 동안은 바로 옆(closeSwitch) 적만 치고 목표로 간다(사용자 2026-11-07 "A") s
     },
-    movement: { spacing: 0.8, maxPush: 0.3, damping: 0.6, neighborCap: 24, cellSize: 4 },
+    movement: move,
+    // 사제(heal.js, 6-1단계): every틱마다 고치고 움직인다, leash = 자리(마지막 명령 자리)에서 다가갈 수 있는 거리 m
+    heal: { every: 10, leash: 25 },
+    // 포위(territory.js, 영지 규칙): 성채와 끊긴 우리 땅 덩어리의 둘레가 모두 적 땅이면 seconds초 뒤 덩어리째 적에게
+    siege: { seconds: 60 },
     vision: { soldier: k.soldierSight,   // 병사 시야 m(사용자 2026-11-07: 30 → 60, 궁수·공성 사거리보다 넓게)
       hillMult: 1.5, forestSeen: 15, cell: 8, everyTicks: 4 },
     terrain: { field: 1, forest: 0.6, hill: 0.8, ford: 0.7, rock: 0 },   // rock: 바위는 못 지나간다(군단 영지 2단계)
     // 쐐기 진형(§6.4): 모이는 무게, 모양, 행군·돌진
     group: {
-      weight: 150 * s, weightByClass: { infantry: 150 * s, spear: 150 * s, archer: 90 * s, cav: 100 * s, siege: 40 * s }, maxWidth: 15, lateral: 1.3, rowGap: 1.4,
+      weight: 150 * s, weightByClass: { infantry: 150 * s, spear: 150 * s, archer: 90 * s, cav: 100 * s, siege: 40 * s, mage: 10 * s, priest: 5 * s, knight: 96 * s, golem: 100 * s }, maxWidth: 15, lateral: 1.3, rowGap: 1.4,   // 특수 병종 무게: 사람 편 마법사 20·사제 10·기사 40·골렘 4명 몫
       // 병종마다 진형(사용자 2026-11-06): 창 = 쐐기(위 maxWidth·lateral·rowGap), 기병 = 삼각형, 궁수·공성 = 가로 직사각형(한 줄 width명)
       shape: {
         spear: { kind: 'wedge' },
@@ -155,9 +183,13 @@ export function makeRules(knobs = {}) {
         cav: { kind: 'triangle', lateral: 1.8, rowGap: 2.0 },
         archer: { kind: 'line', width: 30, lateral: 1.2, rowGap: 1.5 },
         siege: { kind: 'line', width: 25, lateral: 2.0, rowGap: 2.5 },
+        mage: { kind: 'line', width: 10, lateral: 1.4, rowGap: 1.6 },
+        priest: { kind: 'line', width: 10, lateral: 1.4, rowGap: 1.6 },
+        knight: { kind: 'triangle', lateral: 1.8, rowGap: 2.0 },
+        golem: { kind: 'line', width: 4, lateral: 4, rowGap: 4 },
       },
       lineStop: 10,   // 직사각형(궁수·공성)은 적이 사거리 + 이만큼 안에 오면 서서 풀린다(돌진하지 않는다) m
-      speedFactor: 0.85, speedFactorByClass: { cav: 1 }, turnRateDeg: 30, catchUp: 1.25,   // 기병 진형은 감속 없이 제 빠르기로(사용자 2026-11-07)
+      speedFactor: 0.85, speedFactorByClass: { cav: 1, knight: 1 }, turnRateDeg: 30, catchUp: 1.25,   // 기병 진형은 감속 없이 제 빠르기로(사용자 2026-11-07)
       viaStuck: 0.4,   // 경유점으로 가는 진형은 맞닿은 병사가 이 몫을 넘어야 풀린다(사용자 2026-11-07 "A")
       chargeConeDeg: 75,   // 행군 진형은 가는 쪽 ±이만큼 안의 적에게만 돌진·멈춘다(보낸 진형이 뒤에 남은 적에게 되돌아가지 않게)
       chargeDistance: 60, chargeSeconds: 3, chargeSpeed: 1.3, arriveDistance: 20,

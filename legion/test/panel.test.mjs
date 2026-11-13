@@ -24,7 +24,7 @@ test('값 글: 0인 자원은 뺀다', () => {
 test('짓기 단추: 메뉴 차례, 못 고르는 까닭', () => {
   const w = game(), list = buildButtons(w, 0);
   assert.deepEqual(list.map(b => b.type), w.rules.buildMenu);
-  assert.deepEqual(list.map(b => b.name), ['금광', '벌목소', '마나 우물', '병영', '마구간', '공방']);
+  assert.deepEqual(list.map(b => b.name), ['금광', '벌목소', '마나 우물', '병영', '마구간', '공방', '마법탑']);
   const shop = list.find(b => b.type === 'workshop');
   assert.deepEqual([shop.ok, shop.why], [false, '병영이(가) 먼저 있어야 한다']);
   assert.deepEqual(list.find(b => b.type === 'barracks').cost, { gold: 150, wood: 150, mana: 0 });

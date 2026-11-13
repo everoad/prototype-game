@@ -29,13 +29,13 @@ export function stepCatapults(w) {
   }
 }
 
-// 손이 닿는 거리(melee.reach)에 싸우는 적(광부 아님)이 있나. 광부가 없으면 nearestEnemy와 같다.
+// 손이 닿는 거리(melee.reach)에 싸우는 적(광부·사제 아님)이 있나. 싸우지 않는 병종이 없으면 nearestEnemy와 같다.
 function fighterTouching(w, i) {
   const s = w.soldiers, units = w.rules.units, reach = w.rules.melee.reach, j = nearestEnemy(s, i, reach);
-  if (j < 0 || !units[s.side[j]][s.type[j]].worker) return j >= 0;
+  if (j < 0 || !units[s.side[j]][s.type[j]].noncombat) return j >= 0;
   let hit = false;
   forEachNear(s, s.x[i], s.z[i], reach, q => {
-    if (s.alive[q] && s.side[q] !== s.side[i] && !units[s.side[q]][s.type[q]].worker && (s.x[q] - s.x[i]) ** 2 + (s.z[q] - s.z[i]) ** 2 <= reach * reach) { hit = true; return false; }
+    if (s.alive[q] && s.side[q] !== s.side[i] && !units[s.side[q]][s.type[q]].noncombat && (s.x[q] - s.x[i]) ** 2 + (s.z[q] - s.z[i]) ** 2 <= reach * reach) { hit = true; return false; }
   });
   return hit;
 }

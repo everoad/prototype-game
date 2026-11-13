@@ -6,7 +6,7 @@ import { STATE, GOAL, ORDER } from './soldiers.js';
 import { formationOffsets, classOf } from './groups.js';
 
 const EVERY = 20;                                                  // 1초마다 본다(틱)
-const ROWS = [['infantry', 'spear'], ['cav'], ['archer', 'siege']];   // 앞줄부터
+const ROWS = [['golem', 'infantry', 'spear'], ['cav', 'knight'], ['archer', 'mage', 'siege', 'priest']];   // 앞줄부터(6-1단계: 골렘은 앞, 기사는 기병과, 마법사·사제는 뒤)
 
 // 적 병사로 보낸 병사들(쐐기째 간 병사 포함)을 새 무리로. 방향 = 무리 가운데 → 그 적.
 export function startSquad(w, ids, to) {

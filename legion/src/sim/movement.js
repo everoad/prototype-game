@@ -2,7 +2,7 @@
 import { GOAL, STATE, ORDER } from './soldiers.js';
 import { CAVALRY } from './rules.js';
 import { fieldDir } from './flowfield.js';
-import { rangeOf } from './combat.js';
+import { rangeOf, anyBody } from './combat.js';
 
 const NEAR_DIRECT = 25;   // 목표가 이 안이면 흐름장 대신 곧장 간다 m
 const ARRIVE = 1.0;       // 이 안이면 선다 m
@@ -113,7 +113,11 @@ export function stepMovement(w) {
   const spacing = m.spacing, cap = m.neighborCap, keep = m.damping;
   const holds = w._holds ?? (w._holds = w.rules.units.flatMap(side => side.map(u => (u.holdsLine ? 1 : 0))));
   const gap = w._gap ?? (w._gap = w.rules.units.flatMap(side => side.map(u => u.spacing ?? spacing)));   // 병종마다 간격(고블린 떼는 좁게) — 둘 사이는 평균
-  const NT = w.rules.units[0].length;   // 편마다 병종 수(공성 포함) — holds·gap은 편 × NT + 병종
+  const cls = w._cls ?? (w._cls = w.rules.units.flatMap(side => side.map(u => u.cls)));   // 갈래(6-1단계: 기사도 기병처럼 민다)
+  const anvil = w._anvil ?? (w._anvil = w.rules.units.flatMap(side => side.map(u => (u.anvil ? 1 : 0))));   // 모루(골렘): 기병이 밀고 지나가지 못한다
+  const maxGap = w._maxGap ?? (w._maxGap = Math.max(...gap));
+  const wide = maxGap > spacing && anyBody(w);   // 몸 병종(골렘)이 살아 있으면 간격 찾기 반지름을 넓힌다(없으면 지금 그대로)
+  const NT = w.rules.units[0].length;   // 편마다 병종 수(공성 포함) — holds·gap·cls는 편 × NT + 병종
   for (let i = 0; i < s.count; i++) {
     if (!s.alive[i]) continue;
     s.px[i] = s.x[i]; s.pz[i] = s.z[i];
@@ -123,10 +127,11 @@ export function stepMovement(w) {
 
     // 간격: 같은 편끼리 밀고(뒤에서 밀면 앞이 밀린다, 보완 6), 적끼리도 몸이 부딪힌다(보완 4)
     let pushX = 0, pushZ = 0, seen = 0;
-    const xi = s.x[i], zi = s.z[i], side = s.side[i], cav = s.type[i] === CAVALRY, gi = gap[side * NT + s.type[i]];
+    const xi = s.x[i], zi = s.z[i], side = s.side[i], cav = cls[side * NT + s.type[i]] === CAVALRY, gi = gap[side * NT + s.type[i]];
     const cs = s.cellSize, gc = s.gcols, gr = s.grows, head = s.head, next = s.next, X = s.x, Z = s.z;
-    const c0 = Math.max(0, Math.floor((xi - spacing) / cs)), c1 = Math.min(gc - 1, Math.floor((xi + spacing) / cs));
-    const r0 = Math.max(0, Math.floor((zi - spacing) / cs)), r1 = Math.min(gr - 1, Math.floor((zi + spacing) / cs));
+    const sr = wide ? (gi + maxGap) / 2 : spacing;
+    const c0 = Math.max(0, Math.floor((xi - sr) / cs)), c1 = Math.min(gc - 1, Math.floor((xi + sr) / cs));
+    const r0 = Math.max(0, Math.floor((zi - sr) / cs)), r1 = Math.min(gr - 1, Math.floor((zi + sr) / cs));
     scan: for (let rr = r0; rr <= r1; rr++)
       for (let cc = c0; cc <= c1; cc++)
         for (let j = head[rr * gc + cc]; j !== -1; j = next[j]) {
@@ -135,8 +140,8 @@ export function stepMovement(w) {
           if (d2 >= pair * pair) continue;
           let share = PUSH_SHARE;
           if (cav) {                                           // 기병: 버팀 아닌 적은 지나가고, 우리 보병은 약하게 밀고 지나간다
-            if (s.side[j] !== side) { if (!holds[s.side[j] * NT + s.type[j]] || !s.braced[j]) continue; }   // 버티지 못하는 창은 밀고 지나간다
-            else if (s.type[j] !== CAVALRY) share *= w.rules.behavior.cavFriendPush;
+            if (s.side[j] !== side) { if (!anvil[s.side[j] * NT + s.type[j]] && (!holds[s.side[j] * NT + s.type[j]] || !s.braced[j])) continue; }   // 버티지 못하는 창은 밀고 지나간다(모루는 못 지나간다)
+            else if (cls[s.side[j] * NT + s.type[j]] !== CAVALRY) share *= w.rules.behavior.cavFriendPush;
           }
           if (++seen > cap) break scan;
           if (d2 < 1e-8) { pushX += (i < j ? 1 : -1) * pair * 0.5; continue; }

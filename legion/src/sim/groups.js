@@ -4,10 +4,12 @@ import { GOAL, STATE } from './soldiers.js';
 import { fieldDir, fieldAim } from './flowfield.js';
 import { setGoal } from './world.js';
 import { rangeOf } from './combat.js';
-import { SPEAR, ARCHER, CAVALRY, INFANTRY, SIEGE } from './rules.js';
+import { SPEAR, ARCHER, CAVALRY, INFANTRY, SIEGE, WORKER, MAGE, PRIEST, KNIGHT, GOLEM } from './rules.js';
 
-const ORDER = { [INFANTRY]: 0, [SPEAR]: 0, [CAVALRY]: 1, [ARCHER]: 2, [SIEGE]: 3 };   // 쐐기 앞에서부터
-export const classOf = type => (type === CAVALRY ? 'cav' : type === INFANTRY ? 'infantry' : type === ARCHER ? 'archer' : type === SIEGE ? 'siege' : 'spear');
+export const FRONT_ORDER = { [INFANTRY]: 0, [SPEAR]: 0, [GOLEM]: 0, [CAVALRY]: 1, [KNIGHT]: 1, [ARCHER]: 2, [MAGE]: 2, [SIEGE]: 3, [PRIEST]: 3, [WORKER]: 3 };   // 쐐기 앞에서부터(6-1단계: 모든 병종)
+const CLASS = { [CAVALRY]: 'cav', [INFANTRY]: 'infantry', [ARCHER]: 'archer', [SIEGE]: 'siege', [MAGE]: 'mage', [PRIEST]: 'priest', [KNIGHT]: 'knight', [GOLEM]: 'golem' };
+export const classOf = type => CLASS[type] ?? 'spear';
+const CAV_LIKE = new Set(['cav', 'knight']);   // 기병 진형 규칙(돌격하며 풀지 않음·적을 보면 풀려 사냥)을 따르는 갈래 — 기사는 기병 규칙 그대로(6-1단계 최종 검토)
 
 // 맨 앞 (0,0), 줄 k의 폭 = min(1 + 2k, maxWidth). f = 앞(+)/뒤(−), l = 왼(−)/오른(+).
 export function wedgeOffsets(n, g) {
@@ -59,7 +61,7 @@ function fieldOf(w, t) {
 export function joinGroup(w, grp, id) {
   const s = w.soldiers;
   let at = grp.members.length;                       // 병종 순서대로(창 → 기병 → 궁 → 공성) 앞에서부터
-  while (at > 0 && ORDER[s.type[grp.members[at - 1]]] > ORDER[s.type[id]]) at--;
+  while (at > 0 && FRONT_ORDER[s.type[grp.members[at - 1]]] > FRONT_ORDER[s.type[id]]) at--;
   grp.members.splice(at, 0, id);
   grp.weight += w.rules.units[s.side[id]][s.type[id]].weight;
   s.group[id] = grp.id;
@@ -187,7 +189,7 @@ export function stepGroups(w) {
     if (grp.via?.length && Math.hypot(grp.via[0].x - grp.x, grp.via[0].z - grp.z) < g.arriveDistance) grp.via.shift();
     const routing = grp.via?.length > 0, quiet = routing || grp.order;   // 명령받은 쐐기(사용자 2026-11-08 "B")도 경유점 쐐기처럼: 돌격·멈춤 없이 간다
     const touching = grp.members.reduce((a, i) => a + (s.alive[i] && s.inContact[i] ? 1 : 0), 0);
-    if (touching > (quiet ? g.viaStuck * grp.members.length : 0)) { dissolve(w, grp, !line && grp.cls !== 'cav'); continue; }
+    if (touching > (quiet ? g.viaStuck * grp.members.length : 0)) { dissolve(w, grp, !line && !CAV_LIKE.has(grp.cls)); continue; }
     const p = routing ? grp.via[0] : targetPoint(w, grp.target);
     if (!quiet && (w.tick + grp.id) % g.lookEvery === 0) {
       if (line) {                                                          // 직사각형: 사거리 + lineStop 안에 적이 오면 서서 풀린다
@@ -198,7 +200,7 @@ export function stepGroups(w) {
       grp.foe = line ? null : enemyNear(w, grp.side, grp.x, grp.z, g.chargeDistance, grp.heading);
       // 어택땅(거점으로 보낸 쐐기, 사용자 2026-11-08 "여전히 적군 무시하고 이동"): 앞이 아닌 쪽이라도 어그로 반경 안에 적이 있으면 풀려서 싸운 뒤 간다
       if (!grp.foe && grp.attackMove && enemyNear(w, grp.side, grp.x, grp.z, r.behavior.aggro)) { dissolve(w, grp, false); continue; }
-      if (grp.foe && grp.cls === 'cav') { dissolve(w, grp, false); continue; }   // 기병은 하나하나 사냥한다(창 벽에 진형째 박지 않게)
+      if (grp.foe && CAV_LIKE.has(grp.cls)) { dissolve(w, grp, false); continue; }   // 기병·기사는 하나하나 사냥한다(창 벽에 진형째 박지 않게)
       if (grp.foe) grp.charging = true;
     }
     let arrive = g.arriveDistance;                                     // 원거리(궁수·투석기) 쐐기의 적 공격: 그 적이 사거리 안이면 서서 푼다(투석기 2026-11-09 — 20 m까지 걸어 들어갔다)

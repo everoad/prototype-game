@@ -16,6 +16,7 @@ export function createSoldiers(capacity, map, cellSize) {
     x: f32(), z: f32(), vx: f32(), vz: f32(), px: f32(), pz: f32(), hp: f32(), facing: f32(), pfacing: f32(),   // pfacing: 앞 틱 끝의 보는 방향(도는 빠르기 한계, movement.js clampTurns)
     slotX: f32(), slotZ: f32(), lane: f32(), chargeUntil: f32(), ffx: f32(), ffz: f32(), routUntil: f32(), routX: f32(), routZ: f32(), holdUntil: f32(), runDist: f32(), lastCharge: f32(), hitTimer: f32(),
     goalX: f32(), goalZ: f32(),
+    postX: f32(), postZ: f32(),           // 자리(6-1단계 사제): 마지막 명령 자리(setGoal), 태어나면 그 자리
     type: new Uint8Array(capacity), side: new Uint8Array(capacity), state: new Uint8Array(capacity),
     goalKind: new Uint8Array(capacity), alive: new Uint8Array(capacity), inContact: new Uint8Array(capacity), wedge: new Uint8Array(capacity), chargeHit: new Uint8Array(capacity), contactHold: new Uint8Array(capacity),
     goalId: new Int16Array(capacity), group: new Int32Array(capacity), camp: new Int16Array(capacity),   // camp: 소굴 병사면 그 지역 id(camps.js), 아니면 −1
@@ -53,7 +54,7 @@ export function hash01(n) {
 export function spawn(s, side, type, x, z, rules) {
   const id = s.free.length ? s.free.pop() : s.count++;
   if (id >= s.capacity) throw new Error('병사 배열이 가득 찼다');
-  s.x[id] = x; s.z[id] = z; s.px[id] = x; s.pz[id] = z; s.vx[id] = 0; s.vz[id] = 0;
+  s.x[id] = x; s.z[id] = z; s.px[id] = x; s.pz[id] = z; s.vx[id] = 0; s.vz[id] = 0; s.postX[id] = x; s.postZ[id] = z;
   s.hp[id] = rules.units[side][type].hp; s.type[id] = type; s.side[id] = side; s.alive[id] = 1;
   s.facing[id] = side === 0 ? Math.PI / 2 : -Math.PI / 2;   // 적 쪽(편 0은 +z)
   s.pfacing[id] = s.facing[id];

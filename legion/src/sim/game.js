@@ -9,6 +9,8 @@ import { spawnCrew } from './workers.js';
 import { recount } from './economy.js';
 import { newUnit } from './units.js';
 import { applyOrder } from './orders.js';
+import { relink } from './territory.js';
+import { spawnWedge, batchOf } from './produce.js';
 
 const CLASS_OF = { [INFANTRY]: 'infantry', [SPEAR]: 'spear', [ARCHER]: 'archer', [CAVALRY]: 'cav' };
 const ORDER = [INFANTRY, SPEAR, ARCHER, CAVALRY];   // rules.start.xs 차례
@@ -88,4 +90,36 @@ function idleCrewIds(w, side) {
     by.get(s.crew[i]).push(i);
   }
   return [...by.entries()].filter(([c]) => !busy.has(c)).sort((a, b) => a[0] - b[0]).map(([, ids]) => ids);
+}
+
+// 보여 주기 장면(6-1단계, ?showcase=1 — 영상·측정용): 편 0이 특수 병종 땅(본진 쪽 두 줄)을 쥐고 다 지은 마법탑·마구간·공방에서
+// 마법사·사제·기사·골렘을 뽑아 앞 요새에 모은다. 편 1 요새 앞에는 몬스터 특수 부대 넷이 선다. 120초에 우리 특수 부대가 어택땅.
+export function showcaseActions(w, api) {
+  const SP = ['mage', 'priest', 'knight', 'golem'];
+  const efort = () => w.map.regions.find(g => g.mirror && g.role === 'fort');
+  return [
+    act(0, () => {
+      Object.assign(w.sides[0], { gold: 20000, wood: 20000, mana: 20000 });
+      const T = w.territory;
+      for (const g of w.map.regions) if (!g.mirror && g.j <= 1) Object.assign(T[g.id], { owner: 0, hold: 1, prog: 0, capturer: -1 });
+      relink(w);
+      const home = w.map.regions[w.map.homes[0]], fort = flagOf(w, 'fort');
+      const spots = { magetower: [-80, 8], stable: [80, 8], workshop: [-150, 12] }, trains = { magetower: ['mage', 'priest'], stable: ['knight'], workshop: ['golem'] };
+      for (const [type, [dx, dz]] of Object.entries(spots)) {
+        const b = addBuilding(w, 0, type, home.x + dx, home.z + dz, { done: true });
+        b.rally = { x: fort.x, z: fort.z - 25 };
+        for (const unit of trains[type]) applyOrder(w, { kind: 'train', side: 0, building: b.id, unit });
+      }
+      const f = efort();
+      SP.forEach((key, k) => {
+        const { type, n } = batchOf(w.rules, 1, key);
+        spawnWedge(w, 1, type, n, f.x + (k - 1.5) * 28, f.z - 30, -Math.PI / 2);
+      });
+    }),
+    act(120, () => {
+      const s = w.soldiers, ids = [], f = efort();
+      for (let i = 0; i < s.count; i++) if (s.alive[i] && s.side[i] === 0 && s.type[i] >= 6) ids.push(i);
+      if (ids.length) api.send(w, 0, ids, api.point(f.x, f.z), true);
+    }),
+  ];
 }
