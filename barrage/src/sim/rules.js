@@ -42,7 +42,8 @@ export const RULES = {
   boss: { r: 1.6, hp: 7500, speed: 5.65 },       // 체력은 봇으로 맞춘다(원거리 재설계 Task 7: 숙련 약 2분)
   shots: { pellets: 5, spreadDeg: 12, rate: 12, speed: 30, range: 16, dmg: 1, cap: 160 },   // 퍼지는 자동 사격(§4.3)
   stagger: { max: 100, groggy: 3, groggyMul: 1.5 },
-  counter: { overdrive: 2.85 /* 느려짐 1초(×0.35) + 2.5초, sim 시간 */, overdriveMul: 2, bossStun: 1.5 },   // 반격 기회(§4.6)
+  // 반격 기회(§4.6): 금 패링에만. redDodge = 빨강을 구르기로 통과했을 때도 주는가 — 사용자 2026-11-17 "너무 과하다, 그냥 회피 성공으로" → 끔
+  counter: { overdrive: 2.85 /* 느려짐 1초(×0.35) + 2.5초, sim 시간 */, overdriveMul: 2, bossStun: 1.5, redDodge: false },
   // 완전 패링 반격(§4.4.2): 붙기 → 일제 사격 → 뒤로 튀기, 합쳐 약 0.8초(+ 화면 정지 0.1). standOff = 붙는 자리(보스 가운데에서).
   // 그로기 처형(§5.8): 곁 = 보스 몸 + 플레이어 몸 + reach. 피해 share × 최대 체력(붙어 쏘기 한 발 = 그 shotShare, 나머지는 큰 한 발).
   // 시간은 처형 시작부터 초(영화처럼 연출 — 사용자가 빠른 쪽과 비교해 고름). 큰 한 발에 보스를 knock U 밀고, 플레이어는 back초에 backDist U 물러난다.
@@ -69,7 +70,8 @@ export const RULES = {
   // 모아 던지기(§4.11, 변형 ?store=1): 받은 것을 cap개까지 모았다가 U로 한 번에. dmg·heal = [보통, 완벽], n개면 피해·무력화 × (1 + bonus × (n − 1)).
   // every = 던질 때 탄 사이 간격, orbitR = 모인 탄이 도는 반지름(패링 고리 0.8 안쪽), hard = &hard=1의 받는 피해 배율, bossHp = 이 변형의 보스 체력 배율.
   store: { cap: 4, dmg: [100, 150], heal: [2, 4], bonus: 0.1, every: 0.06, orbitR: 0.5, hard: 1.3, bossHp: 1.2 },
-  fullCounter: { dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },
+  // on = 콤보를 다 받아내면 자동 반격을 하는가 — 사용자 2026-11-17 "빼자"(보스가 한동안 멈추는 것이 과하다) → 끔. 장치는 남겨 둔다.
+  fullCounter: { on: false, dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },
   heal: { amount: 3 },   // ?heal=1 변형만(§4.7)
   // 순간 돌진(§5.3): 움츠림 → 0.2초 전 자리 고정 → 25 U/s, 몸 사이 1.0 U(가운데끼리 3.1)에서 멈춤. 피해 없음.
   rush: { crouch: 0.35, lockBefore: 0.2, speed: 25, gap: 1.0 },
@@ -79,11 +81,12 @@ export const RULES = {
     swing: { warn: 0.35, R: 3.6, halfDeg: 60, dmg: 15 },            // 빨라짐(§5.3)
     slam: { warn: 0.45, R: 1.4, offset: 2.0, dmg: 25 },             // (0.45 − 0.2) × 7.83 ≥ 1.4 + 0.5
     active: 0.1, recover: 0.15, gapAfter: 0.8, push: 0.4,
+    clear: false,   // 근접전에 들어갈 때(돌진 도착·가까이서 바로 콤보) 판의 탄을 지우는가 — 사용자 2026-11-17 "빼자" → 끔
     stagger: { normal: 12, perfect: 20 },
   },
   // 빠르고 멀리 닿는 장판 공격(§5.3). 빨간 빠른 공격은 redWindow초 안에 redMax번까지(§5.6, 두뇌가 지킨다).
   floor: {
-    slam: { warn: 0.5, lockBefore: 0.2, width: 3.2, speed: 30, dmg: 22, stun: 1.0, stagger: 20, maxShove: 0.6 },   // maxShove: 한 틱에 플레이어를 이보다 멀리 밀어야 하면(구석) 거기서 멈춘다
+    slam: { warn: 0.5, lockBefore: 0.2, width: 3.2, speed: 30, dmg: 22, stun: 0, recoil: 0.4, stagger: 20, maxShove: 0.6 },   // maxShove: 한 틱에 플레이어를 이보다 멀리 밀어야 하면(구석) 거기서 멈춘다. stun = 흰 패링 때 보스 경직(사용자 2026-11-17: 과해서 0 — 그냥 패링 성공), recoil = 그 대신 다음 공격까지 더 쉬는 초
     wave: { warn: 0.4, speed: 12, thick: 0.8, dmg: 18, stagger: [12, 20], teleR: 1.2 },   // teleR: 예고 고리 = 보스 몸 + 이만큼
     sword: { warn: 0.4, R: 12, halfDeg: 12, dmg: 18, stagger: [12, 20], active: 0.1 },
     redWindow: 3, redMax: 2, redSlack: 0.15,   // redSlack = 타격 예정 시각 어림의 여유

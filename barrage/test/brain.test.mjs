@@ -249,3 +249,23 @@ test('걷기만 해도 레이저는 대개 비킨다(맞는 비율 0.2 이하)',
   assert.ok(runs >= 10);
   assert.ok(hits / runs <= 0.2, `레이저 ${hits}/${runs} = ${(hits / runs).toFixed(2)}`);
 });
+
+// 사용자 2026-11-17: 근접전에 들어갈 때 판의 탄을 지우지 않는다(돌진 도착·가까이서 바로 하는 콤보 둘 다)
+import { spawnBullet } from '../src/sim/bullets.js';
+import { K } from '../src/sim/rules.js';
+
+test('가까이서 근접 콤보를 시작해도 판의 탄은 그대로다', () => {
+  let seen = 0;
+  for (let seed = 1; seed <= 12 && seen < 2; seed++) {
+    const w = brainWorld({ seed });
+    w.boss.opening = RULES.brain.opening.length;
+    w.player.x = w.boss.x - 3.2; w.player.z = w.boss.z;
+    const ids = [0, 1, 2, 3, 4].map(k => spawnBullet(w, K.NORMAL, -9, -6 + k, 0, 0));
+    let melee = false;
+    for (let k = 0; k < ticks(2) && !melee; k++) { w.player.x = w.boss.x - 3.2; w.player.z = w.boss.z; step(w, idle); melee = drainEvents(w).some(e => e.type === 'meleeStart'); }
+    if (!melee) continue;
+    seen++;
+    for (const i of ids) assert.ok(w.bullets.alive[i], `seed ${seed}: 탄이 지워짐`);
+  }
+  assert.ok(seen >= 1, '근접 콤보가 한 번도 안 나옴');
+});

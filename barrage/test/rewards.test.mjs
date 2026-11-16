@@ -50,18 +50,26 @@ test('금 탄 패링 → 과열 2.85초 동안 쏘기 피해 2배', () => {
   assert.ok(w.stats.dmg.shot > shot1);
 });
 
-test('콤보 A를 다 받으면 자동 반격이 0.8초 안에 끝나고 보스와 5 U쯤 벌어진다', () => {
+test('콤보 A를 다 받아도 자동 반격은 없다 — 금 마무리 패링의 반격 기회만(사용자 2026-11-17 "빼자")', () => {
   const w = quietWorld(); w.player.x = -2; w.player.z = 0; w.boss.x = -2 + stopAt(); w.boss.z = 0;
+  const x0 = w.player.x;
   const ev = playCombo(w, 'A', [true, true, true], { extra: autoLen() + 0.3 });
-  const fc = of(ev, 'fullCounter');
-  assert.deepEqual(fc.map(e => e.stage), ['in', 'volley', 'back']);
-  assert.ok(fc[2].t - fc[0].t <= autoLen() + 1e-6);
-  assert.equal(of(ev, 'counterChance').length, 0, '완전 패링이면 반격 기회 대신 자동 반격');
-  assert.equal(w.stats.dmg.counter, FC().dmg);
-  assert.ok(gap(w) >= FC().standOff + FC().backDist - 0.6, `거리 ${gap(w)}`);
+  assert.equal(of(ev, 'fullCounter').length, 0);
+  assert.equal(of(ev, 'counterChance').length, 1);
+  assert.equal(w.stats.dmg.counter, 0);
+  assert.ok(Math.abs(w.player.x - x0) < 1e-9, '저절로 움직임');
   assert.equal(of(ev, 'hurt').length, 0);
 });
 
+test('콤보 B(흰·빨강)를 받고 굴러도 보스는 멈추지 않는다', () => {
+  const w = quietWorld(); w.player.x = -2; w.player.z = 0; w.boss.x = -2 + stopAt(); w.boss.z = 0;
+  const ev = playCombo(w, 'B', [true, false], { input: (w, k) => ({ ...idle, dodge: w.melee.areas.some(a => a.color === 'red' && !a.hit && a.born + a.warn - w.time < 0.05) && w.player.dodge.until < w.time, mx: -1, mz: 0 }) });
+  assert.equal(of(ev, 'fullCounter').length, 0);
+  assert.equal(of(ev, 'counterChance').length, 0);
+  assert.ok(!(w.boss.stunUntil > 0), '보스가 경직됨');
+});
+
+// 아래 셋은 자동 반격 장치 자체의 시험이다(지금은 꺼져 있다 — RULES.fullCounter.on. 다시 켤 때를 위해 남긴다)
 test('뒤로 튀기 방향은 이동 키로 ±90°까지만 틀린다', () => {
   const w = quietWorld(); w.player.x = -2; w.boss.x = -2 + stopAt();
   startFullCounter(w);
@@ -115,4 +123,36 @@ test('heal 변형에서만 완벽 패링이 체력 3을 돌려준다', () => {
     run(w, reach - 0.05); step(w, { ...idle, parry: true }); run(w, 0.1);
     assert.equal(p.hp, heal ? 50 + RULES.heal.amount : 50);
   }
+});
+
+// 사용자 2026-11-17: "빨간 공격 회피·돌진 패링에 성공하면 탄막이 없어지고 보스도 한동안 그로기 — 너무 과하다. 그냥 회피 성공·패링 성공으로"
+import { startSlam, startWave, updateFloor } from '../src/sim/floor.js';
+
+test('빨간 탄을 구르기로 통과: 아슬아슬만 — 반격 기회·보스 경직·과열 없음', () => {
+  const w = quietWorld(); const p = w.player;
+  spawnBullet(w, K.RED, p.x, p.z + 3, -Math.PI / 2, 18);
+  const ev = [];
+  for (let k = 0; k < ticks(0.6); k++) { step(w, { ...idle, dodge: k === ticks(0.1), mx: 0, mz: 1 }); ev.push(...drainEvents(w)); }
+  assert.ok(ev.some(e => e.type === 'nearMiss' && e.red), '아슬아슬이 안 남');
+  assert.equal(of(ev, 'counterChance').length, 0);
+  assert.equal(of(ev, 'hurt').length, 0);
+  assert.ok(!(w.boss.stunUntil > 0), '보스가 경직됨');
+  assert.ok(!(w.player.overdriveUntil > 0), '과열이 켜짐');
+});
+
+test('빨간 파도를 구르기로 넘겨도 반격 기회는 없다', () => {
+  const w = quietWorld();
+  w.boss.x = w.player.x + 5; w.boss.z = w.player.z;
+  startWave(w, 'red');
+  const ev = [];
+  for (let k = 0; k < ticks(1.5); k++) {
+    const v = w.waves[0], d = Math.hypot(w.player.x - w.boss.x, w.player.z - w.boss.z);
+    const near = v && !v.hitDone && d - RULES.player.bodyR - v.r < RULES.floor.wave.speed * 0.05;
+    step(w, { ...idle, dodge: !!near && w.player.dodge.until < w.time, mx: 1, mz: 0 });
+    if (w.floor) updateFloor(w);
+    ev.push(...drainEvents(w));
+  }
+  assert.equal(of(ev, 'waveHit')[0]?.outcome, 'roll');
+  assert.equal(of(ev, 'counterChance').length, 0);
+  assert.ok(!(w.boss.stunUntil > 0));
 });

@@ -8,6 +8,7 @@ const stun = (w, sec) => { w.boss.stunUntil = Math.max(w.boss.stunUntil ?? -1, w
 // 금 탄 패링 · 빨강 아슬아슬 회피 · 근접 금 마무리 패링(콤보를 다 받지 못했을 때).
 export function openCounterChance(w, src) {
   const C = w.rules.counter;
+  if (src === 'redDodge' && !C.redDodge) return;   // 빨강을 피한 것은 그냥 회피 성공(아슬아슬 연출만 — player.js)
   w.player.overdriveUntil = w.time + C.overdrive;
   stun(w, C.bossStun);
   emit(w, 'counterChance', { src });

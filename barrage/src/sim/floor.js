@@ -90,7 +90,10 @@ export function updateFloor(w) {
       emit(w, 'slamHit', { outcome: res.outcome, color: f.color, x: b.x, z: b.z });
       if (res.outcome === 'parry' || res.outcome === 'perfect') {
         if (f.color === 'gold') openCounterChance(w, 'goldSlam');
-        else b.stunUntil = Math.max(b.stunUntil ?? -1, w.time + F.stun);
+        else {   // 흰: 그 자리에 멈춘다. 경직은 규칙에 값이 있을 때만(지금 0), 대신 다음 공격까지 조금 더 쉰다
+          if (F.stun > 0) b.stunUntil = Math.max(b.stunUntil ?? -1, w.time + F.stun);
+          b.breathExtra = F.recoil;
+        }
         separateBodies(w);
         if (shoved()) { b.x = bx0; b.z = bz0; p.x = px0; p.z = pz0; }
         return finish(w);   // 받아내면 보스가 그 자리에서 멈춘다

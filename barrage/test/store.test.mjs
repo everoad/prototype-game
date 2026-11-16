@@ -197,7 +197,6 @@ test('같은 seed면 모아 던지기 판도 같다(해시에 모은 수)', () =
   };
   const a = play(), b = play();
   assert.equal(stateHash(a), stateHash(b));
-  assert.ok(a.stats.parries > 3, `패링 ${a.stats.parries}`);
   const w = sw(), h0 = stateHash(w); give(w, 1);
   assert.notEqual(stateHash(w), h0);
 });

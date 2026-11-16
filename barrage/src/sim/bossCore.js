@@ -71,7 +71,7 @@ export function budgetCombo(w, name, rush) {
 export function startMelee(w) {
   const b = w.boss;
   dropRuns(w);
-  clearBullets(w, 0, 0, Infinity);
+  if (w.rules.melee.clear) clearBullets(w, 0, 0, Infinity);   // 꺼져 있다 — 새 탄만 멈추고(dropRuns) 날던 탄은 그대로
   const combo = budgetCombo(w, b.next.melee, false);
   emit(w, 'meleeStart', { combo });
   startCombo(w, combo);
@@ -87,8 +87,9 @@ export function updateRuns(w) {
 
 // 숨: fast = 2단계 새 패턴을 다 소개한 뒤(짧은 숨)
 export function breathe(w, mul = 1, fast = false) {
-  const B = w.rules.brain;
-  w.boss.breathUntil = w.time + between(w, fast ? B.breath2 : B.breath) * mul;
+  const B = w.rules.brain, extra = w.boss.breathExtra || 0;   // breathExtra = 방금 한 공격이 청한 추스름(받아쳐진 박치기)
+  w.boss.breathExtra = 0;
+  w.boss.breathUntil = w.time + between(w, fast ? B.breath2 : B.breath) * mul + extra;
   setState(w, 'idle');
 }
 

@@ -34,12 +34,12 @@ test('움츠림은 첫 타의 색으로 번쩍인다', () => {
   assert.deepEqual([wu.color, wu.kind], ['white', 'rush']);
 });
 
-test('돌진 도착 순간 판의 적 탄이 모두 사라진다', () => {
+test('돌진이 도착해도 판의 적 탄은 그대로다(사용자 2026-11-17 "탄막이 없어지는 건 과하다")', () => {
   const w = quietWorld();
   for (let k = 0; k < 5; k++) spawnBullet(w, K.NORMAL, 8, -6 + k, 0, 0);
   assert.equal(liveCount(w), 5);
   assert.ok(rushUntilArrive(w));
-  assert.equal(liveCount(w), 0);
+  assert.equal(liveCount(w), 5);
 });
 
 test('모서리에 몰린 플레이어를 밀어도 판 안, 보스 몸 밖', () => {

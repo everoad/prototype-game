@@ -49,7 +49,8 @@ test('파도가 닿기 전에는 다음 주 패턴 준비가 없다', () => {
   assert.ok(waves >= 5, `파도 ${waves}`);
 });
 
-test('가까이서 바로 하는 근접 콤보 동안 주 패턴 탄이 없다', () => {
+// 2026-11-17: 근접전에 들어갈 때 탄을 지우지 않게 됐다(사용자) — 날던 탄은 남고, 새 주 패턴 탄만 나오지 않는다
+test('가까이서 바로 하는 근접 콤보 동안 새 주 패턴 탄은 나오지 않는다', () => {
   let combos = 0;
   for (const seed of [1, 2, 3, 4]) {
     for (const phase of [1, 2]) {
@@ -60,8 +61,7 @@ test('가까이서 바로 하는 근접 콤보 동안 주 패턴 탄이 없다',
         for (const e of drainEvents(w)) {
           if (e.type === 'meleeStart') {
             inCombo = true; combos++;
-            const b = w.bullets;
-            for (let i = 0; i < b.cap; i++) if (b.alive[i] && b.src[i] >= 1 && b.src[i] <= 8) assert.fail(`seed ${seed}/${phase} ${e.t.toFixed(2)}: 콤보 시작에 패턴 ${b.src[i]} 탄`);
+            assert.equal(w.boss.runs.length, 0, `seed ${seed}/${phase} ${e.t.toFixed(2)}: 콤보 시작에 패턴이 아직 돈다`);
           }
           if (inCombo && e.type === 'fire' && e.src >= 1 && e.src <= 8) assert.fail(`seed ${seed}/${phase} ${e.t.toFixed(2)}: 콤보 중 패턴 ${e.src} 탄`);
         }

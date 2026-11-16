@@ -45,7 +45,7 @@ test('줄 가운데서도 0.3초 걸으면 박치기 줄 밖으로 나간다', (
   const S = RULES.floor.slam; assert.ok((S.warn - 0.2) * RULES.player.speed >= S.width / 2 + RULES.player.bodyR);
 });
 
-test('흰 박치기 패링 = 보스가 멈추고 경직 1초, 무력화 20', () => {
+test('흰 박치기 패링 = 보스가 그 자리에 멈춘다. 경직은 없고(짧은 추스름만) 무력화 20', () => {
   const w = quietWorld();
   const ev = play(w, w => startSlam(w, 'white'), (w, k) => {
     // 보스 몸이 닿기 0.05초 전 패링
@@ -55,7 +55,9 @@ test('흰 박치기 패링 = 보스가 멈추고 경직 1초, 무력화 20', () 
   const hit = of(ev, 'slamHit')[0];
   assert.ok(hit && (hit.outcome === 'parry' || hit.outcome === 'perfect'), JSON.stringify(hit));
   assert.equal(w.boss.stagger, RULES.floor.slam.stagger);
-  assert.ok(w.boss.stunUntil >= hit.t + RULES.floor.slam.stun - 1e-6);
+  assert.ok(!(w.boss.stunUntil > hit.t), '패링했다고 보스가 경직됨(사용자 2026-11-17: 그냥 패링 성공으로)');
+  assert.equal(w.boss.breathExtra, RULES.floor.slam.recoil);
+  assert.equal(w.floor, null);
   assert.equal(of(ev, 'hurt').length, 0);
 });
 

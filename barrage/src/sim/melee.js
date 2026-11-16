@@ -50,7 +50,7 @@ export function updateRush(w) {
   b.x = r.sx; b.z = r.sz;
   separateBodies(w);
   m.rush = null;
-  clearBullets(w, 0, 0, Infinity);
+  if (R.melee.clear) clearBullets(w, 0, 0, Infinity);   // 꺼져 있다 — 도착해도 날던 탄은 그대로
   emit(w, 'rushArrive', { x: b.x, z: b.z });
   return true;
 }
@@ -115,7 +115,7 @@ function strike(w, a) {
     } else if (res.outcome !== 'roll') w.melee.taken = false;
   }
   const parried = res.outcome === 'parry' || res.outcome === 'perfect';
-  if (last && w.melee.taken) startFullCounter(w);
+  if (last && w.melee.taken && R.fullCounter.on) startFullCounter(w);   // 꺼져 있다(RULES.fullCounter.on) — 다 받아도 그냥 패링 성공
   else if (parried && res.kind === K.GOLD) openCounterChance(w, 'goldMelee');
   else if (res.outcome === 'roll' && res.newRed) openCounterChance(w, 'redDodge');
 }
