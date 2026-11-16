@@ -1,0 +1,62 @@
+# 탄막 패링 웹 도형 시험판 (버리는 코드)
+
+쿼터뷰 보스전 탄막 슈팅 + 흰·금 탄 패링. army-command(Unity 전쟁 게임)와 별개인 새 게임의 첫 시험판이고,
+뿌리는 WSL의 Godot 시험판 `proto-game`(쿼터뷰 보스전 패링 액션)이다.
+
+- 설계서: `docs/superpowers/specs/2026-11-16-barrage-design.md`, 계획서: `docs/superpowers/plans/2026-11-16-barrage-prototype.md`(첫 판)·`2026-11-16-barrage-ranged-boss.md`(원거리 보스 재설계).
+- 실행: `python prototypes/barrage/tools/serve.py 8797` → `http://localhost:8797/`
+- 시험: `node --test "prototypes/barrage/test/*.test.mjs"` (Node 22)
+- `src/sim/` = 순수 계산(브라우저·Node 둘 다, 고정 120 Hz 틱), `src/view/` = 화면·입력·연출·소리.
+  판정 수치는 `src/sim/rules.js`, 보이기 수치는 `src/view/look.js` 한곳.
+- `out/` = 녹화(저장소 밖).
+
+
+## 조작
+
+| 키 | 하는 일 |
+|---|---|
+| WASD / 화살표 | 이동(화면 기준, 가속·관성 없음). 사격은 늘 자동(보스 쪽으로 퍼지는 탄) |
+| Shift / 왼쪽 클릭 | 패링 — 흰·금 탄과 흰·금 몸 공격(근접·박치기·파도·검기)을 받아친다. 빨강은 못 받는다 |
+| Space / 오른쪽 클릭 | 회피(구르기) — 충전 2개, 하나는 3초에 돌아온다. 빨간 공격은 구르기로 통과 |
+| V | 시점 45° ↔ 60° |
+| G | 패링 고리 보이기 켜기·끄기 |
+| Esc | 멈춤 |
+| F1 | 디버그(판정 원) |
+| F2 | 수치 패널(판정·보이기 수치를 판 중에 바꿈) |
+| F4 | 다시 하기 |
+
+색 규칙: 자주 = 보통 탄(피함) · 흰 = 패링 · 금 = 마무리(패링하면 반격 기회) · 빨강 = 회피만 · 청록 = 플레이어.
+보스 몸이 번쩍이는 색 = 다음 위협 색. 바닥 장판(박치기 줄·파도 고리·검기 부채·레이저 조준선)의 색도 같은 뜻이다.
+
+## URL
+
+`http://localhost:8797/?seed=1&bot=1` 처럼 붙인다.
+
+| 이름 | 뜻 |
+|---|---|
+| `seed` | 판 난수(같은 seed = 같은 판) |
+| `bot` | 시범 봇: `1` 숙련 · `some` 가끔 패링 · `dodge` 피하기만 · `walk` 걷기만 · `turtle` 서서 패링만 |
+| `phase` | `2`면 2단계(체력 50%)부터 |
+| `pattern` | 그 패턴만 되풀이(1~8, 8 = 레이저) |
+| `lab` | 상황 되풀이 장면: `parry` `stream` `melee` `rush` `dodge` `graze` |
+| `pitch` | 시점 각도(45·60, 그 밖은 고정 확인용) |
+| `bh` | 탄 높이 |
+| `speed` | 게임 빠르기 배율 |
+| `ring` | `0`이면 패링 고리 숨김 |
+| `heal` | `1`이면 완벽 패링 회복 변형 |
+| `record` · `fps` | 녹화(초·프레임) — `tools/record.ps1`이 붙인다 |
+| `raf` | `timer`면 숨은 창에서도 돈다(미리보기 확인용) |
+
+## 도구
+
+- `node prototypes/barrage/tools/botrun.mjs --seeds 10` — 화면 없이 봇 판: 종류별 승/판, 판 길이, 맞음, 패링 몫, 출처별 맞음(1~7 · 레이저 · 구슬 · 콤보 · 박치기 · 파도 · 검기 · 바탕).
+- `powershell -File prototypes/barrage/tools/record.ps1 -Seconds 30 -Fps 60 -Name x -Query "bot=1&seed=1"` — 소리 든 영상 → `out/x.mp4`.
+
+## 수동 테스트 방법
+
+1. `python prototypes/barrage/tools/serve.py 8797` → `http://localhost:8797/?seed=1` 한 판. 처음 약 20초는 규칙을 가르치는 순서다:
+   흰 가운데 부채(흰 탄 받기) → 빨간 창(빨강은 피하기) → 흰 몸통 박치기(줄 위에서 받아치기) → 다가와서 흰·흰·금 콤보(다 받으면 완전 반격).
+2. 그 뒤: 보스가 쏘면서 둘레를 돌고, 약 7초(2단계 5초)마다 박치기·지면 파도·검기·다가오기 중 하나. 파도는 판 끝까지 퍼지니 흰이면 받고 빨강이면 구른다.
+3. 2단계만: `?phase=2` — 쌍둥이 구슬, 진한 바탕 탄막, 새 패턴 5·6·7이 하나씩.
+4. 한 동작씩 연습: `?lab=parry` · `?lab=stream` · `?lab=melee` · `?lab=rush` · `?lab=dodge` · `?lab=graze`.
+5. 시점은 V, 고리는 G, 회복 변형은 `?heal=1`.

@@ -1,0 +1,18 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>탄막 패링</title>
+<style>
+  /* 한 가지 모습(어두운 판 위 보스전)으로 고정한 화면 — 배경과 글자색을 직접 정한다 */
+  :root { --bg: #15141a; --ink: #e8e6ef; color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: system-ui, "Malgun Gothic", sans-serif; overflow: hidden; touch-action: none; overscroll-behavior: none; }
+  #view, #hud { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { pointer-events: none; }
+  #wait { position: fixed; inset: 0; display: grid; place-items: center; font-size: 20px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js" } }
+</script>
+<canvas id="view"></canvas>
+<canvas id="hud"></canvas>
+<div id="wait">준비 중</div>
+<script type="module" src="src/view/main.js"></script>
