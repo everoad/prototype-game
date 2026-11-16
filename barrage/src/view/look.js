@@ -31,6 +31,7 @@ export const LOOK = {
     waveAlpha: [0.3, 0.95], waveFront: 0.18, waveGap: 1.4, waveTele: 0.4,   // waveGap: 받아낸 자리 끊긴 고리 반쪽 길이(U), waveTele: 파도 예고 고리 두께
     beamCore: 0.35, beamAlpha: 0.9, sweepAlpha: 0.12, beamTip: 0.32,
     orbR: 0.42, orbFlashSec: 0.12,
+    execRing: 0.35, execRingAlpha: [0.25, 0.9], letterbox: 0.11,   // 처형 금빛 고리(보스 몸 + 이만큼, 그로기 / 곁일 때 밝기), 검은 띠 높이(화면 높이 몫)
   },
   // 그리는 순서(아래 → 위, §7): 적 탄은 깊이와 상관없이 몸 위에
   draw: { order: { floor: 0, floorFx: 1, telegraph: 2, shadow: 3, shots: 4, actors: 5, bullets: 6, reflect: 7, fx: 8, marker: 9 } },
@@ -74,6 +75,11 @@ export const LOOK = {
     laser: { shakePx: 4, shakeSec: 0.8 },
     phase: { shakePx: 12, shakeSec: 0.5 },
     afterimage: { count: 3, fade: 0.22, alpha: 0.35, alphaNear: 0.6 },
+    // 그로기 처형(§5.8) — 영화처럼: 검은 띠·카메라 당김 유지·정적 → 붙어 쏘기(한 발마다 shotCent 음 올림) → 큰 한 발(정지·느려짐·금빛 가장자리).
+    execute: {
+      hold: 0.14, holdSec: 0.9, duckDb: -30, duckSec: 0.22, stop: 0.12, shakePx: 24, shakeSec: 0.45, slow: 0.3, slowSec: 0.5, edgeSec: 0.6, burst: 3, number: 44,
+      shotCent: 300, shotShake: 6, shotShakeSec: 0.08,
+    },
   },
   // 소리 음량 한 표(dB). 사격음이 가장 작다 — 2분 내내 초당 12번 난다(§4.3).
   sound: {
@@ -82,7 +88,7 @@ export const LOOK = {
       thump: -10, graze: -22, ping: -16, pingGold: -14, whoosh: -16, whooshNear: -14, hurt: -10, charge: -18,
       rushCharge: -14, rushArrive: -10, swing: -16, slam: -10, counterChance: -12, fullCounter: -10, execute: -8,
       groggy: -10, wake: -18, roar: -10, death: -8, clear: -20,
-      laserCharge: -16, laserBeam: -15, slamWall: -8, orb: -30,
+      laserCharge: -16, laserBeam: -15, slamWall: -8, orb: -30, execShot: -9,
     },
   },
 };

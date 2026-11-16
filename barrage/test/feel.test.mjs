@@ -141,3 +141,48 @@ test('박치기가 지나간 길을 따라 먼지가 인다', () => {
   feel.handle([ev('slamWall', { color: 'red', x: 9, z: 0 })], 1.3);
   assert.ok(has('fx.dust').length >= 1 + LOOK.feel.slamWall.dustLine, `먼지 ${has('fx.dust').length}`);
 });
+
+// 그로기 처형 연출(§5.8, 영화처럼)
+test('처형 시작: 검은 띠·카메라 당김·정적(소리 없음)', () => {
+  const r = rig();
+  r.feel.handle([ev('executeStart', { x: 0, z: 0, bx: 3, bz: 0 })], 1);
+  assert.ok(r.has('hud.letterbox').some(c => c[2] === true));
+  assert.equal(r.has('camera.hold').length, 1);
+  assert.equal(r.has('sfx.duck').length, 1);
+  assert.equal(r.has('sfx.play').length, 0, '정적인데 소리가 남');
+});
+
+test('큰 한 발: 정지·흔들림·처형 소리·느려짐', () => {
+  const r = rig();
+  r.feel.handle([ev('executeStart', { x: 0, z: 0, bx: 3, bz: 0 })], 1);
+  r.feel.handle([ev('executeFinal', { x: 0.6, z: 0, bx: 3, bz: 0, dmg: 600 })], 1.5);
+  assert.ok(r.has('timeFx.hitstop').some(c => c[1] === LOOK.feel.execute.stop));
+  assert.ok(r.has('camera.shake').length >= 1);
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'execute'));
+  assert.equal(r.has('timeFx.slow').length, 1);
+});
+
+test('붙어 쏘기는 발마다 음이 오른다', () => {
+  const r = rig();
+  r.feel.handle([ev('executeStart', { x: 0, z: 0, bx: 3, bz: 0 })], 1);
+  for (let i = 0; i < 3; i++) r.feel.handle([ev('executeShot', { i, x: 0.6, z: 0, bx: 3, bz: 0 })], 1.2 + i * 0.1);
+  const det = r.has('sfx.play').filter(c => c[1] === 'execShot').map(c => c[2].detune);
+  assert.equal(det.length, 3);
+  assert.ok(det[0] < det[1] && det[1] < det[2], JSON.stringify(det));
+});
+
+test('처형이 끝나면 띠가 빠진다', () => {
+  const r = rig();
+  r.feel.handle([ev('executeStart', { x: 0, z: 0, bx: 3, bz: 0 })], 1);
+  r.feel.handle([ev('executeEnd', { x: -2, z: 0 })], 2);
+  assert.ok(r.has('hud.letterbox').some(c => c[2] === false));
+});
+
+test('큰 한 발: 금·흰 섬광과 처형 피해 합계 숫자', () => {
+  const r = rig();
+  r.feel.handle([ev('executeStart', { x: 0, z: 0, bx: 3, bz: 0 })], 1);
+  r.feel.handle([ev('executeFinal', { x: 0.6, z: 0, bx: 3, bz: 0, dmg: 420, total: 600 })], 1.5);
+  const flashes = r.has('fx.flashAt').map(c => c[3]);
+  assert.ok(flashes.includes('gold') && flashes.includes('white'), JSON.stringify(flashes));
+  assert.ok(r.has('fx.number').some(c => c[3] === 600), JSON.stringify(r.has('fx.number')));
+});

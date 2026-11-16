@@ -13,20 +13,21 @@ export function createBoss(rules) {
 export const bossGroggy = w => w.time < w.boss.groggyUntil;
 
 // 피해: 과열 중 쏘기는 2배(늘어난 몫 = overdrive), 그로기 중엔 1.5배(늘어난 몫 = groggy). 체력 0 = 이김.
-export function damageBoss(w, amount, src) {
+// raw = 배율 없이 그대로(처형 — 정해진 몫을 정확히).
+export function damageBoss(w, amount, src, raw = false) {
   const b = w.boss;
   if (b.dead) return 0;
   let total = amount;
   addDamage(w.stats, src, amount);
-  if (src === 'shot' && w.time < w.player.overdriveUntil) {
+  if (!raw && src === 'shot' && w.time < w.player.overdriveUntil) {
     const extra = amount * (w.rules.counter.overdriveMul - 1);
     addDamage(w.stats, 'overdrive', extra); total += extra;
   }
-  if (bossGroggy(w)) {
+  if (!raw && bossGroggy(w)) {
     const extra = total * (w.rules.stagger.groggyMul - 1);
     addDamage(w.stats, 'groggy', extra); total += extra;
   }
-  b.hp = Math.max(0, b.hp - total);
+  b.hp = Math.max(w.opts.lab ? 1 : 0, b.hp - total);   // 연습 장면에선 끝나지 않는다(플레이어와 같게)
   if (b.hp <= 0) {
     b.dead = true;
     if (!w.result) w.result = 'win';

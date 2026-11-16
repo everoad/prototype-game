@@ -3,7 +3,7 @@
 export function createHud(canvas, LOOK) {
   const ctx = canvas.getContext('2d'), C = LOOK.colors;
   let dpr = 1, W = 0, H = 0;
-  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9 };
+  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9 };
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = canvas.clientWidth || window.innerWidth; H = canvas.clientHeight || window.innerHeight;
@@ -97,8 +97,18 @@ export function createHud(canvas, LOOK) {
     }
   }
 
+  // 처형 b의 위아래 검은 띠(0.15초에 들어오고 빠진다). 맨 위에 그려 겹 화면도 가린다.
+  function drawBars(now) {
+    const u = Math.min(1, (now - st.barsAt) / 0.15), k = st.bars ? u : 1 - u;
+    if (k <= 0) return;
+    const h = H * LOOK.sizes.letterbox * k * (2 - k);
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, h); ctx.fillRect(0, H - h, W, h);
+  }
+  const drawAll = (w, ui) => { draw(w, ui); drawBars(ui.now); };
+
   return {
-    draw, resize, ctx, canvas,
+    draw: drawAll, resize, ctx, canvas,
+    letterbox(now, on) { if (st.bars !== on) { st.bars = on; st.barsAt = now; } },
     get size() { return { W, H, dpr }; },
     shakePips(now) { st.pipShakeAt = now; },
     flashStagger(now) { st.staggerFlashAt = now; },

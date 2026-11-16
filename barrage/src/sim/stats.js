@@ -1,5 +1,5 @@
 // 판 기록: 피해 출처(패링 몫 셈), 패링·맞음 수 등. botrun과 결과 화면이 읽는다.
-export const DAMAGE_SOURCES = ['shot', 'overdrive', 'reflect', 'counter', 'groggy'];
+export const DAMAGE_SOURCES = ['shot', 'overdrive', 'reflect', 'counter', 'groggy', 'execute'];
 
 export function createStats() {
   const dmg = {};
@@ -12,9 +12,9 @@ export function addDamage(stats, src, amount) {
   stats.total += amount;
 }
 
-// 패링에서 나온 피해 몫: 되튄 탄 + 완전 패링 반격 + 과열로 늘어난 몫 + 그로기로 늘어난 몫(그로기는 패링으로만 온다).
+// 패링에서 나온 피해 몫: 되튄 탄 + 완전 패링 반격 + 과열로 늘어난 몫 + 그로기로 늘어난 몫 + 처형(그로기는 패링으로만 온다).
 export function parryShare(stats) {
   if (stats.total <= 0) return 0;
   const d = stats.dmg;
-  return (d.reflect + d.counter + d.overdrive + d.groggy) / stats.total;
+  return (d.reflect + d.counter + d.overdrive + d.groggy + d.execute) / stats.total;
 }

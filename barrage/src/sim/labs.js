@@ -3,7 +3,7 @@
 import { K } from './rules.js';
 import { emit } from './events.js';
 import { spawnBullet } from './bullets.js';
-import { bossGroggy } from './boss.js';
+import { bossGroggy, addStagger } from './boss.js';
 import { startPattern, updatePattern, windupColor } from './patterns.js';
 import { startRush, updateRush, startCombo, updateCombo } from './melee.js';
 import { clampToBoard } from './geom.js';
@@ -60,6 +60,15 @@ export const LABS = {
     fire(w, K.WHITE, a, 14);
     for (const d of [-16, -8, 8, 16]) fire(w, K.NORMAL, a + d * D, 11);
   }),
+  // 처형 연습(§5.8): 보스가 곁에 서 있다가 몇 초마다 무력화가 가득 찬다(그로기) — 다가가 패링 키
+  execute: {
+    setup(w) { w.lab = { next: 0.8, down: false }; nearBoss(w); },
+    think(w) {   // 그로기(처형 포함) 동안은 thinkLab이 부르지 않는다
+      const L = w.lab;
+      if (L.down) { L.down = false; L.next = Math.max(L.next, w.time + 1.2); }   // 그로기가 끝나면 잠깐 쉬고
+      if (w.time >= L.next) { addStagger(w, w.rules.stagger.max); L.next = w.time + 3.5; L.down = true; }
+    },
+  },
   // 붙어서 콤보 A → 1.2초 → 콤보 B 되풀이
   melee: {
     setup(w) { w.lab = { combo: null, next: 0.6, flip: false }; nearBoss(w); },
@@ -104,7 +113,7 @@ export const labName = name => (name && LABS[name] ? name : null);
 
 export function setupLab(w) {
   const lab = LABS[w.opts.lab];
-  w.boss.hp = w.boss.maxHp = 1e7;
+  // 보스 체력은 본판 그대로(숫자가 본판처럼 보이게) — 연습 장면에선 1 밑으로 내려가지 않는다(boss.js)
   if (w.opts.lab === 'parry' || w.opts.lab === 'stream' || w.opts.lab === 'graze') {
     w.player.x = w.player.px = -2; w.player.z = w.player.pz = 0;
     w.boss.x = w.boss.px = 6; w.boss.z = w.boss.pz = 0;

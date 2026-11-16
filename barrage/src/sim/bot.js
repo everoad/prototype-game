@@ -8,6 +8,8 @@ import { makeRng } from './rng.js';
 import { clampToBoard, inSector, inCircle } from './geom.js';
 import { isDodging } from './player.js';
 import { parryActive } from './parry.js';
+import { canExecute } from './execute.js';
+import { bossGroggy } from './boss.js';
 
 const DIRS = [[0, 0]];
 for (let i = 0; i < 16; i++) DIRS.push([Math.cos(i * Math.PI / 8), Math.sin(i * Math.PI / 8)]);
@@ -103,6 +105,8 @@ export function createBot(kind, seed) {
   return function bot(w) {
     const R = w.rules, B = R.bot, p = w.player, now = w.time;
     snapshot(w, R);
+    if (w.execute) return { mx: 0, mz: 0, parry: false, dodge: false };
+    if (parries && canExecute(w)) return { mx: 0, mz: 0, parry: true, dodge: false };   // 그로기 곁 = 처형
     const f = delayed();
     const lag = f ? now - f.t : 0;
     let parry = false, dodge = false;
@@ -211,7 +215,7 @@ export function createBot(kind, seed) {
             const db = Math.hypot(qx - w.boss.x, qz - w.boss.z);
             // 패링하는 봇은 돌진·근접 동안 달아나지 않고 붙어서 받는다(사람도 그렇다 — 달아나면 패링 기회가 사라진다)
             const duel = parries && (w.boss.state === 'rush' || w.boss.state === 'melee' || w.boss.state === 'meleeWait' || !!w.melee.combo);
-            const [k0, k1] = duel ? B.duel : B.keep;
+            const [k0, k1] = parries && bossGroggy(w) ? B.execBand : duel ? B.duel : B.keep;   // 그로기면 다가가 처형
             danger += (Math.max(0, k0 - db) + Math.max(0, db - k1)) * 0.6;
             const edge = Math.min(R.board.hx - Math.abs(qx), R.board.hz - Math.abs(qz));
             if (edge < 1.5) danger += (1.5 - edge) * 1.0;

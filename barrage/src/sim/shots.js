@@ -11,7 +11,7 @@ export function createShots(cap) {
 
 export function fireShots(w) {
   const s = w.shots, p = w.player, b = w.boss, S = w.rules.shots;
-  if (w.result || b.dead) return;
+  if (w.result || b.dead || w.execute) return;   // 처형 중엔 처형의 붙어 쏘기만
   if (isDodging(w)) { s.nextAt = Math.max(s.nextAt, w.time); return; }
   if (w.time + 1e-9 < s.nextAt) return;
   s.nextAt = Math.max(s.nextAt + 1 / S.rate, w.time + 1 / S.rate - 1e-9);

@@ -1,5 +1,7 @@
 // 몸: 플레이어(캡슐·총구·패링 고리·판정 점)와 보스(둥근 덩어리·눈). 몸짓은 sim 상태와 사건에서 읽는다(로직 ↔ 외형 분리).
 // 늘 보스를 본다(돌아보는 시간 없음), 가는 쪽으로 기울고 서면 살짝 튕긴다. 보스는 준비 때 다음 위협 색으로 번쩍인다(§5.1).
+import { canExecute } from '../sim/execute.js';
+
 export function createActors(view, LOOK, opts = {}) {
   const THREE = view.THREE, C = LOOK.colors, S = LOOK.sizes, Bd = LOOK.body, L = view.layers;
   const col = c => new THREE.Color(c);
@@ -35,6 +37,11 @@ export function createActors(view, LOOK, opts = {}) {
   const bPose = new THREE.Group(); bPose.add(bBody, eyes);
   boss.add(bPose);
   L.actors.add(boss);
+
+  // 처형 금빛 고리(§5.8): 그로기면 옅게, 곁(누르면 처형)이면 밝게 맥동
+  const execRingMat = new THREE.MeshBasicMaterial({ color: C.gold, transparent: true, depthTest: false, depthWrite: false });
+  const execRing = new THREE.Mesh((() => { const g = new THREE.RingGeometry(S.bossR + S.execRing - 0.1, S.bossR + S.execRing, 64); g.rotateX(-Math.PI / 2); return g; })(), execRingMat);
+  execRing.position.y = 0.05; execRing.visible = false; L.marker.add(execRing);
 
   // 2단계 쌍둥이 구슬: 작은 자주 구 둘, 쏠 때 흰 번쩍
   const orbs = [0, 1].map(() => {
@@ -123,7 +130,8 @@ export function createActors(view, LOOK, opts = {}) {
     } else if (rush && rush.phase === 'dash') { stretch = 1 + Bd.dashStretch; sy = 0.9; }
     else if (fa?.kind === 'slam' && fa.phase === 'dash') { stretch = 1 + Bd.slamStretch; sy = 0.82; }
     else if (state === 'hop') side = Bd.hopTiltDeg * Math.PI / 180 * (b.orbitDir || 1);
-    else if (state === 'groggy') { sy = 1 - Bd.groggySquash; sxz = 1 + Bd.groggySquash * 0.4; tilt = -0.15; }
+    else if (w.time < b.groggyUntil && !b.dead) { sy = 1 - Bd.groggySquash;   // 그로기(처형 중·연습 장면 포함 — 두뇌 상태가 아니라 그로기 시간으로)
+       sxz = 1 + Bd.groggySquash * 0.4; tilt = -0.15; }
     else if (state === 'stun') { tilt = -0.08; }
     const lu = now - st.lunge;
     if (lu < 0.15) tilt -= Math.sin(lu / 0.15 * Math.PI) * 0.25;   // 근접 타격 순간 앞으로 튀어 나감
@@ -137,6 +145,15 @@ export function createActors(view, LOOK, opts = {}) {
     if (k > 0) { bMat.emissive.set(st.flashColor); bMat.emissiveIntensity = k * (st.flashColor === C.windup.purple ? 0.35 : 1); }   // 특수 탄 없는 패턴은 약하게(§5.1)
     else if (b.stagger >= w.rules.stagger.max * 0.8) { bMat.emissive.set(C.bossCrack); bMat.emissiveIntensity = 0.06 + 0.05 * Math.sin(now * 14); }   // 곧 무너진다(§5.4)
     else bMat.emissiveIntensity = 0;
+    // 처형 고리
+    const groggy = w.time < b.groggyUntil && !b.dead && !w.execute;
+    execRing.visible = groggy;
+    if (groggy) {
+      const near = canExecute(w), [lo, hi] = S.execRingAlpha;
+      execRing.position.x = bx; execRing.position.z = bz;
+      execRingMat.opacity = near ? hi * (0.75 + 0.25 * Math.sin(now * 18)) : lo;
+      execRing.scale.setScalar(near ? 1 + 0.05 * Math.sin(now * 18) : 1);
+    }
     // 쌍둥이 구슬(sim 자리 그대로)
     for (let k = 0; k < 2; k++) {
       const o = b.orbs?.[k], g = orbs[k];

@@ -129,6 +129,36 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'laserCut': sfx.stop?.('laserBeam'); break;
         case 'orbFire': sfx.play('orb'); break;
         case 'hop': sfx.play('whoosh', { detune: -700 }); break;
+        // 그로기 처형(§5.8): 바짝 붙어 쏘기(총·활) — 영화처럼
+        case 'executeStart': {
+          const X = F().execute;
+          actors.dashTrail?.(now);   // 소리는 없다 — 정적(§5.8)
+          hud.letterbox?.(now, true); camera.hold?.(X.hold, X.holdSec); sfx.duck(X.duckDb, X.duckSec);
+          break;
+        }
+        case 'executeShot': {
+          const E = F().execute, a = Math.atan2(e.bz - e.z, e.bx - e.x);
+          fx.muzzle?.(e.x, e.z, a); fx.tracer?.(e.x, e.z, e.bx, e.bz, 'cyan');
+          if (on('sparks')) fx.spark(e.bx, e.bz, 'cyan', 0.8);
+          shake(E.shotShake, E.shotShakeSec);
+          actors.bossJolt?.(now, 0.15);
+          sfx.play('execShot', { detune: e.i * E.shotCent });
+          break;
+        }
+        case 'executeFinal': {
+          const X = F().execute;
+          stop(now, X.stop, { override: true });
+          fx.tracer?.(e.x, e.z, e.bx, e.bz, 'cyan', 2);
+          fx.flashAt(e.bx, e.bz, 'gold'); fx.flashAt(e.bx, e.bz, 'white');
+          if (on('sparks')) fx.burst(e.bx, e.bz, 'cyan', X.burst);
+          if (on('numbers')) fx.number(e.bx, e.bz, Math.round(e.total ?? e.dmg), 'gold', X.number);   // 처형 피해 합계
+          shake(X.shakePx, X.shakeSec);
+          slow(now, X.slow, X.slowSec); if (on('edge')) fx.edge('gold', X.edgeSec);
+          actors.bossJolt?.(now, 0.6);
+          sfx.play('execute'); sfx.play('thump', { detune: -800 });
+          break;
+        }
+        case 'executeEnd': hud.letterbox?.(now, false); camera.release?.(); break;
         case 'phase': { const P = F().phase; shake(P.shakePx, P.shakeSec); sfx.play('roar'); break; }
         case 'bossDeath': { const D = F().death; stop(now, D.stop, { override: true }); slow(now, D.slow, D.slowSec); shake(D.shakePx, D.shakeSec); fx.burst(e.x, e.z, 'orange', 3); sfx.play('death'); break; }
         case 'playerDeath': sfx.play('death'); if (on('edge')) fx.edge('red', 1.0); break;

@@ -37,6 +37,10 @@ export function createFx(view, LOOK) {
     spark(x, z, color, size = 1) { radial(x, z, 4, 4 * size, 0.18, 0.06 * size + 0.03, color); },
     burst(x, z, color, scale = 1) { radial(x, z, Math.round(10 * scale), 6 * scale, 0.35, 0.08 * scale, color); emit(x, bh(), z, 0, 0, 0, 0.09, 0.55 * scale, color); },
     flashAt(x, z, color) { emit(x, bh(), z, 0, 0, 0, 0.07, 0.75, color); radial(x, z, 6, 5, 0.16, 0.06, color); },
+    tracer(x1, z1, x2, z2, color, scale = 1) {
+      const n = Math.round(7 * scale), y = bh() * 1.2;
+      for (let i = 0; i <= n; i++) { const u = i / n; emit(x1 + (x2 - x1) * u, y, z1 + (z2 - z1) * u, 0, 0, 0, 0.07 * scale, 0.09 * scale, color); }
+    },
     muzzle(x, z, angle) { emit(x + Math.cos(angle) * 0.6, bh() * 1.2, z + Math.sin(angle) * 0.6, 0, 0, 0, 0.04, 0.16, 'cyan'); },
     clearSparkle(x, z, r) {
       const n = r === Infinity ? 40 : 14, rr = r === Infinity ? 9 : r;

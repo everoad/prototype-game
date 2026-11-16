@@ -10,6 +10,7 @@ import { createShots, fireShots, moveShots } from './shots.js';
 import { tryParry, catchBullets, endParry, hitBossReflects } from './parry.js';
 import { updateLanes } from './patterns.js';
 import { autoActive, stepAuto } from './rewards.js';
+import { executeActive, canExecute, startExecute, stepExecute, endExecute } from './execute.js';
 import { initBrain, thinkBoss } from './brain.js';
 import { labName, setupLab, thinkLab } from './labs.js';
 import { updateLayers } from './layers.js';
@@ -38,8 +39,13 @@ export function step(w, input) {
   const p = w.player, b = w.boss;
   p.px = p.x; p.pz = p.z; b.px = b.x; b.pz = b.z;
   // 입력·플레이어
-  if (autoActive(w)) stepAuto(w, input);
-  else { updatePlayer(w, input); tryParry(w, input); }
+  if (executeActive(w)) stepExecute(w, input);
+  else if (autoActive(w)) stepAuto(w, input);
+  else {
+    updatePlayer(w, input);
+    if ((input.parry || w.time <= p.buffer.parryUntil) && canExecute(w)) startExecute(w);   // 그로기 곁 패링 키(미리 누른 것 포함) = 처형(§5.8)
+    else tryParry(w, input);
+  }
   separateBodies(w);
   p.face = Math.atan2(b.z - p.z, b.x - p.x);   // 몸은 늘 보스를 본다(돌아보는 시간 없음)
   // 보스(두뇌가 패턴·돌진·근접을 돌린다) · 차선
@@ -56,6 +62,7 @@ export function step(w, input) {
   hitPlayerBullets(w);
   hitBossReflects(w);
   endParry(w);
+  if (w.result && w.execute) endExecute(w);   // 날아가던 탄·되튄 탄이 끝낸 판: 처형도 끝낸다(화면은 이긴 뒤 판을 돌리지 않는다)
   // 보상 · 결과 판정 (뒤 Task)
   w.tick++;
   w.time = w.tick * w.rules.dt;

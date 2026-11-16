@@ -5,7 +5,7 @@ import { framingPoints, frameTarget, stepFrame, floorOf } from './camMath.js';
 export function createCamera(view, LOOK) {
   const C = LOOK.camera;
   let state = null, pitchDeg = C.pitches[0];
-  const fx = { shakePx: 0, shakeUntil: 0, shakeDur: 1, kickX: 0, kickY: 0, kickUntil: 0, kickDur: 1, punch: 0, punchAt: -1, punchDur: 1, now: 0 };
+  const fx = { shakePx: 0, shakeUntil: 0, shakeDur: 1, kickX: 0, kickY: 0, kickUntil: 0, kickDur: 1, punch: 0, punchAt: -1, punchDur: 1, hold: 0, holdAt: -1e9, holdUntil: -1e9, now: 0 };
 
   function opts() { return { yawDeg: C.yawDeg, pitchDeg, aspect: view.aspect, LOOK, board: { hx: 10, hz: 7 } }; }
 
@@ -28,6 +28,12 @@ export function createCamera(view, LOOK) {
     let zoom = 1;
     const pu = now - fx.punchAt;
     if (pu >= 0 && pu < fx.punchDur) { const u = pu / fx.punchDur, env = u < 0.2 ? u / 0.2 : 1 - (u - 0.2) / 0.8; zoom = 1 - fx.punch * env; }
+    // 당긴 채 유지(처형 b): 0.1초에 당기고, 끝나면 0.15초에 푼다
+    if (fx.hold > 0) {
+      const inK = Math.min(1, (now - fx.holdAt) / 0.1), outK = now < fx.holdUntil ? 1 : Math.max(0, 1 - (now - fx.holdUntil) / 0.15);
+      zoom *= 1 - fx.hold * Math.min(inK, outK);
+      if (outK <= 0) fx.hold = 0;
+    }
     view.setView({ cx: f.x, cz: f.z, width: state.width * zoom, pitchDeg, yawDeg: C.yawDeg, offX, offY });
   }
 
@@ -37,6 +43,8 @@ export function createCamera(view, LOOK) {
     shake(px, sec) { const left = fx.shakeUntil > fx.now ? fx.shakePx * (fx.shakeUntil - fx.now) / fx.shakeDur : 0; if (px < left) return; fx.shakePx = px; fx.shakeDur = sec; fx.shakeUntil = fx.now + sec; },
     kick(dx, dy, sec) { fx.kickX = dx; fx.kickY = dy; fx.kickDur = sec; fx.kickUntil = fx.now + sec; },
     punch(ratio, sec) { fx.punch = ratio; fx.punchDur = sec; fx.punchAt = fx.now; },
+    hold(ratio, sec) { fx.hold = ratio; fx.holdAt = fx.now; fx.holdUntil = fx.now + sec; },
+    release() { fx.holdUntil = Math.min(fx.holdUntil, fx.now); },
     setPitch(deg) { pitchDeg = deg; state = null; },   // 기울기가 바뀌면 화면 좌표가 달라진다 — 다시 잡는다
     get pitch() { return pitchDeg; },
     get state() { return state; },

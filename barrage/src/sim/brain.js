@@ -238,7 +238,7 @@ export function thinkBoss(w) {
   if (b.dead) { setState(w, 'dead'); return; }
   b.farFor = dist(w) > B.far ? b.farFor + w.rules.dt : 0;
   // 끼어듦: 단계 넘어감 → 그로기 → 경직
-  if (b.phase === 1 && b.hp <= b.maxHp * B.phaseAt) { enterPhase2(w); return; }
+  if (b.phase === 1 && b.hp <= b.maxHp * B.phaseAt && !w.execute) { enterPhase2(w); return; }   // 처형 중이면 끝난 뒤(처형 → 포효 → 깨어남)
   if (b.state === 'phaseChange') { if (w.time >= b.stateAt + B.phasePause) breathe(w); return; }
   const down = bossGroggy(w) ? 'groggy' : w.time < b.stunUntil ? 'stun' : null;
   if (down) {

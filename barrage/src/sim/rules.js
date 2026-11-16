@@ -44,6 +44,13 @@ export const RULES = {
   stagger: { max: 100, groggy: 3, groggyMul: 1.5 },
   counter: { overdrive: 2.85 /* 느려짐 1초(×0.35) + 2.5초, sim 시간 */, overdriveMul: 2, bossStun: 1.5 },   // 반격 기회(§4.6)
   // 완전 패링 반격(§4.4.2): 붙기 → 일제 사격 → 뒤로 튀기, 합쳐 약 0.8초(+ 화면 정지 0.1). standOff = 붙는 자리(보스 가운데에서).
+  // 그로기 처형(§5.8): 곁 = 보스 몸 + 플레이어 몸 + reach. 피해 share × 최대 체력(붙어 쏘기 한 발 = 그 shotShare, 나머지는 큰 한 발).
+  // 시간은 처형 시작부터 초(영화처럼 연출 — 사용자가 빠른 쪽과 비교해 고름). 큰 한 발에 보스를 knock U 밀고, 플레이어는 back초에 backDist U 물러난다.
+  execute: {
+    // share 0.12면 숙련 봇 판이 105→66초로 줄어 0.08(74초, 가끔 패링 봇 7/10)
+    reach: 2.0, share: 0.08, shotShare: 0.1, knock: 2.0, backDist: 4, standOff: 2.4,
+    dashIn: 0.15, shots: [0.25, 0.35, 0.45], final: 0.6, back: 0.3,
+  },
   fullCounter: { dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },
   heal: { amount: 3 },   // ?heal=1 변형만(§4.7)
   // 순간 돌진(§5.3): 움츠림 → 0.2초 전 자리 고정 → 25 U/s, 몸 사이 1.0 U(가운데끼리 3.1)에서 멈춤. 피해 없음.
@@ -66,7 +73,7 @@ export const RULES = {
   combos: { A: [['swing', 'white'], ['swing', 'white'], ['slam', 'gold']], B: [['swing', 'white'], ['slam', 'red']] },
   lanes: { redWarn: 0.7, goldWarn: 0.5, lockBefore: 0.2 },   // 빨강·금 탄의 차선 예고(§5.1)
   // 시범 봇(§9, 확인·영상용 도구): 사람처럼 0.2초 늦게, 둘레 10 U만 본다. think = 움직임을 다시 정하는 간격.
-  bot: { react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2] },
+  bot: { react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
   // 보스 두뇌(§5.1~5.3): 준비 → 패턴 → 숨, 거리 묶음, 돌진 시계, 깨어남, 2단계 새 패턴 하나씩.
   brain: {
     // 박자(§5.5): 준비 0.25초, 숨 0.15~0.35초, 다음 준비는 앞 패턴 마지막 0.3초와 겹친다
