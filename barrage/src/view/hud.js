@@ -173,10 +173,10 @@ export function createHud(canvas, LOOK) {
       ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
       ctx.fillStyle = C.textDim; ctx.fillText('F4 다시', W / 2, H / 2 + 14);
     } else {
-      ctx.font = font(32, true); ctx.fillText('멈춤', W / 2, H / 2 - 90);
+      ctx.font = font(32, true); ctx.fillText('멈춤', W / 2, H / 2 - 100);
       ctx.font = font(15);
-      const rows = ['WASD·방향키 — 이동(누르는 그 틱에 최고 속도)', 'Shift·마우스 왼쪽 — 패링(흰·금 탄, 흰·금 근접)', 'Space·마우스 오른쪽 — 회피(2회 충전, 시작부터 무적)', '쏘기는 자동(보스 쪽, 붙을수록 많이 맞음)', 'V 시점 45°/60° · G 패링 고리 · F1 판정 보기 · F4 다시 · Esc 이어서'];
-      rows.forEach((t, k) => ctx.fillText(t, W / 2, H / 2 - 44 + k * 24));
+      const rows = ['WASD·방향키 — 이동(누르는 그 틱에 최고 속도)', 'Shift·마우스 왼쪽 — 패링(흰·금 탄, 흰·금 근접)', 'Space·마우스 오른쪽 — 회피(2회 충전, 시작부터 무적)', '쏘기는 자동(보스 쪽, 붙을수록 많이 맞음)', w.opts.store ? 'U — 받아서 모은 탄 던지기(피해 + 회복, 최대 4개)' : 'U·I·O — 무기 스킬(패링 게이지 3칸)', 'K·Q 방패 · L·E 폭탄(아이템으로 얻은 만큼)', 'V 시점 45°/60° · G 패링 고리 · F1 판정 보기 · F4 다시 · Esc 이어서'];
+      rows.forEach((t, k) => ctx.fillText(t, W / 2, H / 2 - 56 + k * 24));
     }
     ctx.globalAlpha = 1;
   }

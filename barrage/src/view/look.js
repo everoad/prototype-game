@@ -40,6 +40,7 @@ export const LOOK = {
     storeOrbR: 0.12, storeOrbY: 0.95, storeSpin: 2.6, storeArrive: 0.16, storeArcWidth: 0.08, storeArcGapDeg: 14, thrownScale: 1.3,   // 모아 던지기(§4.11): 모인 구슬(크기·높이·도는 빠르기·빨려 드는 시간), 고리 칸(굵기·틈), 던진 탄 크기
     shieldAlpha: 0.22, shieldEdge: 0.6, itemR: 0.42, itemBlink: 3, itemGlow: 0.35,   // 방패 원판(탄 높이)·테 밝기, 아이템 크기, 사라지기 전 깜빡이는 초, 바닥 빛 밝기
   },
+  names: { ranged: '수호자', dragon: '용' },   // 시작 장면에 뜨는 보스 이름
   // 그리는 순서(아래 → 위, §7): 적 탄은 깊이와 상관없이 몸 위에
   draw: { order: { floor: 0, floorFx: 1, telegraph: 2, shadow: 3, shots: 4, actors: 5, bullets: 6, reflect: 7, fx: 8, marker: 9 } },
   body: {
@@ -88,7 +89,12 @@ export const LOOK = {
     playerDeath: { stop: 0.12, slow: 0.3, slowSec: 0.8, shakePx: 14, shakeSec: 0.4, burst: 3, edgeSec: 1.0 },   // 패배: 느려짐·청록 파편·붉은 가장자리
     result: { winDelay: 1.6, loseDelay: 1.0, fade: 0.3, gray: 0.85 },   // 결과 화면이 뜨기까지·서서히 뜨는 시간, 패배 때 화면 색 빠짐
     lowHp: { at: 0.25, beat: 0.85, edgeLo: 0.1, edgeHi: 0.34 },   // 체력 위태: 최대 체력 몫, 심장 간격, 붉은 가장자리 밝기(낮음~높음)
-    overdrive: { blink: 0.5, shotScale: 1.7, glow: 0.7 },   // 반격 기회(과열): 끝나기 blink초 전부터 깜빡, 탄 굵기, 몸 빛
+    overdrive: { blink: 0.5, shotScale: 1.7, glow: 0.7 },
+    // 탄 발사 박자: 보라·빨강 탄이 나올 때 한 묶음에 한 번(gap초 안은 건너뜀) 낮은 소리 + 발사 자리 불꽃 + 보스 몸이 살짝 튐(kick)
+    volley: { gap: 0.08, srcCent: 120, redCent: -400, spark: 0.9, kick: 0.04, kickSec: 0.09 },
+    bossChunks: { at: [0.75, 0.25], burst: 2.4, dust: 1.6, shakePx: 10, shakeSec: 0.2, jolt: 0.3 },   // 보스 체력이 이 몫을 지날 때 파편(50%는 2단계 넘어감이 맡는다)
+    aura: { every: 0.14, glow: 0.6 },   // 무기 가동(패링 뒤): 몸에서 청록 알갱이가 오르는 간격, 몸 빛
+    intro: { sec: 1.1, hold: 0.22 },    // 시작 장면: 길이, 카메라 당김   // 반격 기회(과열): 끝나기 blink초 전부터 깜빡, 탄 굵기, 몸 빛
     rush: { kickPx: 16, kickSec: 0.18, arriveShake: 10, arriveSec: 0.18 },
     slam: { shakePx: 10, shakeSec: 0.2 },
     // 원거리 재설계: 박치기 받아냄(근접 패링 위에 크게 튕김) · 난간 쿵 · 파도 시작 · 레이저 발사 떨림
@@ -125,7 +131,8 @@ export const LOOK = {
       shield: -14, shieldBlock: -26, bomb: -6, pickup: -12, itemSpawn: -20,
       missile: -32, beam: -30, burst: -26, drone: -42,   // 보조 무기는 평타처럼 작게
       gearWake: -20, salvo: -12, bigBeam: -12, swarm: -16,   // 무기가 깨어남(패링), 무기 스킬
-      heartbeat: -13, shatter: -9,   // 체력 위태, 보스가 부서짐
+      heartbeat: -13, shatter: -9, puff: -25, puffBg: -33, gearSleep: -22,   // 탄 발사 박자(주 패턴·바탕), 무기가 꺼짐
+         // 체력 위태, 보스가 부서짐
       store: -13, storeFull: -11, throw: -9, throwHit: -10, throwBoom: -5, heal: -11,   // 모아 던지기(§4.11)
     },
   },

@@ -97,6 +97,9 @@ export function createSfx(ctx, LOOK) {
     salvo: (t, v) => { for (let k = 0; k < 6; k++) noise(t + k * 0.03, 0.12, v * 0.6, 'bandpass', 1000, 3200, 2); },
     bigBeam: (t, v) => { tone(t, 'sawtooth', 220, 180, 1.5, v * 0.5); noise(t, 1.5, v * 0.5, 'bandpass', 2400, 1600, 1.5); },
     swarm: (t, v) => { for (let k = 0; k < 4; k++) tone(t + k * 0.04, 'square', 1200 + k * 200, 1600 + k * 200, 0.08, v * 0.5); },
+    puff: (t, v, o) => { tone(t, 'sine', 150, 70, 0.09, v, o.detune || 0); noise(t, 0.03, v * 0.4, 'lowpass', 900); },
+    puffBg: (t, v) => tone(t, 'sine', 95, 55, 0.12, v),
+    gearSleep: (t, v) => tone(t, 'triangle', 880, 440, 0.18, v),
     heartbeat: (t, v) => { tone(t, 'sine', 62, 44, 0.13, v); tone(t + 0.19, 'sine', 56, 40, 0.15, v * 0.7); },
     shatter: (t, v, o) => { noise(t, 0.22, v, 'bandpass', 2600, 500, 1.2); tone(t, 'sine', 120, 50, 0.25, v * 0.8, o.detune || 0); },
     // 모아 던지기(§4.11): 착(모임) · 가득 · 던짐 · 명중(음이 오름) · 마지막 한 발 · 회복

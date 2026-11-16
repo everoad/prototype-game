@@ -3,7 +3,7 @@
 import { K, RULES } from '../sim/rules.js';
 
 export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
-  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, later: [], beatAt: -1e9 };
+  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, later: [], beatAt: -1e9, puffAt: -1e9, puffBgAt: -1e9, bossHpR: null, charged: false, auraAt: -1e9 };
   const F = () => LOOK.feel, on = k => F().on[k] !== false;
   const stop = (now, sec, opt) => (on('stop') ? timeFx.hitstop(now, sec, opt) : 0);
   const slow = (now, s, sec, opt) => on('slow') && timeFx.slow(now, s, sec, opt);
@@ -99,6 +99,14 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'clear': if (e.n > 0) fx.clearSparkle(e.x, e.z, e.r); if (e.r === Infinity) sfx.play('clear'); break;
         case 'fire':
           if ((e.kind === K.WHITE || e.kind === K.GOLD) && !pinged.has(`${e.kind}:${e.t}`)) { pinged.add(`${e.kind}:${e.t}`); sfx.play(e.kind === K.GOLD ? 'pingGold' : 'ping'); }
+          else if (e.kind === K.NORMAL || e.kind === K.RED) {   // 탄 발사 박자: 한 묶음에 한 번(주 패턴은 불꽃·몸 튐까지, 바탕 탄막은 작은 소리만)
+            const V = F().volley, bg = e.src === RULES.src.background;
+            if (now - (bg ? st.puffBgAt : st.puffAt) >= V.gap) {
+              if (bg) st.puffBgAt = now; else st.puffAt = now;
+              sfx.play(bg ? 'puffBg' : 'puff', { detune: e.kind === K.RED ? V.redCent : ((e.src ?? 0) % 4) * V.srcCent });
+              if (!bg) { if (on('sparks')) fx.spark(e.x, e.z, e.kind === K.RED ? 'red' : 'purple', V.spark); actors.bossKick?.(now); }
+            }
+          }
           break;
         case 'dodge': actors.dodgeTrail?.(now, false); sfx.play('whoosh'); break;
         case 'nearMiss': actors.dodgeTrail?.(now, true); sfx.play('whooshNear'); break;
@@ -287,8 +295,23 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
   // 상태 연출(사건이 아니라 지금 상태): 체력 위태면 심장 소리가 박자마다
   function tick(w, now) {
     const L = F().lowHp, p = w.player;
-    if (w.result || p.hp <= 0 || p.hp > w.rules.player.hp * L.at) return;
-    if (now - st.beatAt >= L.beat) { st.beatAt = now; sfx.play('heartbeat'); }
+    if (!w.result && p.hp > 0 && p.hp <= w.rules.player.hp * L.at && now - st.beatAt >= L.beat) { st.beatAt = now; sfx.play('heartbeat'); }
+    // 보스 체력 구간(75%·25%): 지날 때 파편이 떨어진다 — 싸움이 나아가는 것이 보이게
+    const b = w.boss;
+    if (b) {
+      const r = b.hp / b.maxHp, H = F().bossChunks;
+      if (st.bossHpR != null && r > 0) for (const th of H.at) if (st.bossHpR > th && r <= th) {
+        if (on('sparks')) fx.burst(b.x, b.z, 'purple', H.burst);
+        fx.dust?.(b.x, b.z, H.dust); shake(H.shakePx, H.shakeSec); actors.bossJolt?.(now, H.jolt);
+        sfx.play('shatter', { detune: -300 });
+      }
+      st.bossHpR = r;
+    }
+    // 무기 가동(패링 뒤 몇 초): 켜진 동안 몸에서 청록 알갱이가 오르고, 꺼질 때 소리
+    const W = w.weapons, charged = !!W && !w.result && W.on.some(g => g !== 'burst') && w.time < W.chargeUntil, A = F().aura;
+    if (st.charged && !charged && !w.result) sfx.play('gearSleep');
+    if (charged && now - st.auraAt >= A.every) { st.auraAt = now; fx.rise?.(p.x, p.z, 'cyan', 1); }
+    st.charged = charged;
   }
 
   return { tick, handle, flushHits };

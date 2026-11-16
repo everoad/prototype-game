@@ -88,7 +88,7 @@ export function createActors(view, LOOK, opts = {}) {
   const trail = { until: -1e9, every: 0.08, nextAt: 0, near: false };
 
   // 몸짓 상태
-  const st = { flashColor: null, flashAt: -1, ringFlashAt: -1e9, dimAt: -1e9, stopAt: -1e9, moving: false, lunge: -1e9, shakeUntil: -1e9, shakeAmp: 0, joltAt: -1e9, jolt: 0, deadAt: null, downAt: null, pulseAt: -1e9 };
+  const st = { flashColor: null, flashAt: -1, ringFlashAt: -1e9, dimAt: -1e9, stopAt: -1e9, moving: false, lunge: -1e9, shakeUntil: -1e9, shakeAmp: 0, joltAt: -1e9, jolt: 0, deadAt: null, downAt: null, pulseAt: -1e9, kickAt: -1e9 };
   const lerp = (a, b, t) => a + (b - a) * t;
 
   function onEvents(events, now) {
@@ -121,7 +121,8 @@ export function createActors(view, LOOK, opts = {}) {
     // 맞은 뒤 무적: 깜빡임 · 잠김 표시: 잠깐 어둡게
     const blink = w.time < p.invulnUntil && !(p.dodge.startedAt >= 0 && w.time < p.dodge.startedAt + w.rules.dodge.invuln) ? (Math.floor(now * 20) % 2 === 0) : false;
     body.visible = !blink; nose.visible = !blink;
-    pMat.emissiveIntensity = now - st.dimAt < 0.15 ? 0 : 0.25;
+    const armed = !!w.weapons && w.time < w.weapons.chargeUntil && w.weapons.on.some(g => g !== 'burst');   // 무기 가동 중: 몸이 더 밝게
+    pMat.emissiveIntensity = now - st.dimAt < 0.15 ? 0 : armed ? LOOK.feel.aura.glow : 0.25;
     pMat.color.set(now - st.dimAt < 0.15 ? C.playerDark : C.player);
     // 반격 기회(과열): 그동안 몸이 금빛, 끝나기 직전 깜빡
     const od = p.overdriveUntil - w.time, OD = LOOK.feel.overdrive;
@@ -190,7 +191,8 @@ export function createActors(view, LOOK, opts = {}) {
     if (lu < 0.15) tilt -= Math.sin(lu / 0.15 * Math.PI) * 0.25;   // 근접 타격 순간 앞으로 튀어 나감
     bPose.rotation.z = lerp(bPose.rotation.z, tilt, 0.35);
     bPose.rotation.x = lerp(bPose.rotation.x, side, 0.35);
-    bPose.scale.set(lerp(bPose.scale.x, sxz * stretch, 0.4), lerp(bPose.scale.y, sy, 0.4), lerp(bPose.scale.z, sxz / Math.sqrt(stretch), 0.4));
+    const kt = (now - st.kickAt) / LOOK.feel.volley.kickSec, kick = kt >= 0 && kt < 1 ? 1 + LOOK.feel.volley.kick * (1 - kt) : 1;   // 탄을 낼 때 몸이 살짝 튄다
+    bPose.scale.set(lerp(bPose.scale.x, sxz * stretch, 0.4) * kick, lerp(bPose.scale.y, sy, 0.4), lerp(bPose.scale.z, sxz / Math.sqrt(stretch), 0.4) * kick);
     // 번쩍임: 다음 위협 색 — 준비 동안 이어지고 끝나면 flashSec에 걸쳐 사그라든다
     const charging = state === 'windup' || floorWarn || (rush && rush.phase === 'crouch');
     const fl = now - st.flashAt;
@@ -257,6 +259,7 @@ export function createActors(view, LOOK, opts = {}) {
     dashTrail(now) { trail.until = now + 0.2; trail.nextAt = now; trail.near = true; },
     bossJolt(now, amount) { st.joltAt = now; st.jolt = amount; },
     bossPulse(now) { st.pulseAt = now; },
+    bossKick(now) { st.kickAt = now; },
     playerDown(now) { st.downAt = now; },
     dim(now) { st.dimAt = now; },
     toggleRing() { ringOn = !ringOn; return ringOn; },

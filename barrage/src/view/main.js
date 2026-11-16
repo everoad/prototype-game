@@ -11,6 +11,8 @@ import { createActors } from './actors.js';
 import { createBulletsView } from './bulletsView.js';
 import { createWeaponsView } from './weaponsView.js';
 import { createHud, resultAlpha } from './hud.js';
+import { createIntro } from './intro.js';
+import { worldOptions } from './query.js';
 import { createCamera } from './camera.js';
 import { createTimeFx } from './timeFx.js';
 import { createFx } from './fx.js';
@@ -24,7 +26,7 @@ const num = (k, d) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Number(q.
 if (q.get('raf') === 'timer') window.requestAnimationFrame = cb => setTimeout(() => cb(performance.now()), 16);   // 확인용: 숨은 창에서는 rAF가 멈춘다
 const seed = num('seed', 1), speed = num('speed', 1), recording = q.has('record');
 if (q.has('bh')) LOOK.sizes.bh = num('bh', LOOK.sizes.bh);
-const world = createWorld({ seed, phase: num('phase', 1), pattern: q.has('pattern') ? num('pattern', null) : null, lab: q.get('lab'), heal: q.get('heal') === '1', boss: q.get('boss') ?? 'ranged', store: q.get('store') === '1', hard: q.get('hard') === '1', gear: q.get('gear') ?? (q.get('lab') ? 'none' : 'all') });   // 보조 무기(§4.10): 첫 시험은 다 켬
+const world = createWorld(worldOptions(q));   // 모아 던지기가 기본(?store=0 = 예전 방식)
 
 document.getElementById('wait')?.remove();
 const canvas = document.getElementById('view'), hudCanvas = document.getElementById('hud');
@@ -59,6 +61,11 @@ let pitchIdx = Math.max(0, LOOK.camera.pitches.indexOf(num('pitch', LOOK.camera.
 const pitchFixed = q.has('pitch') && !LOOK.camera.pitches.includes(num('pitch', 45)) ? num('pitch', 45) : null;   // 목록 밖 각도는 확인용으로 고정
 camera.setPitch(pitchFixed ?? LOOK.camera.pitches[pitchIdx]);
 let pendingPress = null;   // 입력→화면 지연 재기: 먹은 누름의 시각
+// 시작 장면: 1초쯤 보스 이름과 포효(판은 멈춤) — 아무 키나 누르면 건너뜀. 연습 장면·봇·녹화·?intro=0에는 없다
+const intro = createIntro(q.get('intro') === '1' ? LOOK.feel.intro.sec : world.opts.lab || botKind || recording || q.get('intro') === '0' ? 0 : LOOK.feel.intro.sec);   // ?intro=1이면 봇·녹화에도
+let introShown = false, introOpen = false;
+window.addEventListener('keydown', () => { if (introShown) intro.skip(); });
+window.addEventListener('mousedown', () => { if (introShown) intro.skip(); });
 
 function inputFn(w) {
   if (bot) return bot(w);
@@ -72,7 +79,14 @@ function frame(now, dtReal) {
   ui.now = now; ui.dt = dtReal; clockNow = now;
   // 정지·느려짐은 sim에 주는 시간에 곱한다(sim은 배율을 모른다). 끝난 판도 죽음 느려짐이 끝날 때까지 연출은 돈다.
   const scale = timeFx.scaleAt(now);
-  if (!ui.paused && !world.result) advance(world, dtReal * speed * scale, inputFn, 12);
+  const inIntro = intro.active(now);
+  if (inIntro && !introShown) {   // 시작: 카메라를 당기고 보스 이름·포효·몸 부풂
+    introShown = true; introOpen = true;
+    hud.banner(now, LOOK.names[world.boss.kind === 'dragon' ? 'dragon' : 'ranged'], LOOK.feel.intro.sec);
+    camera.hold?.(LOOK.feel.intro.hold, LOOK.feel.intro.sec + 1); actors.bossPulse(now); sfx.play('roar');
+  }
+  if (!inIntro && introOpen) { introOpen = false; camera.release?.(); map.take(); }   // 끝: 카메라를 풀고, 장면 중에 누른 패링·회피는 버린다
+  if (!ui.paused && !world.result && !inIntro) advance(world, dtReal * speed * scale, inputFn, 12);
   const events = drainEvents(world);
   actors.onEvents(events, now);
   feel.handle(events, now);
