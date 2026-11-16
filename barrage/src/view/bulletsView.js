@@ -4,6 +4,7 @@
 // 장판 공격: 박치기 줄(판 끝까지, 예고 동안 길이로 채워짐) · 파도 예고 원 · 검기 부채 · 퍼지는 파도 고리 띠(앞면 밝게) ·
 // 레이저(조준 점선 + 쓸 쪽 옅은 부채 → 굵은 빨간 빔 + 흰 속 + 끝 불꽃).
 import { K } from '../sim/rules.js';
+import { warpAt } from './warp.js';
 
 export function createBulletsView(view, LOOK, cap) {
   const THREE = view.THREE, C = LOOK.colors, S = LOOK.sizes, L = view.layers;
@@ -27,12 +28,14 @@ export function createBulletsView(view, LOOK, cap) {
     reflectTail: inst(sphere, top(C.cyan, { transparent: true, opacity: 0.45 }), L.reflect, 0),
     shadow: inst(new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: C.shadow, transparent: true, opacity: S.shadowAlpha, depthWrite: false }), L.shadow, 0),
     shots: inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: S.shotAlpha, depthWrite: false }), L.shots, 0),
+    shotHeads: inst(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: LOOK.guns.head.alpha, depthWrite: false }), L.shots, 1),   // 평타 머리(밝고 짧게)
     marks: inst(new THREE.SphereGeometry(0.12, 8, 6), top(C.white), L.bullets, 4),
   };
   meshes.goldRim.geometry.rotateX(Math.PI / 2);
 
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const qx = new THREE.Quaternion(), axisY = new THREE.Vector3(0, 1, 0), axisX = new THREE.Vector3(1, 0, 0);
+  const warpOut = [0, 0];
   function put(mesh, x, y, z, sx, sy, sz, yaw = 0, spin = 0) {
     q.setFromAxisAngle(axisY, -yaw);
     if (spin) { qx.setFromAxisAngle(axisX, spin); q.multiply(qx); }
@@ -145,10 +148,12 @@ export function createBulletsView(view, LOOK, cap) {
     drawFloor(w, now);
     for (const m of Object.values(meshes)) m.count = 0;
     const b = w.bullets, vis = S.bulletVisual, minR = S.bulletMinPx * view.unitsPerPx(), bh = S.bh;
+    const sn = w.tries?.snipe, Wp = LOOK.tries.snipe.warp, warped = !!sn && w.time - sn.firedAt < Wp.sec;   // 저격이 가른 공기(그림만 밀린다)
     for (let i = 0; i < b.cap; i++) {
       if (!b.alive[i]) continue;
       if (w.result === 'win' && b.kind[i] !== K.REFLECT) continue;   // 이긴 순간 남은 적 탄은 반짝이며 사라진다(main)
-      const x = b.px[i] + (b.x[i] - b.px[i]) * alpha, z = b.pz[i] + (b.z[i] - b.pz[i]) * alpha;
+      let x = b.px[i] + (b.x[i] - b.px[i]) * alpha, z = b.pz[i] + (b.z[i] - b.pz[i]) * alpha;
+      if (warped) { warpAt(Wp, sn, x, z, w.time, warpOut); x += warpOut[0]; z += warpOut[1]; }
       const r = Math.max(b.r[i] * vis, minR), k = b.kind[i];
       const yaw = Math.atan2(b.vz[i], b.vx[i]);
       if (k !== K.REFLECT) put(meshes.shadow, x, 0.01, z, r * 0.9, 1, r * 0.9);
@@ -164,13 +169,17 @@ export function createBulletsView(view, LOOK, cap) {
     }
     // 플레이어 탄(밝기는 매 화면 읽는다 — 수치 패널)
     meshes.shots.material.opacity = S.shotAlpha;
-    const over = w.time < w.player.overdriveUntil, shotW = S.shotWidth * (over ? LOOK.feel.overdrive.shotScale : 1);   // 반격 기회(과열): 금빛·굵게
-    meshes.shots.material.color.set(over ? C.gold : C.cyan);
+    const G = LOOK.guns, heat = !!w.tries?.on.always && !!w.weapons && w.time < w.weapons.chargeUntil;   // 과열(패링 뒤 가동 시간): 굵게
+    const over = w.time < w.player.overdriveUntil, shotW = S.shotWidth * (over ? LOOK.feel.overdrive.shotScale : 1) * (heat ? G.heat.shotScale : 1);   // 반격 기회(과열): 금빛·굵게
+    meshes.shots.material.color.set(over ? C.gold : C.cyan); meshes.shotHeads.material.color.set(over ? C.gold : C.cyan);
+    const headLen = G.head.len * (heat ? G.heat.headScale : 1), headW = G.head.w * (heat ? G.heat.shotScale : 1), headAt = (S.shotLen - headLen) / 2;
     const s = w.shots;
     for (let i = 0; i < s.cap; i++) {
       if (!s.alive[i]) continue;
       const x = s.px[i] + (s.x[i] - s.px[i]) * alpha, z = s.pz[i] + (s.z[i] - s.pz[i]) * alpha;
-      put(meshes.shots, x, bh * 1.2, z, S.shotLen, shotW, shotW, Math.atan2(s.vz[i], s.vx[i]));
+      const yaw = Math.atan2(s.vz[i], s.vx[i]);
+      put(meshes.shots, x, bh * 1.2, z, S.shotLen, shotW, shotW, yaw);
+      put(meshes.shotHeads, x + Math.cos(yaw) * headAt, bh * 1.2, z + Math.sin(yaw) * headAt, headLen, headW, headW, yaw);
     }
     // 쪼개지는 구슬의 흰 조각 표시
     const run = w.boss.run;

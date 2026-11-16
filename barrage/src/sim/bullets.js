@@ -52,14 +52,17 @@ export const liveCount = w => w.bullets.live;
 // 움직이기: 멈춤(holdUntil) 동안은 그 자리(가까이 생긴 흰·금 탄, 받은 탄). 되튄 탄은 멈춤이 끝나면 보스를 향해 방향을 다시 잡는다. 판 밖 + 1 U면 지운다.
 export function moveBullets(w) {
   const b = w.bullets, dt = w.rules.dt, hx = w.rules.board.hx + 1, hz = w.rules.board.hz + 1;
-  const boss = w.boss, rs = w.rules.bullets.reflectSpeed;
+  const boss = w.aim === undefined ? w.boss : w.aim, rs = w.rules.bullets.reflectSpeed;   // 겨눈 적(foes.js) — 보스전에선 늘 보스
   for (let i = 0; i < b.cap; i++) {
     if (!b.alive[i]) continue;
     b.px[i] = b.x[i]; b.pz[i] = b.z[i];
     if (w.time < b.holdUntil[i]) continue;
-    if (b.kind[i] === K.REFLECT) {
-      const dx = boss.x - b.x[i], dz = boss.z - b.z[i], d = Math.hypot(dx, dz) || 1;
-      b.vx[i] = dx / d * rs; b.vz[i] = dz / d * rs;
+    const LL = w.tries ? w.tries.lanceLast : null;   // 꿰뚫는 던지기(실험): 던진 탄은 놓일 때 한 번만 겨누고 곧게 난다
+    if (b.kind[i] === K.REFLECT && LL && b.thrown[i]) {
+      if (b.vx[i] === 0 && b.vz[i] === 0) { const a = boss ? Math.atan2(boss.z - b.z[i], boss.x - b.x[i]) : w.player.face; b.vx[i] = Math.cos(a) * rs; b.vz[i] = Math.sin(a) * rs; LL[i] = 0; }
+    } else if (b.kind[i] === K.REFLECT) {
+      if (boss) { const dx = boss.x - b.x[i], dz = boss.z - b.z[i], d = Math.hypot(dx, dz) || 1; b.vx[i] = dx / d * rs; b.vz[i] = dz / d * rs; }
+      else if (b.vx[i] === 0 && b.vz[i] === 0) { killBullet(w, i); continue; }   // 겨눌 적이 없다(방 정리 뒤): 날던 것은 곧게 가다 판 밖에서, 멈춰 있던 것은 여기서 사라진다
     }
     b.x[i] += b.vx[i] * dt; b.z[i] += b.vz[i] * dt;
     if (b.x[i] < -hx || b.x[i] > hx || b.z[i] < -hz || b.z[i] > hz) killBullet(w, i);

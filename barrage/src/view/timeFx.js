@@ -37,6 +37,7 @@ export function createTimeFx(LOOK) {
       if (now < slowUntil) return slowScale;
       return 1;
     },
+    reset() { stopUntil = -1; slowUntil = -1; slowScale = 1; spent.length = 0; },   // 방 다시 하기(스테이지)
     get stopped() { return stopUntil; },
   };
 }

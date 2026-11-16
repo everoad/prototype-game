@@ -10,6 +10,9 @@ import { attachInput } from './input.js';
 import { createActors } from './actors.js';
 import { createBulletsView } from './bulletsView.js';
 import { createWeaponsView } from './weaponsView.js';
+import { createMobsView } from './mobsView.js';
+import { createTriesView } from './triesView.js';
+import { restartRoom } from '../sim/stage.js';
 import { createHud, resultAlpha } from './hud.js';
 import { createIntro } from './intro.js';
 import { worldOptions } from './query.js';
@@ -34,6 +37,8 @@ const view = createScene(canvas, LOOK, { preserveDrawingBuffer: recording });
 const actors = createActors(view, LOOK, { ring: q.get('ring') !== '0', boss: world.boss.kind === 'dragon' ? 'dragon' : 'ranged', storeCap: world.opts.store ? RULES.store.cap : 0 });
 const bullets = createBulletsView(view, LOOK, RULES.bullets.cap);
 const weaponsView = createWeaponsView(view, LOOK, RULES);
+const mobsView = createMobsView(view, LOOK);   // 일반 몬스터·보상·문(스테이지)
+const triesView = createTriesView(view, LOOK);   // 실험 기믹(?try=)
 const hud = createHud(hudCanvas, LOOK);
 const camera = createCamera(view, LOOK);
 const timeFx = createTimeFx(LOOK);
@@ -62,7 +67,7 @@ const pitchFixed = q.has('pitch') && !LOOK.camera.pitches.includes(num('pitch', 
 camera.setPitch(pitchFixed ?? LOOK.camera.pitches[pitchIdx]);
 let pendingPress = null;   // 입력→화면 지연 재기: 먹은 누름의 시각
 // 시작 장면: 1초쯤 보스 이름과 포효(판은 멈춤) — 아무 키나 누르면 건너뜀. 연습 장면·봇·녹화·?intro=0에는 없다
-const intro = createIntro(q.get('intro') === '1' ? LOOK.feel.intro.sec : world.opts.lab || botKind || recording || q.get('intro') === '0' ? 0 : LOOK.feel.intro.sec);   // ?intro=1이면 봇·녹화에도
+const intro = createIntro(q.get('intro') === '1' ? LOOK.feel.intro.sec : world.opts.lab || world.stage || botKind || recording || q.get('intro') === '0' ? 0 : LOOK.feel.intro.sec);   // ?intro=1이면 봇·녹화에도
 let introShown = false, introOpen = false;
 window.addEventListener('keydown', () => { if (introShown) intro.skip(); });
 window.addEventListener('mousedown', () => { if (introShown) intro.skip(); });
@@ -78,7 +83,9 @@ function inputFn(w) {
 function frame(now, dtReal) {
   ui.now = now; ui.dt = dtReal; clockNow = now;
   // 정지·느려짐은 sim에 주는 시간에 곱한다(sim은 배율을 모른다). 끝난 판도 죽음 느려짐이 끝날 때까지 연출은 돈다.
-  const scale = timeFx.scaleAt(now);
+  const aiming = !!world.tries?.snipe?.on;   // 저격 자세(실험): 판의 시간이 slow배로 흐르고 화면 색이 가라앉는다
+  const scale = timeFx.scaleAt(now) * (aiming ? RULES.tries.snipe.slow : 1);
+  if (!world.result && aiming !== ui.aiming) { ui.aiming = aiming; canvas.style.filter = aiming ? LOOK.tries.snipe.dim : ''; }
   const inIntro = intro.active(now);
   if (inIntro && !introShown) {   // 시작: 카메라를 당기고 보스 이름·포효·몸 부풂
     introShown = true; introOpen = true;
@@ -108,15 +115,26 @@ function frame(now, dtReal) {
   actors.update(world, alpha, now);
   bullets.update(world, alpha, now);
   weaponsView.update(world, alpha, now);
+  mobsView.update(world, alpha, now);
+  triesView.update(world, alpha, now);
   view.render();
   hud.draw(world, ui);
   const sz = hud.size;
   fx.draw2d(hud.ctx, sz.W, sz.H, view.project, world.player);
 }
 
+// 스테이지에서 죽은 뒤 R: 그 방에 들어설 때 상태로 그 방부터(결과 화면·색 빠짐·느려짐을 걷는다)
+function retryRoom() {
+  restartRoom(world);
+  ui.resultAt = null; ui.released = false; ui.resultAlpha = 0;
+  canvas.style.filter = '';
+  map.clearPresses();
+}
+
 attachInput(window, canvas, map, {
   onKey(code) {
     if (code === 'F4') location.reload();
+    else if (code === 'KeyR' && world.stage && world.result === 'lose') retryRoom();
     else if (code === 'Escape') { ui.paused = !ui.paused; map.clearPresses(); }
     else if (code === 'F1') ui.debug = !ui.debug;
     else if (code === 'KeyV' && pitchFixed == null) { pitchIdx = (pitchIdx + 1) % LOOK.camera.pitches.length; camera.setPitch(LOOK.camera.pitches[pitchIdx]); }
@@ -127,7 +145,7 @@ attachInput(window, canvas, map, {
   onFirstInput() { audio?.resume(); },
 });
 window.addEventListener('resize', () => { view.resize(); hud.resize(); });
-window.barrage = { world, view, camera, actors, hud, fx, feel, timeFx, ui, LOOK, RULES, get sfx() { return sfx; }, setSfx(s) { sfx = s; } };
+window.barrage = { retryRoom, world, view, camera, actors, hud, fx, feel, timeFx, ui, LOOK, RULES, get sfx() { return sfx; }, setSfx(s) { sfx = s; } };
 
 if (recording) {
   const seconds = num('record', 10);

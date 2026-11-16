@@ -10,6 +10,7 @@ import { makeRng } from './rng.js';
 import { clearBullets, killBullet } from './bullets.js';
 import { clearBeams } from './beams.js';
 import { damageBoss } from './boss.js';
+import { isAway, hurtFoe } from './foes.js';
 
 export const freshStock = R => ({ shield: R.items.start.shield, bomb: R.items.start.bomb });
 
@@ -52,8 +53,10 @@ function fireBomb(w) {
   clearBeams(w);
   p.invulnUntil = Math.max(p.invulnUntil, w.time + R.bomb.invuln);
   p.bombUntil = w.time + R.bomb.invuln;
-  const dmg = damageBoss(w, R.bomb.share * b.maxHp, 'bomb', true);   // 정확히 share(그로기 배율 없음)
-  emit(w, 'bomb', { x: p.x, z: p.z, bx: b.x, bz: b.z, dmg });
+  let dmg = 0;
+  if (isAway(w)) { for (const f of [...w.foeList]) dmg += hurtFoe(w, f, R.mobs.bombShare * f.maxHp, 'bomb', { pierce: true }); }   // 일반 방: 모든 몬스터에게 최대 체력의 몫
+  else dmg = damageBoss(w, R.bomb.share * b.maxHp, 'bomb', true);   // 정확히 share(그로기 배율 없음)
+  emit(w, 'bomb', { x: p.x, z: p.z, bx: isAway(w) ? p.x : b.x, bz: isAway(w) ? p.z : b.z, dmg });
 }
 
 // 방패: 탄이 움직인 뒤, 맞기 전에 부른다
@@ -81,7 +84,7 @@ export function updateItemSpawns(w) {
       emit(w, 'itemPick', { kind: it.kind, x: it.x, z: it.z });
     }
   }
-  if (!w.opts.ai || w.opts.lab || w.result) return;
+  if (!w.opts.ai || w.opts.lab || w.result || w.stage) return;   // 스테이지에서는 나오지 않는다(사용권은 방에서 얻은 것뿐)
   w.itemNext ??= I.every;
   if (w.time < w.itemNext - 1e-9) return;
   w.itemNext = w.time + I.every;

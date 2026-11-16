@@ -5,7 +5,8 @@ import { emit } from './events.js';
 import { segCircle } from './geom.js';
 import { isDodging } from './player.js';
 import { killBullet } from './bullets.js';
-import { damageBoss, addStagger } from './boss.js';
+import { addStagger } from './boss.js';
+import { isAway, hitFoe, hurtFoe } from './foes.js';
 import { openCounterChance, healOn } from './rewards.js';
 import { storeRoom, storeAdd } from './store.js';
 
@@ -73,31 +74,33 @@ export function endParry(w) {
   }
 }
 
-// 되튄 탄이 보스 몸에 닿음: 피해 + 무력화(금 20 / 완벽 14 / 보통 8).
+// 되튄 탄·던진 탄이 적 몸에 닿음(보스, 일반 방에선 몬스터 — foes.js): 피해 + 보스면 무력화(금 20 / 완벽 14 / 보통 8). 받아친 탄은 방패병의 방패를 뚫는다.
 export function hitBossReflects(w) {
-  const b = w.bullets, boss = w.boss, R = w.rules;
-  if (boss.dead) return;
+  const b = w.bullets, boss = w.boss, R = w.rules, away = isAway(w);
+  if (!away && boss.dead) return;
   for (let i = 0; i < b.cap; i++) {
     if (!b.alive[i] || b.kind[i] !== K.REFLECT || w.time < b.holdUntil[i]) continue;
-    if (!segCircle(b.px[i], b.pz[i], b.x[i], b.z[i], boss.x, boss.z, R.boss.r + b.r[i])) continue;
+    const f = hitFoe(w, b.px[i], b.pz[i], b.x[i], b.z[i], b.r[i]);
+    if (!f) continue;
     const perfect = !!b.perfect[i], gold = !!b.gold[i], x = b.x[i], z = b.z[i];
     if (b.thrown[i]) {   // 모아 던진 탄(§4.11): 피해·무력화 × 배율, 마지막 발에 합계
       const mul = b.mul[i], stag = b.stag[i] * mul, last = !!b.last[i], S = R.store, p = w.player;
       if (p.dyingAt != null) continue;   // 구제 창(보스가 피해를 받지 않는 동안)엔 닿아도 기다린다 — 피해 0으로 버려지지 않게
-      killBullet(w, i);
-      const dealt = damageBoss(w, (perfect ? S.dmg[1] : S.dmg[0]) * mul, 'throw');
+      const LL = w.tries ? w.tries.lanceLast : null, fid = f === boss ? -1 : f.id;   // 꿰뚫는 던지기(실험): 사라지지 않고 같은 적은 한 번만
+      if (LL) { if (LL[i] === fid) continue; LL[i] = fid; } else killBullet(w, i);
+      const dealt = hurtFoe(w, f, (perfect ? S.dmg[1] : S.dmg[0]) * mul * (LL ? R.tries.lance.mul : 1), 'throw', { pierce: true });
       p.throwSum = (p.throwSum ?? 0) + dealt;
       emit(w, 'throwHit', { x, z, perfect, gold, dmg: dealt, last, total: p.throwSum });
       if (last) { let flying = false; for (let j = 0; j < b.cap && !flying; j++) flying = !!b.alive[j] && !!b.thrown[j]; if (!flying) p.throwSum = 0; }   // 겹쳐 던진 것까지 다 닿으면 합계를 비운다
-      addStagger(w, stag);
-      if (boss.dead) return;
+      if (f === boss) addStagger(w, stag);
+      if (!away && boss.dead) return;
       continue;
     }
     killBullet(w, i);
     const dmg = perfect ? R.reflect.dmgPerfect : R.reflect.dmgNormal;
     emit(w, 'reflectHit', { x, z, perfect, gold, dmg });
-    damageBoss(w, dmg, 'reflect');
-    addStagger(w, gold ? R.reflect.staggerGold : perfect ? R.reflect.staggerPerfect : R.reflect.staggerNormal);
-    if (boss.dead) return;
+    hurtFoe(w, f, dmg, 'reflect', { pierce: true });
+    if (f === boss) addStagger(w, gold ? R.reflect.staggerGold : perfect ? R.reflect.staggerPerfect : R.reflect.staggerNormal);
+    if (!away && boss.dead) return;
   }
 }

@@ -161,3 +161,50 @@ test('시작 장면: 1초쯤 판이 멈춰 있고, 아무 키나 누르면 건�
   assert.equal(b.active(1), true); b.skip(); assert.equal(b.active(1.1), false);
   assert.equal(createIntro(0).active(0), false);
 });
+
+// 스테이지(Task 4): 방의 순간들
+test('스테이지 보이기 수치는 모두 유한한 수', () => {
+  const walk = (o, path) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === 'object' && !Array.isArray(v)) walk(v, `${path}.${k}`); else for (const x of [].concat(v)) if (typeof x === 'number') assert.ok(Number.isFinite(x), `${path}.${k} = ${v}`); } };
+  walk(LOOK.mobs, 'LOOK.mobs'); walk(LOOK.feel.stage, 'LOOK.feel.stage');
+  for (const c of ['mob', 'mobShield', 'door']) assert.ok(/^#[0-9a-f]{6}$/i.test(LOOK.colors[c]), c);
+  for (const k of ['missile', 'burst', 'beam', 'drone', 'shield', 'bomb', 'heal']) assert.equal(typeof LOOK.names.reward[k], 'string', k);
+});
+
+test('몬스터가 죽으면 파편과 소리, 방을 정리하면 큰 글자, 보상을 주우면 소리와 이름', () => {
+  const r = rig();
+  r.feel.handle([ev('mobDeath', { id: 1, kind: 'shooter', x: 2, z: 3 })], 1);
+  assert.ok(r.has('fx.burst').some(c => c[1] === 2 && c[2] === 3), '파편 없음');
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'shatter'), '소리 없음');
+  r.feel.handle([ev('roomClear', { room: 1, of: 4, sec: 30 })], 2);
+  assert.ok(r.has('hud.banner').some(c => String(c[2]).includes('정리')), '방 정리 글자 없음');
+  r.feel.handle([ev('rewardPick', { kind: 'weapon', what: 'beam', x: 0, z: 0 })], 3);
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'pickup'));
+  assert.ok(r.has('fx.number').some(c => c[3] === LOOK.names.reward.beam), '보상 이름 없음');
+});
+
+test('방에 들어서면 방 번호, 보스 방이면 보스 이름과 포효', () => {
+  const r = rig();
+  r.feel.handle([ev('roomStart', { room: 2, of: 4, boss: false })], 1);
+  assert.ok(r.has('hud.banner').some(c => c[2] === '방 2 / 4'));
+  r.feel.handle([ev('roomStart', { room: 4, of: 4, boss: true }), ev('bossEnter', { x: 6, z: 0 })], 2);
+  assert.ok(r.has('hud.banner').some(c => c[2] === LOOK.names.ranged));
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'roar'));
+  r.feel.handle([ev('doorOpen', { x: 10, z: 0 })], 3);
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'door'));
+  assert.ok(Number.isFinite(LOOK.sound.db.door));
+});
+
+test('방패가 막으면 작은 불꽃(연달아 막아도 소리는 띄엄띄엄)', () => {
+  const r = rig();
+  r.feel.handle(Array.from({ length: 10 }, () => ev('mobBlock', { id: 1, x: 1, z: 1 })), 1);
+  assert.equal(r.has('sfx.play').filter(c => c[1] === 'shieldBlock').length, 1);
+  assert.ok(r.has('fx.spark').length >= 1);
+});
+
+test('문은 금색이 아니다(금은 받아칠 것에만)', () => {
+  assert.notEqual(LOOK.colors.door.toLowerCase(), LOOK.colors.gold.toLowerCase());
+  assert.notEqual(LOOK.colors.door.toLowerCase(), LOOK.colors.white.toLowerCase());
+  const r = rig();
+  r.feel.handle([ev('roomClear', { room: 1, of: 4, sec: 30 })], 1);
+  assert.ok(!r.has('fx.edge').some(c => c[1] === 'gold'), '방 정리 가장자리가 금색');
+});

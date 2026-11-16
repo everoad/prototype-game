@@ -232,10 +232,52 @@ test('연출 수치는 모두 유한한 숫자(처형·폭탄·방패)', () => {
   for (const [k, keys] of Object.entries(need)) for (const f of keys) assert.ok(Number.isFinite(LOOK.feel[k][f]), `LOOK.feel.${k}.${f} = ${LOOK.feel[k][f]}`);
 });
 
-test('무기가 보스에 맞으면 작은 청록 불꽃', () => {
+test('무기 명중: 미사일은 청록으로 터지고, 작은 탄(드론·산탄)은 작은 청록 불꽃', () => {
   const r = rig();
   r.feel.handle([ev('weaponHit', { kind: 'missile', x: 3, z: 0 })], 1);
-  assert.ok(r.has('fx.spark').some(c => c[3] === 'cyan'));
+  assert.ok(r.has('fx.burst').some(c => c[3] === 'cyan' && c[4] === LOOK.guns.missile.hitBurst));
+  const r2 = rig();
+  r2.feel.handle([ev('weaponHit', { kind: 'drone', x: 3, z: 0 })], 1);
+  assert.ok(r2.has('fx.spark').some(c => c[3] === 'cyan'));
+  assert.equal(r2.has('fx.burst').length, 0);
+});
+
+// 평타·무기 연출(사용자 2026-11-17 "기본 공격이나 무기도 좀 더 화려했으면")
+test('산탄 부채 하나에 부채꼴 불티 한 번, 미사일·드론은 쏠 때 작은 불꽃', () => {
+  const r = rig();
+  r.feel.handle([ev('weaponFire', { kind: 'burst', x: 0, z: 0, angle: 0.1 }, 5), ev('weaponFire', { kind: 'burst', x: 0, z: 0, angle: 0.2 }, 5), ev('weaponFire', { kind: 'burst', x: 0, z: 0, angle: 0.3 }, 5)], 1);
+  assert.equal(r.has('fx.fan').length, 1);
+  r.feel.handle([ev('weaponFire', { kind: 'missile', x: 1, z: 2, angle: 0 }, 6), ev('weaponFire', { kind: 'drone', x: 1, z: 2, angle: 0 }, 6)], 1.1);
+  assert.equal(r.has('fx.spark').filter(c => c[3] === 'cyan').length, 2);
+});
+
+test('평타·무기로 조금씩 깎인 피해는 적마다 모아 every초마다 숫자 하나 — 큰 한 방(던지기·저격)은 세지 않는다', () => {
+  const r = rig(), Gn = LOOK.guns.number;
+  const m = { id: 7, hp: 300, maxHp: 300, x: 2, z: 1, dead: false, bornAt: 0 };
+  const w = { time: 1, enemies: [m], boss: { away: true }, player: { x: 0, z: 0 }, stats: {}, weapons: null, result: null };
+  let now = 1;
+  r.feel.tick(w, now);
+  for (let k = 0; k < 10; k++) { m.hp -= 3; now += Gn.every / 20; w.time = now; r.feel.tick(w, now); }
+  assert.equal(r.has('fx.number').length, 0, 'every초가 되기 전');
+  m.hp -= Gn.big + 10;   // 던지기 한 방
+  for (let k = 0; k < 12; k++) { m.hp -= 3; now += Gn.every / 20; w.time = now; r.feel.tick(w, now); }
+  const nums = r.has('fx.number');
+  assert.equal(nums.length, 1);
+  assert.equal(nums[0][3], 3 * 20, '큰 한 방을 빼고 every초 동안 깎인 합');
+  assert.equal(nums[0][4], 'cyan');
+});
+
+test('빔이 켜져 있는 동안 겨눈 적 자리에 불티가 튄다', () => {
+  const r = rig(), Gb = LOOK.guns.beam;
+  const w = { time: 1, enemies: [], boss: { away: true }, aim: { x: 4, z: -2 }, player: { x: 0, z: 0 }, stats: {}, weapons: { on: ['beam'], chargeUntil: -1, beamUntil: 1.3 }, result: null };
+  r.feel.tick(w, 1);
+  r.feel.tick(w, 1 + Gb.sparkEvery / 2);
+  r.feel.tick(w, 1 + Gb.sparkEvery * 1.1);
+  const sp = r.has('fx.spark').filter(c => c[1] === 4 && c[2] === -2);
+  assert.equal(sp.length, 2);
+  w.time = 1.4;
+  r.feel.tick(w, 1.4);
+  assert.equal(r.has('fx.spark').filter(c => c[1] === 4).length, 2, '빔이 꺼지면 멈춘다');
 });
 
 // 패링으로 깨어나는 무기·무기 스킬(§4.10)

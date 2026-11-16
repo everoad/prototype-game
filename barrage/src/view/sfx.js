@@ -100,6 +100,7 @@ export function createSfx(ctx, LOOK) {
     puff: (t, v, o) => { tone(t, 'sine', 150, 70, 0.09, v, o.detune || 0); noise(t, 0.03, v * 0.4, 'lowpass', 900); },
     puffBg: (t, v) => tone(t, 'sine', 95, 55, 0.12, v),
     gearSleep: (t, v) => tone(t, 'triangle', 880, 440, 0.18, v),
+    snipe: (t, v) => { tone(t, 'sine', 95, 26, 0.7, v); noise(t, 0.2, v, 'bandpass', 3400, 500, 0.9); noise(t + 0.06, 0.5, v * 0.55, 'lowpass', 1100, 180); },   // 저격 한 방: 낮은 쿵 + 찢는 소리
     heartbeat: (t, v) => { tone(t, 'sine', 62, 44, 0.13, v); tone(t + 0.19, 'sine', 56, 40, 0.15, v * 0.7); },
     shatter: (t, v, o) => { noise(t, 0.22, v, 'bandpass', 2600, 500, 1.2); tone(t, 'sine', 120, 50, 0.25, v * 0.8, o.detune || 0); },
     // 모아 던지기(§4.11): 착(모임) · 가득 · 던짐 · 명중(음이 오름) · 마지막 한 발 · 회복
@@ -108,6 +109,8 @@ export function createSfx(ctx, LOOK) {
     throw: (t, v) => { noise(t, 0.2, v, 'bandpass', 500, 3400, 1.5); tone(t, 'sawtooth', 180, 620, 0.16, v * 0.5); },
     throwHit: (t, v, o) => { tone(t, 'sine', 190, 95, 0.13, v, o.detune || 0); noise(t, 0.05, v * 0.5, 'highpass', 3200); },
     throwBoom: (t, v) => { tone(t, 'sine', 75, 30, 0.55, v); noise(t, 0.28, v * 0.7, 'lowpass', 1400, 300); tone(t, 'triangle', 880, 440, 0.25, v * 0.3); },
+    door: (t, v) => { tone(t, 'triangle', 440, 660, 0.18, v); tone(t + 0.12, 'triangle', 660, 990, 0.25, v * 0.8); },
+    mobSpawn: (t, v) => tone(t, 'sawtooth', 140, 220, 0.18, v),
     heal: (t, v) => { [660, 880, 1320].forEach((f, k) => tone(t + k * 0.06, 'sine', f, f, 0.22, v * (1 - k * 0.2))); },
     execShot: (t, v, o) => { noise(t, 0.07, v, 'bandpass', 2600, 700, 2); tone(t, 'square', 260, 120, 0.09, v * 0.4, o.detune || 0); },
   };

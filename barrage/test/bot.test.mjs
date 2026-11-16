@@ -210,3 +210,37 @@ test('user 봇은 숙련 봇보다 많이 맞는다(사람 손에 맞춘 잣대)
   assert.ok(u.hits > s.hits + 5, `맞음 user ${u.hits} 숙련 ${s.hits}`);
   assert.ok(u.parries >= 24, `user 패링 ${u.parries}(3판)`);
 });
+
+// 스테이지(Task 5): 방에서의 봇
+test('스테이지: 봇이 방 1을 깨고 보상을 주워 문으로 다음 방에 간다', async () => {
+  const w = createWorld({ stage: 1, seed: 2 }), bot = createBot('1', 2);
+  w.player.invulnUntil = 1e9;   // 방 흐름만 본다
+  for (let k = 0; k < ticks(150) && w.stage.room === 0 && !w.result; k++) { step(w, bot(w)); drainEvents(w); }
+  assert.equal(w.result, null);
+  assert.equal(w.stage.room, 1, `방 1에 머묾(단계 ${w.stage.phase}, 남은 적 ${w.enemies.filter(m => !m.dead).length})`);
+});
+
+test('스테이지: 걷기만 하는 봇도 포격 원에서 걸어 나온다', async () => {
+  const { spawnMob } = await import('../src/sim/foes.js');
+  const w = createWorld({ store: true, seed: 3 }), bot = createBot('walk', 3);
+  w.boss.away = true; w.shots.nextAt = 1e9;
+  spawnMob(w, 'mortar', 5, 0, 0);
+  let shells = 0;
+  for (let k = 0; k < ticks(16); k++) { step(w, bot(w)); for (const e of drainEvents(w)) if (e.type === 'mobFire') shells++; }
+  assert.ok(shells >= 6, `포탄 ${shells}`);
+  assert.equal(w.stats.hitsByPattern[RULES.src.mortar] ?? 0, 0);
+});
+
+test('스테이지: 패링하는 봇은 돌격병의 몸을 받아치고, 패링 안 하는 봇은 줄에서 비킨다', async () => {
+  const { spawnMob } = await import('../src/sim/foes.js');
+  const room = kind => { const w = createWorld({ store: true, seed: 4 }), bot = createBot(kind, 4); w.boss.away = true; w.shots.nextAt = 1e9; const m = spawnMob(w, 'charger', 3, 0, 0); return { w, bot, m }; };
+  const a = room('1');
+  for (let k = 0; k < ticks(12) && !a.m.dead; k++) { step(a.w, a.bot(a.w)); drainEvents(a.w); }
+  assert.ok(a.m.dead || a.m.hp <= a.m.maxHp * 0.5, `돌격병 체력 ${a.m.hp}`);
+  assert.equal(a.w.stats.hitsByPattern[RULES.src.charger] ?? 0, 0);
+  const b = room('dodge');
+  let dashes = 0;
+  for (let k = 0; k < ticks(14); k++) { step(b.w, b.bot(b.w)); for (const e of drainEvents(b.w)) if (e.type === 'mobDash') dashes++; }
+  assert.ok(dashes >= 3, `돌진 ${dashes}`);
+  assert.ok((b.w.stats.hitsByPattern[RULES.src.charger] ?? 0) <= 1, `맞음 ${b.w.stats.hitsByPattern[RULES.src.charger]}`);
+});

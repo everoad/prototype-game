@@ -128,3 +128,24 @@ test('화면 비율이 잠깐 망가져도 카메라는 다시 잡힌다', () =>
   view.aspect = 16 / 9; run(0.5);
   assert.ok(Number.isFinite(last.width) && Number.isFinite(last.cx) && Number.isFinite(last.cz), JSON.stringify(last));
 });
+
+// 스테이지(Task 4): 일반 방의 틀
+test('일반 방: 틀에 몬스터·보상·문이 들어가고 자리에 없는 보스는 빠진다', async () => {
+  const { hurtFoe } = await import('../src/sim/foes.js');
+  const { step, drainEvents } = await import('../src/sim/world.js');
+  const w = createWorld({ stage: 1, ai: false });
+  let p = framingPoints(w, LOOK);
+  for (const m of w.enemies) assert.ok(p.some(q => q.x === m.x && q.z === m.z), '몬스터가 틀에 없음');
+  assert.ok(!p.some(q => q.r === RULES.boss.r + LOOK.camera.bossMargin), '자리에 없는 보스가 틀에 있음');
+  const o = base(), f = frameTarget(p, o);
+  assert.ok(Number.isFinite(f.sx + f.sy + f.width));
+  for (let guard = 0; w.stage.phase === 'fight' && guard < 10; guard++) { for (const m of w.enemies) { m.bornAt = 0; hurtFoe(w, m, 1e9, 'shot'); } step(w, { mx: 0, mz: 0 }); drainEvents(w); }
+  p = framingPoints(w, LOOK);
+  for (const r of w.stage.rewards) assert.ok(p.some(q => q.x === r.x && q.z === r.z), '보상이 틀에 없음');
+  assert.ok(!p.some(q => w.enemies.some(m => q.x === m.x && q.z === m.z && q.r > 1)), '죽은 몬스터가 틀에 있음');
+  w.stage.rewards = []; w.stage.door = { x: RULES.board.hx, z: 0, halfZ: 1.5 }; w.stage.phase = 'door';
+  p = framingPoints(w, LOOK);
+  assert.ok(p.some(q => q.x === RULES.board.hx && q.z === 0), '문이 틀에 없음');
+  const f2 = frameTarget(p, o);
+  assert.ok(Number.isFinite(f2.sx + f2.sy + f2.width));
+});

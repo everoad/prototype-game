@@ -1,5 +1,8 @@
 // 겹 화면(2D 캔버스, §7): 보스 체력(깎인 꼬리)·무력화·단계, 플레이어 체력·회피 충전 점, 시간, 멈춤·결과, F1 판정 보기.
 // 녹화는 이 캔버스를 WebGL 화면 위에 합쳐 찍는다. 가장자리 연출(Task 14)도 이 캔버스에 그린다(ctx).
+import { BASE_TRIES } from '../sim/tries.js';
+import { BUILD } from './version.js';
+
 // 결과 화면 밝기: 승리·패배 순간에서 since초 — 늦게(큰 순간을 먼저 보여 주고) 서서히 뜬다
 export function resultAlpha(result, since, R) {
   if (!result) return 0;
@@ -10,7 +13,7 @@ export function resultAlpha(result, since, R) {
 export function createHud(canvas, LOOK) {
   const ctx = canvas.getContext('2d'), C = LOOK.colors;
   let dpr = 1, W = 0, H = 0;
-  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9, stockShake: { shield: -1e9, bomb: -1e9, skill: -1e9, store: -1e9 }, banner: null };
+  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9, stockShake: { shield: -1e9, bomb: -1e9, skill: -1e9, store: -1e9 }, banner: null, fadeAt: -1e9, fadeSec: 0 };
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = canvas.clientWidth || window.innerWidth; H = canvas.clientHeight || window.innerHeight;
@@ -28,13 +31,20 @@ export function createHud(canvas, LOOK) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     const b = w.boss, p = w.player, now = ui.now;
+    const away = !!b.away, S = w.stage;   // 일반 방(스테이지): 보스 막대 대신 방 번호와 남은 적
+    if (S) stageLayer(w, ui);
     // 보스 체력 + 깎인 꼬리(잠깐 남았다 줄어듦)
-    const hp = b.hp / b.maxHp;
+    const hp = away ? 1 : b.hp / b.maxHp;
     if (hp < st.lastHp) st.trailHold = now + 0.4;
     st.lastHp = hp;
     if (now > st.trailHold) st.trail = Math.max(hp, st.trail - 0.6 * (ui.dt ?? 0.016));
     if (st.trail < hp) st.trail = hp;
     const bw = Math.min(720, W * 0.5), bx = (W - bw) / 2, by = 22;
+    if (away) {
+      const left = w.enemies.reduce((n, m) => n + (m.dead ? 0 : 1), 0);
+      ctx.textAlign = 'center'; ctx.font = font(18, true); ctx.fillStyle = C.text; ctx.fillText(`방 ${S.room + 1} / ${S.of}`, W / 2, by + 12);
+      ctx.font = font(13); ctx.fillStyle = C.textDim; ctx.fillText(S.phase === 'fight' ? (S.surviveUntil != null ? `버티기 ${Math.max(0, S.surviveUntil - w.time).toFixed(0)}초` : `남은 적 ${left}`) : S.phase === 'reward' ? '보상 하나를 고르세요' : '문으로 →', W / 2, by + 32);
+    } else {
     bar(bx, by, bw, 14, st.trail, C.hpTrail);
     ctx.fillStyle = C.hp; ctx.fillRect(bx, by, bw * hp, 14);
     // 무력화(80%부터 맥동)
@@ -43,6 +53,8 @@ export function createHud(canvas, LOOK) {
     if (now - st.staggerFlashAt < 0.18) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(bx, by + 18, bw * sv, 6); }
     ctx.font = font(13, true); ctx.fillStyle = C.text; ctx.textAlign = 'left';
     ctx.fillText(ui.lab ? `연습: ${ui.lab}` : `${b.phase ?? 1}단계`, bx + bw + 10, by + 12);
+    if (S) { ctx.textAlign = 'right'; ctx.fillStyle = C.textDim; ctx.fillText(`방 ${S.room + 1} / ${S.of}`, bx - 10, by + 12); ctx.textAlign = 'left'; }
+    }
     // 플레이어 체력 + 회피 충전 점
     const px = 24, py = H - 34;
     ctx.font = font(12); ctx.fillStyle = C.textDim; ctx.fillText('체력', px, py - 6);
@@ -64,7 +76,8 @@ export function createHud(canvas, LOOK) {
       });
       // 가동(패링 뒤 남은 시간)·스킬 게이지(패링 +1, 완벽 +2)·스킬 키(쓸 수 있으면 밝게)
       const WR = w.rules.weapons, left = Math.max(0, w.weapons.chargeUntil - w.time);
-      ctx.fillStyle = left > 0 ? C.cyan : C.textDim; ctx.fillText(left > 0 ? '가동' : '패링하면 가동', gx + 6, py - 24);
+      ctx.fillStyle = left > 0 ? C.cyan : C.textDim; const hot = !!w.tries && !!w.tries.on.always;   // 늘 나가는 무기(실험): 가동 = 과열
+      ctx.fillText(left > 0 ? (hot ? '과열' : '가동') : hot ? '패링하면 과열' : '패링하면 가동', gx + 6, py - 24);
       if (left > 0) bar(gx + 40, py - 32, 60, 6, left / WR.charge.perfectSec, C.cyan);
       const sk = now - st.stockShake.skill < 0.2 ? Math.sin((now - st.stockShake.skill) * 80) * 3 : 0;
       for (let k = 0; k < WR.skill.max && !w.opts.store; k++) {
@@ -88,7 +101,7 @@ export function createHud(canvas, LOOK) {
       ctx.font = font(13, true); ctx.textAlign = 'left';
       const low = p.hp > 0 && p.hp <= w.rules.player.hp * LOOK.feel.lowHp.at && n > 0;   // 체력 위태 + 모은 것 있음 = 던져서 회복하라고 깜빡
       ctx.fillStyle = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : n > 0 ? C.cyan : C.textDim;
-      ctx.fillText(low ? 'U 던져서 회복!' : full ? 'U 던지기 — 가득!' : 'U 던지기', px + 8 + cap * 18 + 6 + sk, py - 41);
+      ctx.fillText((low ? 'U 던져서 회복!' : full ? 'U 던지기 — 가득!' : 'U 던지기') + (w.tries?.on.snipe ? ' · I 누르고 있기 = 저격(WASD 적 고르기)' : ''), px + 8 + cap * 18 + 6 + sk, py - 41);
     }
     // 방패·폭탄 사용권(§4.9)
     if (p.stock) {
@@ -127,16 +140,54 @@ export function createHud(canvas, LOOK) {
         ctx.globalAlpha = 1;
       }
     }
+    // 실험 기믹(?try=): 켠 것의 이름을 왼쪽 위에
+    const extra = w.tries ? w.tries.names.filter(n => !BASE_TRIES.includes(n)) : [];   // 기본 판으로 올린 것은 적지 않는다
+    if (extra.length) {
+      ctx.textAlign = 'left'; ctx.font = font(12, true); ctx.fillStyle = C.cyan; ctx.fillText('실험', 20, 66);
+      ctx.font = font(12); ctx.fillStyle = C.textDim;
+      extra.forEach((n, k) => ctx.fillText(LOOK.tries.names[n] ?? n, 20, 84 + k * 16));   // 보스 체력 막대 아래부터(겹치지 않게)
+    }
+    // 방을 넘어갈 때: 어두웠다가 밝아진다
+    const fu = (now - st.fadeAt) / (st.fadeSec || 1);
+    if (fu >= 0 && fu < 1) { ctx.fillStyle = `rgba(10,9,14,${(1 - fu).toFixed(3)})`; ctx.fillRect(0, 0, W, H); }
     // 시간
     ctx.font = font(15, true); ctx.fillStyle = C.text; ctx.textAlign = 'right';
     ctx.fillText(mmss(w.time), W - 20, 34);
     ctx.font = font(12); ctx.fillStyle = C.textDim;
-    ctx.fillText(`WASD 이동 · J/Shift 패링 · Space 회피 · K/Q 방패 · L/E 폭탄 · ${w.opts.store ? 'U 모은 탄 던지기' : 'U/I/O 무기 스킬'} · 1~4 무기 · V 시점 · Esc 멈춤 · F4 다시`, W - 20, H - 18);
+    ctx.fillText(`WASD 이동 · J/Shift 패링 · Space 회피 · K/Q 방패 · L/E 폭탄 · ${w.opts.store ? 'U 모은 탄 던지기' : 'U/I/O 무기 스킬'} · 1~4 무기 · V 시점 · Esc 멈춤 · F4 다시${w.stage ? ' · R 방 다시(죽은 뒤)' : ''}`, W - 20, H - 18);
+    ctx.fillText(`빌드 ${BUILD}`, W - 20, ui.bot ? 70 : 54);
     if (ui.bot) ctx.fillText(`봇: ${ui.bot}`, W - 20, 54);
     // F1 판정 보기
     if (ui.debug) debug(w, ui);
     // 멈춤·결과
     if ((w.result && (ui.resultAlpha ?? 1) > 0) || ui.paused) overlay(w, ui);   // 결과는 큰 순간이 지난 뒤 서서히(main이 resultAlpha를 준다)
+  }
+
+  // 스테이지: 몬스터 머리 위 체력 막대, 보상 이름, 문 표시(판 좌표 → 화면)
+  function stageLayer(w, ui) {
+    const M = LOOK.mobs, S = w.stage, now = ui.now;
+    if (!ui.project) return;
+    for (const m of w.enemies) {
+      if (m.dead || w.time < m.bornAt || m.hp >= m.maxHp) continue;
+      const s = ui.project(m.x, m.z, M.barY), frac = m.hp / m.maxHp, Lg = LOOK.guns.lag, tr = (st.mobTrail ??= new Map());
+      const t = tr.get(m.id) ?? { v: frac, last: frac, hold: 0 };   // 깎인 꼬리: 잠깐 남았다 줄어든다(보스 막대와 같다)
+      if (frac < t.last) t.hold = now + Lg.hold;
+      t.last = frac;
+      if (now > t.hold) t.v = Math.max(frac, t.v - Lg.rate * (ui.dt ?? 0.016));
+      if (t.v < frac) t.v = frac;
+      tr.set(m.id, t); if (tr.size > 96) tr.clear();
+      bar(s.x - M.barW / 2, s.y, M.barW, M.barH, t.v, C.hpTrail);
+      ctx.fillStyle = C.hp; ctx.fillRect(s.x - M.barW / 2, s.y, M.barW * Math.max(0, Math.min(1, frac)), M.barH);
+    }
+    ctx.textAlign = 'center'; ctx.font = font(14, true);
+    for (const r of S.rewards) {
+      const s = ui.project(r.x, r.z, 0), ready = w.time >= r.born + w.rules.stage.rewardDelay;
+      ctx.globalAlpha = ready ? 1 : 0.45;
+      ctx.fillStyle = r.kind === 'weapon' ? C.cyan : r.kind === 'charge' ? C.item : C.heal;
+      ctx.fillText(r.kind === 'heal' ? `체력 +${w.rules.stage.heal}` : LOOK.names.reward[r.what] ?? r.what, s.x, s.y + 22);
+      ctx.globalAlpha = 1;
+    }
+    if (S.door) { const s = ui.project(S.door.x, S.door.z, M.doorH + 0.4); ctx.fillStyle = Math.floor(now * 3) % 2 ? C.door : C.text; ctx.fillText('다음 방', s.x, s.y); }
   }
 
   function debug(w, ui) {
@@ -168,10 +219,11 @@ export function createHud(canvas, LOOK) {
     ctx.textAlign = 'center'; ctx.fillStyle = C.text;
     const s = w.stats;
     if (w.result) {
-      ctx.font = font(40, true); ctx.fillText(w.result === 'win' ? '승리' : '패배', W / 2, H / 2 - 60);
+      ctx.font = font(40, true); ctx.fillText(w.result === 'win' ? (w.stage ? '스테이지 완료' : '승리') : '패배', W / 2, H / 2 - 60);
       ctx.font = font(16);
       ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
-      ctx.fillStyle = C.textDim; ctx.fillText('F4 다시', W / 2, H / 2 + 14);
+      ctx.fillStyle = C.textDim; ctx.fillText(w.stage && w.result === 'lose' ? 'R 이 방 다시 · F4 처음부터' : 'F4 다시', W / 2, H / 2 + 14);
+      if (w.stage) ctx.fillText(`방 ${w.stage.room + 1} / ${w.stage.of} · 다시 한 횟수 ${w.stage.retries}` + w.stage.times.map(t => ` · 방 ${t.room} ${t.sec.toFixed(0)}초`).join(''), W / 2, H / 2 + 40);
     } else {
       ctx.font = font(32, true); ctx.fillText('멈춤', W / 2, H / 2 - 100);
       ctx.font = font(15);
@@ -198,5 +250,6 @@ export function createHud(canvas, LOOK) {
     shakeStock(now, what) { st.stockShake[what] = now; },
     flashStagger(now) { st.staggerFlashAt = now; },
     banner(now, text, sec) { st.banner = { text, at: now, sec }; },
+    fadeIn(now, sec) { st.fadeAt = now; st.fadeSec = sec; },
   };
 }

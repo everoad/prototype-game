@@ -48,6 +48,18 @@ function waveHits(w, qx, qz, react) {
   }
   return out;
 }
+// 돌격병의 줄(스테이지): 돌격병 몸이 줄 위 (qx,qz)의 몸과 겹치는 [들어옴, 나감] — 줄 밖이거나 이미 지났으면 null
+function chargeSpan(w, a, m, qx, qz) {
+  const R = w.rules, C = R.mobs.charger, body = m.r + R.player.bodyR, ux = Math.cos(a.face), uz = Math.sin(a.face);
+  const dx = qx - a.x, dz = qz - a.z, s = dx * ux + dz * uz, lat = Math.abs(-dx * uz + dz * ux);
+  if (lat >= body || s < -body || s > a.len + body) return null;
+  const half = Math.sqrt(body * body - lat * lat), sIn = s - half;
+  let t0;
+  if (m.state === 'windup') t0 = m.stateAt + (a.warn ?? C.warn) - w.time + Math.max(0, sIn) / C.dash;
+  else if (m.state === 'dash') { const sb = (m.x - a.x) * ux + (m.z - a.z) * uz; if (sb > s + half) return null; t0 = Math.max(0, sIn - sb) / C.dash; }
+  else return null;
+  return [t0, t0 + 2 * half / C.dash];
+}
 // 빔: 지금부터 t초 뒤 (qx,qz)가 빔 폭(+ 여유) 안인가
 function beamAt(w, m, qx, qz, t, margin) {
   const L = w.rules.laser, T = w.time + t;
@@ -56,6 +68,22 @@ function beamAt(w, m, qx, qz, t, margin) {
   const ux = Math.cos(a), uz = Math.sin(a), s = (qx - m.x) * ux + (qz - m.z) * uz;
   if (s < 0) return false;
   return Math.abs(-(qx - m.x) * uz + (qz - m.z) * ux) < L.width / 2 + w.rules.player.hitR + margin;
+}
+
+// 흰 탄 찾아가기: (ux, uz)로 look초 걷고 선다면, 받을 탄 가운데 하나라도 ahead초 안에 within 안으로 지나가는가
+function meets(f, wants, lag, px, pz, ux, uz, look, HB) {
+  for (const k of wants) {
+    const vx = f.vx[k], vz = f.vz[k], x0 = f.x[k] + vx * lag - px, z0 = f.z[k] + vz * lag - pz;
+    // 걷는 동안: 서로의 속도 차로 가장 가까운 때
+    const dvx = vx - ux, dvz = vz - uz, dd = dvx * dvx + dvz * dvz;
+    const t1 = dd > 0 ? Math.max(0, Math.min(look, -(x0 * dvx + z0 * dvz) / dd)) : 0;
+    if (Math.hypot(x0 + dvx * t1, z0 + dvz * t1) <= HB.within) return true;
+    // 선 뒤: 탄의 길에서 가장 가까운 때(ahead초 안)
+    const x1 = x0 + dvx * look, z1 = z0 + dvz * look, vv = vx * vx + vz * vz;
+    const t2 = vv > 0 ? Math.max(0, Math.min(HB.ahead, -(x1 * vx + z1 * vz) / vv)) : 0;
+    if (Math.hypot(x1 + vx * t2, z1 + vz * t2) <= HB.within) return true;
+  }
+  return false;
 }
 
 export function createBot(kind, seed) {
@@ -68,6 +96,9 @@ export function createBot(kind, seed) {
   let ring = null, head = 0, frames = 0, nextThink = 0, mx = 0, mz = 0, skillTurn = 0;
   let zoneGoal = null, lastBossState = null;   // 용 판: 머리 공격이 끝날 때 가끔 옆·뒤로 돌아간다({ off, R, until })
   const plans = new Map();   // 기회(탄 id·생긴 때 / 장판 born) → { parry: bool, jitter }
+  let snipeLeft = 0;   // 저격(실험): 누르고 있을 남은 틱
+  let pinch = false, calm = false;   // 실험 기믹: 서 있으면 맞는다(갈고리로 비킨다) / 지금 자리가 안전함
+  let roomPick = null;   // 스테이지: 이 방에서 고를 보상({ room, kind })
   let userChance = 0.5, userB = null;   // user 봇: 받는 기회 몫과 규칙 묶음(판 규칙에서 한 번 읽는다)
 
   function snapshot(w, R) {
@@ -120,7 +151,8 @@ export function createBot(kind, seed) {
       const S = R.store, n = p.store.length;
       let heal = 0; for (const o of p.store) heal += o.perfect ? S.heal[1] : S.heal[0];
       const free = p.dyingAt == null && !(p.auto && now < p.autoUntil);   // 못 던지는 때엔 누르지 않는다(틱 소리만 난다)
-      toss = free && (n >= S.cap || (n >= 2 && R.player.hp - p.hp >= heal) || bossGroggy(w) || p.hp <= R.player.hp * 0.25);
+      const target = !w.boss.away || !!w.aim;   // 일반 방: 겨눌 적이 없으면 아낀다(다음 방으로 들고 간다)
+      toss = free && target && (n >= S.cap || (n >= 2 && R.player.hp - p.hp >= heal) || bossGroggy(w) || p.hp <= R.player.hp * 0.25);
     }
     if (w.execute) return { mx: 0, mz: 0, parry: false, dodge: false, throw: false };
     if (parries && canExecute(w)) return { mx: 0, mz: 0, parry: !toss, dodge: false, throw: toss };   // 그로기 곁 = (모은 것부터 던지고) 처형
@@ -137,13 +169,28 @@ export function createBot(kind, seed) {
     if (zoneGoal && now >= zoneGoal.until) zoneGoal = null;
     let parry = false, dodge = false;
     // 근접 장판 + 검기(부채). 박치기 줄·파도 예고 원은 아래에서 따로 센다.
-    const seenAreas = [...w.melee.areas, ...w.floorAreas.filter(a => a.kind === 'sword' || a.kind === 'tail')].filter(a => a.born <= now - B.react + 1e-9);   // 부채꼴 장판(검기·꼬리)
+    const seenAreas = [...w.melee.areas, ...w.floorAreas.filter(a => a.kind === 'sword' || a.kind === 'tail' || a.kind === 'shell' || a.kind === 'swing' || a.kind === 'boom')].filter(a => a.born <= now - B.react + 1e-9);   // 부채꼴 장판(검기·꼬리)
     const slamOn = !!w.floor && w.floor.kind === 'slam' && w.floor.born <= now - B.react + 1e-9;
     const slamKey = slamOn ? `slam:${Math.round(w.floor.born * 120)}` : null;
     const slamParry = slamOn && w.floor.color !== 'red' && plan(slamKey, true).parry;
     const waves = waveHits(w, p.x, p.z, B.react);
     const seenBeams = w.beams.filter(m => m.born <= now - B.react + 1e-9);
     const seenLanes = w.lanes.filter(l => l.born <= now - B.react + 1e-9);
+    // 스테이지의 일반 방: 돌격 줄(받을 생각이면 줄 위에서 기다려 몸을 받아친다), 갈 곳(보상·문)
+    const away = !!w.boss.away, charges = [];
+    if (away) for (const a of w.floorAreas) {
+      if (a.kind !== 'charge' || a.born > now - B.react + 1e-9) continue;
+      const m = w.enemies.find(e => e.id === a.owner);
+      if (m && !m.dead) charges.push({ a, m, key: `charge:${a.owner}:${Math.round(a.born * 120)}` });
+    }
+    let goal = null;
+    if (away && w.stage) {
+      const S = w.stage;
+      if (S.phase === 'reward' && S.rewards.length) {
+        if (!roomPick || roomPick.room !== S.room) roomPick = { room: S.room, kind: p.hp <= R.player.hp * B0.room.healBelow ? 'heal' : S.rewards[0].kind };
+        goal = S.rewards.find(r => r.kind === roomPick.kind) ?? S.rewards[0];
+      } else if (S.phase === 'door' && S.door) goal = { x: S.door.x, z: S.door.z };
+    }
 
     // 패링: 받을 생각인 흰·금 탄이 lead초 뒤 패링 원에 닿으면 누른다
     if (parries && f && !parryActive(w) && !isDodging(w) && now >= p.parry.failUntil) {
@@ -175,6 +222,12 @@ export function createBot(kind, seed) {
         const pl = plan(h.key, true);
         if (pl.parry && h.t >= lo + pl.jitter && h.t <= hi + pl.jitter) parry = true;
       }
+      for (const c of charges) {   // 돌격병 몸: 닿기 lead초 전
+        const pl = plan(c.key, true);
+        if (parry || !pl.parry) continue;
+        const sp = chargeSpan(w, c.a, c.m, p.x, p.z);
+        if (sp && sp[0] >= lo + pl.jitter && sp[0] <= hi + pl.jitter) parry = true;
+      }
     }
 
     // 받을 흰·금 탄이 곧 오면(가만히 있을 때 0.5초 안) 그 길을 지킨다 — 위험하지 않은 한
@@ -194,6 +247,7 @@ export function createBot(kind, seed) {
       }
       // 받을 박치기가 곧 오면 줄 위에서 기다린다
       if (!hold && slamParry) { const sp = slamSpan(w, p.x, p.z); if (sp && sp[0] < B.look) hold = true; }
+      for (const c of charges) { if (hold || !plan(c.key, true).parry) continue; const sp = chargeSpan(w, c.a, c.m, p.x, p.z); if (sp && sp[0] < B.look) hold = true; }
     }
 
     // 움직임: 정한 간격마다 17가지 중 위험이 가장 작은 것
@@ -201,6 +255,12 @@ export function createBot(kind, seed) {
       nextThink = now + B.think;
       let best = Infinity, bestDir = DIRS[0], bestEarly = 0, stayDanger = Infinity;
       const look = B.look, n = B.samples, speed = R.player.speed;
+      // 흰 탄 찾아가기(실험): 받을 흰·금 탄 가운데 곧(ahead초 안) 곁을 지나갈 것 — 그 길로 들어서는 쪽에 점수를 준다
+      const HB = B0.hunt, wants = [];
+      if (parries && f && w.tries && w.tries.on.hunt) for (let k = 0; k < f.n; k++) {
+        const kd = f.kind[k];
+        if ((kd === K.WHITE || kd === K.GOLD) && plan(`${f.id[k]}:${f.born[k]}`, true).parry) wants.push(k);
+      }
       for (const [dx, dz] of DIRS) {
         let danger = 0, early = 0;
         for (let j = 1; j <= n; j++) {
@@ -235,9 +295,26 @@ export function createBot(kind, seed) {
             const sp = slamSpan(w, qx, qz), hw = look / n / 2;
             if (sp && t >= sp[0] - hw && t <= sp[1] + hw) { danger += 30; if (sp[0] < 0.17) early++; }
           }
+          // 돌격병의 줄(받지 않을 때): 그때 몸이 그 자리를 지나가면
+          for (const c of charges) {
+            if (plan(c.key, true).parry) continue;
+            const sp = chargeSpan(w, c.a, c.m, qx, qz), hw = look / n / 2;
+            if (sp && t >= sp[0] - hw && t <= sp[1] + hw) { danger += 30; if (sp[0] < 0.17) early++; }
+          }
+          // 불 장판(실험): 타는 자리는 밟지 않는다
+          if (w.tries && w.tries.fires.length && j <= 3) for (const fr of w.tries.fires) if (Math.hypot(qx - fr.x, qz - fr.z) <= fr.r + B.margin) danger += 12;
+          // 밀물(실험): 예고된 반쪽에 남아 있을수록 위험 — 일찍 건너간다
+          if (w.tries && w.tries.tide && w.tries.tide.area && !w.tries.tide.area.hit && j === n) { const ta = w.tries.tide.area; if (qx * ta.side > -R.player.bodyR) danger += 12 + Math.abs(qx) * 2; }
           // 레이저 빔
           for (const m of seenBeams) if (beamAt(w, m, qx, qz, t, B.margin)) { danger += 10 * (n + 1 - j); if (j <= 2) early++; }
-          if (j === n) {
+          if (away && goal) {   // 일반 방: 갈 곳(보상·문)이 있으면 그리로 — 첫 걸음의 거리로 잰다(멀리 내다보면 지나쳐서 제자리에 선다)
+            if (j === 1) danger += Math.hypot(qx - goal.x, qz - goal.z) * B0.room.pull;
+          } else if (j === n && away) {   // 아니면 가장 가까운 적과 거리를 지킨다
+            const tgt = w.enemies.find(e => e.kind === 'totem' && !e.dead && now >= e.bornAt) ?? w.aim;   // 보호탑이 있으면 탑 곁으로(가장 가까운 적을 겨누니 다가가야 탑을 쏜다)
+            if (tgt) { const d = Math.hypot(qx - tgt.x, qz - tgt.z), [k0, k1] = tgt.kind === 'totem' ? B0.room.totem : B0.room.keep; danger += (Math.max(0, k0 - d) + Math.max(0, d - k1)) * 0.6; }
+            const edge = Math.min(R.board.hx - Math.abs(qx), R.board.hz - Math.abs(qz));
+            if (edge < 1.5) danger += (1.5 - edge) * 1.0;
+          } else if (j === n) {
             const db = Math.hypot(qx - w.boss.x, qz - w.boss.z);
             // 패링하는 봇은 돌진·근접 동안 달아나지 않고 붙어서 받는다(사람도 그렇다 — 달아나면 패링 기회가 사라진다)
             const duel = parries && (w.boss.state === 'rush' || w.boss.state === 'melee' || w.boss.state === 'meleeWait' || !!w.melee.combo);
@@ -251,11 +328,13 @@ export function createBot(kind, seed) {
           }
         }
         if (dx === 0 && dz === 0) stayDanger = danger;
+        if (wants.length && meets(f, wants, lag, p.x, p.z, dx * speed, dz * speed, look, HB)) danger -= HB.pull;
         if (danger < best - 1e-9) { best = danger; bestDir = [dx, dz]; bestEarly = early; }
       }
       if (hold && stayDanger < 10) { bestDir = DIRS[0]; bestEarly = 0; }
       mx = bestDir[0]; mz = bestDir[1];
       if (dodges && bestEarly > 0 && p.dodge.charges > 0 && !isDodging(w)) dodge = true;
+      pinch = stayDanger >= 10 && best < stayDanger; calm = stayDanger < 5;   // pinch = 서 있으면 맞는데 비킬 길이 있다
     }
     if (!moves) { mx = 0; mz = 0; }
     // 걸어서 못 피하는 빨간 파도(또는 받지 않을 흰 파도): 닿기 dodgeLead초 전 구르기
@@ -269,6 +348,28 @@ export function createBot(kind, seed) {
       const owned = ['missile', 'beam', 'drone'].filter(g => Wp.on.includes(g));
       if (owned.length) { skill = owned[skillTurn % owned.length]; skillTurn++; }
     }
-    return { mx, mz, parry, dodge, skill, throw: toss };
+    // 실험 기믹(?try=): 갈고리 = 서 있으면 맞거나 갈 곳(보상·문)이 멀 때 가는 쪽 말뚝으로, 돌진 베기 = 안전하고 충전이 가득일 때 가까운 적을 지나간다
+    let act = false;
+    const X = w.tries;
+    if (X && moves) {
+      // 무적 없는 줄(rope)을 피하는 데 쓰면 탄 속으로 끌려가 더 맞는다(봇 판 4/10) — 멀리 갈 때만. 날아가는 줄(sky)은 피할 때도 쓴다
+      if ((X.on.rope || X.on.sky) && !X.rope.to && now >= X.rope.readyAt && ((X.on.sky && pinch) || (goal && Math.hypot(goal.x - p.x, goal.z - p.z) > B0.room.ropeFar)) && (mx !== 0 || mz !== 0)) act = true;
+      const a = w.aim;
+      const da = a && !a.dead ? Math.hypot(a.x - p.x, a.z - p.z) : Infinity;
+      if (X.on.swap && w.boss.away && pinch && da < Infinity && now >= X.swapAt) act = true;   // 자리 바꾸기: 서 있으면 맞을 때 겨눈 몬스터와
+      if (X.on.mine && !toss && p.store.length >= 1 && X.mines.length < R.tries.mine.max && da < B0.room.mineFrom) act = true;   // 지뢰: 적이 다가왔을 때 발밑에
+      if (X.on.dash && dodges && !dodge && !parry && calm && a && !a.dead && p.dodge.charges >= R.dodge.charges && !isDodging(w) && Math.hypot(a.x - p.x, a.z - p.z) < B0.room.dashFrom) {
+        const d = Math.hypot(a.x - p.x, a.z - p.z) || 1;
+        mx = (a.x - p.x) / d; mz = (a.z - p.z) / d; dodge = true;
+      }
+    }
+    // 저격(실험): 가득 모았고 체력이 넉넉하면 던지는 대신 쏜다 — 잠깐 눌렀다 뗀다(선은 처음부터 겨눈 적을 향한다). 모자라면 던져서 회복
+    let aimHold = false;
+    if (X && X.on.snipe) {
+      if (snipeLeft > 0) { snipeLeft--; aimHold = snipeLeft > 0; toss = false; }   // 마지막 틱은 뗀다(그 틱에 나간다)
+      else if (toss && w.aim && p.store.length >= R.store.cap && p.hp >= R.player.hp * B0.snipe.hpAbove) { snipeLeft = B0.snipe.ticks; aimHold = true; toss = false; }
+      if (aimHold) { mx = 0; mz = 0; }   // 조준점은 겨눈 적에 붙어 있다 — 고르지 않고 쏜다
+    }
+    return { mx, mz, parry, dodge, skill, throw: toss, act, hold: aimHold };
   };
 }

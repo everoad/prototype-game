@@ -40,7 +40,7 @@ export function damageBoss(w, amount, src, raw = false) {
 // 무력화: 다 차면 그로기 3초, 막대 0, 판의 적 탄 전부 지움. 그로기 중에는 차지 않는다.
 export function addStagger(w, amount) {
   const b = w.boss, S = w.rules.stagger;
-  if (b.dead || bossGroggy(w)) return;
+  if (b.dead || b.away || bossGroggy(w)) return;   // 자리에 없는 보스(일반 방)에게는 쌓이지 않는다
   b.stagger += amount;
   if (b.stagger >= S.max) {
     b.stagger = 0;
@@ -53,6 +53,14 @@ export function addStagger(w, amount) {
 // 몸끼리: 플레이어 몸이 보스 몸에 겹치면 둘레로 밀어낸다(닿아도 피해 없음). 난간과 몸 사이에 끼면 난간을 따라 비껴 나간다.
 export function separateBodies(w) {
   const p = w.player, b = w.boss, r = w.rules, pr = r.player.bodyR, R = r.boss.r;
+  if (b.away) {   // 일반 방(스테이지): 보스는 없고 몬스터 몸이 단단하다
+    for (let k = 0; k < 2; k++) for (const e of w.enemies) {
+      if (e.dead || w.time < e.bornAt) continue;
+      [p.x, p.z] = slideOut(p.x, p.z, pr, e.x, e.z, e.r);
+      [p.x, p.z] = clampToBoard(r, p.x, p.z, pr);
+    }
+    return;
+  }
   for (let k = 0; k < 3; k++) {
     [p.x, p.z] = slideOut(p.x, p.z, pr, b.x, b.z, R);
     [p.x, p.z] = clampToBoard(r, p.x, p.z, pr);

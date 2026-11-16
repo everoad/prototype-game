@@ -2,6 +2,7 @@
 // 늘 보스를 본다(돌아보는 시간 없음), 가는 쪽으로 기울고 서면 살짝 튕긴다. 보스는 준비 때 다음 위협 색으로 번쩍인다(§5.1).
 import { canExecute } from '../sim/execute.js';
 import { createDragonView } from './dragonView.js';
+import { warpAt } from './warp.js';
 
 export function createActors(view, LOOK, opts = {}) {
   const THREE = view.THREE, C = LOOK.colors, S = LOOK.sizes, Bd = LOOK.body, L = view.layers;
@@ -171,8 +172,10 @@ export function createActors(view, LOOK, opts = {}) {
     if (now < st.shakeUntil) { bx += (Math.random() - 0.5) * st.shakeAmp; bz += (Math.random() - 0.5) * st.shakeAmp; }
     const jt = now - st.joltAt;
     if (jt < 0.12) { const k = Math.sin(jt / 0.12 * Math.PI) * st.jolt, a = Math.atan2(b.z - p.z, b.x - p.x); bx += Math.cos(a) * k; bz += Math.sin(a) * k; }
+    if (w.tries?.snipe) { const o = warpAt(LOOK.tries.snipe.warp, w.tries.snipe, bx, bz, w.time, [0, 0]); bx += o[0]; bz += o[1]; }   // 저격에 맞아 젖혀진다(그림만)
     boss.position.set(bx, 0, bz);
     boss.rotation.y = -b.face;
+    boss.visible = !b.away;   // 일반 방(스테이지)에서는 보스가 자리에 없다
     // 몸짓: 준비 젖힘·움츠림, 돌진 늘어남, 그로기 주저앉음
     let tilt = 0, sy = 1, sxz = 1, stretch = 1, side = 0;
     const state = b.state, rush = w.melee.rush, fa = state === 'floor' ? w.floor : null;
@@ -261,6 +264,7 @@ export function createActors(view, LOOK, opts = {}) {
     bossPulse(now) { st.pulseAt = now; },
     bossKick(now) { st.kickAt = now; },
     playerDown(now) { st.downAt = now; },
+    playerUp() { st.downAt = null; st.deadAt = null; },   // 방 다시 하기(스테이지)
     dim(now) { st.dimAt = now; },
     toggleRing() { ringOn = !ringOn; return ringOn; },
     player, boss,

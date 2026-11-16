@@ -64,7 +64,7 @@ export function tryDodge(w, input) {
   }
   b.dodgeUntil = -1;
   let dx = input.mx || 0, dz = input.mz || 0;
-  if (dx === 0 && dz === 0) { dx = p.x - w.boss.x; dz = p.z - w.boss.z; }
+  if (dx === 0 && dz === 0) { const from = w.boss.away ? w.aim : w.boss; if (from) { dx = p.x - from.x; dz = p.z - from.z; } }   // 겨눈 적(보스)의 반대쪽
   const len = Math.hypot(dx, dz);
   if (len < 1e-9) { dx = -1; dz = 0; } else { dx /= len; dz /= len; }
   d.charges--; d.rechargeAt.push(w.time + r.dodge.recharge);

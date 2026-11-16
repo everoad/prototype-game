@@ -17,6 +17,7 @@ export function floorOf(sx, sy, yawDeg, pitchDeg) {
 // 담을 것: [플레이어, 보스, 빨강·금 차선 양 끝(판 안으로 자름), 탄 벽 시작 줄 양 끝]. 앞 둘은 늘 이 차례(frameTarget이 쓴다).
 export function framingPoints(w, LOOK) {
   const C = LOOK.camera, p = w.player, b = w.boss, R = w.rules;
+  if (b.away) return roomPoints(w, LOOK);
   const out = [{ x: p.x, z: p.z, r: C.playerMargin }, { x: b.x, z: b.z, r: R.boss.r + C.bossMargin }];
   for (const l of w.lanes) {
     if (l.kind !== K.RED && l.kind !== K.GOLD) continue;
@@ -32,6 +33,18 @@ export function framingPoints(w, LOOK) {
   for (const it of w.items ?? []) out.push({ x: it.x, z: it.z, r: C.laneMargin });   // 아이템(§4.9)이 화면 밖에 생기지 않게
   for (const m of w.beams ?? []) { const d = exitDist(R.board, m.x, m.z, m.angle); out.push({ x: m.x + Math.cos(m.angle) * d, z: m.z + Math.sin(m.angle) * d, r: C.laneMargin }); }
   return out;
+}
+
+// 일반 방(스테이지): [플레이어, 볼 것들의 가운데, 살아 있는 몬스터(등장 예고 포함)·보상·문, 돌격 줄 끝]. 보스는 자리에 없다.
+function roomPoints(w, LOOK) {
+  const C = LOOK.camera, p = w.player, S = w.stage, see = [];
+  for (const m of w.enemies) if (!m.dead) see.push({ x: m.x, z: m.z, r: m.r + C.laneMargin });
+  for (const r of S?.rewards ?? []) see.push({ x: r.x, z: r.z, r: C.laneMargin });
+  if (S?.door) see.push({ x: S.door.x, z: S.door.z, r: C.laneMargin });
+  for (const a of w.floorAreas ?? []) if (a.shape === 'lane') see.push({ x: a.x + Math.cos(a.face) * a.len, z: a.z + Math.sin(a.face) * a.len, r: C.laneMargin });
+  let cx = 0, cz = 0;
+  for (const q of see) { cx += q.x / see.length; cz += q.z / see.length; }
+  return [{ x: p.x, z: p.z, r: C.playerMargin }, { x: cx, z: cz, r: C.playerMargin }, ...see];
 }
 
 // 이상적인 틀: 가운데 = 보스→플레이어 playerShare 지점, 가로 = 모두 담는 최소값을 [minW, maxW]로.

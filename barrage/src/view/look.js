@@ -14,6 +14,7 @@ export const LOOK = {
     orbFlash: '#d9a8ff', beamCore: '#ffb3b8', beamTip: '#ff8a91',
     board2: '#2b2030', grid2: '#47304c', railTop2: '#8c4a6e',   // 2단계의 판(자줏빛으로 물든다)
     heal: '#8dffc0',   // 회복(모아 던지기 §4.11) — 옅은 초록(아이템 연두·플레이어 청록과 다르게)
+    mob: '#6b3e8e', mobShield: '#9d8fbd', door: '#9fd0ff',   // 일반 몬스터 몸(보스와 같은 어두운 자주, 조금 밝게)·방패 판·문
     item: '#a6ff4d',   // 아이템(방패·폭탄 사용권, §4.9) — 아직 아무 뜻이 없던 연두(청록 플레이어와 멀게)
   },
   sizes: {
@@ -36,11 +37,51 @@ export const LOOK = {
     orbR: 0.42, orbFlashSec: 0.12,
     execRing: 0.35, execRingAlpha: [0.25, 0.9], letterbox: 0.11,   // 처형 금빛 고리(보스 몸 + 이만큼, 그로기 / 곁일 때 밝기), 검은 띠 높이(화면 높이 몫)
     weaponAlpha: 0.5, weaponBeamAlpha: 0.45, weaponBeamWidth: 0.18, weaponBeamGlow: 3.5, skillBeamWidth: 3, frenzyDroneR: 0.26,   // 굵은 빔·드론 연사(스킬)
-    missileLen: 0.45, missileTail: 0.7, droneR: 0.16,   // 보조 무기(§4.10): 청록, 옅게(빔 빛 = 속 너비 × glow, 미사일 꼬리)
+    // 보조 무기(§4.10)의 미사일·드론 크기는 guns로 옮겼다(평타·무기 연출)
     storeOrbR: 0.12, storeOrbY: 0.95, storeSpin: 2.6, storeArrive: 0.16, storeArcWidth: 0.08, storeArcGapDeg: 14, thrownScale: 1.3,   // 모아 던지기(§4.11): 모인 구슬(크기·높이·도는 빠르기·빨려 드는 시간), 고리 칸(굵기·틈), 던진 탄 크기
     shieldAlpha: 0.22, shieldEdge: 0.6, itemR: 0.42, itemBlink: 3, itemGlow: 0.35,   // 방패 원판(탄 높이)·테 밝기, 아이템 크기, 사라지기 전 깜빡이는 초, 바닥 빛 밝기
   },
-  names: { ranged: '수호자', dragon: '용' },   // 시작 장면에 뜨는 보스 이름
+  names: { ranged: '수호자', dragon: '용', reward: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', shield: '방패 +1', bomb: '폭탄 +1', heal: '체력 회복' } },   // 시작 장면에 뜨는 보스 이름 · 보상 이름
+  // 실험 기믹(?try=): 말뚝(높이·굵기·꼭대기), 줄 굵기, 기둥 높이, 불 밝기(낮음~높음)·사그라드는 시간, 이름(겹 화면)
+  tries: {
+    // 저격 한 방(사용자 "진심 펀치처럼 공기를 가르며 주변으로 확 퍼지는 연출"): stop = 떼는 순간의 멈춤, warp = 줄 곁의 것이 밀렸다 돌아오는 그림(warp.js),
+    // gust = 줄 양옆으로 튀어 나가는 바람 줄(n개, wave U/s로 줄을 따라 차례로), dust = 줄을 따라 이는 먼지 수, punch = 화면 당김.
+    snipe: { stop: 0.07, punch: [0.05, 0.22], dust: 7, hitBurst: 3.4,
+      warp: { sec: 0.34, side: 0.9, fwd: 0.8, reach: 3.2, width: 0.7, back: 0.5 },
+      gust: { n: 48, sec: 0.42, dist: 2.8, len: 1.5, w: 0.08, alpha: 0.85, wave: 70, y: 0.55, start: 0.25, sweep: 0.7 },
+      cross: { arm: 0.6, gap: 0.25, w: 0.1, dot: 0.12, y: 0.75, spin: 0.6 }, aimW: 0.14, aimAlpha: 0.6, glowW: 0.8, glowAlpha: 0.12, flashW: 1.1, flashSec: 0.22, y: 0.7, shake: 16, shakeSec: 0.28, burst: 2.4, number: 34, dim: 'saturate(0.55) brightness(0.8)' },
+    bubbleR: 2.3, bubbleAlpha: [0.16, 0.34], mineR: 0.32, crystalH: 1.3, crystalR: 0.45, boomBurst: 2.2, boomShake: 9, boomShakeSec: 0.18, anchorH: 1.2, anchorR: 0.12, anchorTop: 0.34, ropeW: 0.06, pillarH: 1.9, fireAlpha: [0.28, 0.5], fireFade: 0.7, blockGap: 0.08, dashBurst: 1.4, dashNumber: 22, ropeShake: 3, ropeShakeSec: 0.08,
+    names: { rope: '갈고리 이동 — I·F: 가는 쪽 말뚝으로(맞을 수 있다)', sky: '날아가는 갈고리 — I·F: 가는 쪽 말뚝으로(공중이라 안 맞는다)', pillars: '엄폐 기둥 — 보라·빨강 탄과 평타를 막는다(흰·금은 지나간다), 많이 막으면 무너진다', fire: '불 장판 — 빨간 원이 떨어진 자리가 탄다(적도 탄다)', dash: '돌진 베기 — 회피로 적을 지나가면 피해', lance: '꿰뚫는 던지기 — 던진 탄이 곧게 뚫고 간다', mine: '지뢰 — I·F: 모은 탄 하나를 발밑에(적이 밟으면 터진다)', orbit: '오라 — 모은 탄이 있으면 가까운 적이 깎인다', crystal: '수정 — 곁에서 패링하면 둘레의 보라 탄이 흰 탄으로', swap: '자리 바꾸기 — I·F: 겨눈 몬스터와', focus: '집중 사격 — 잠깐 서 있으면 평타 2배', graze: '스침 모으기 — 네 번 스치면 한 칸', bubble: '보호막 — 보스가 막을 두르면 던진 탄만 통한다(세 발이면 깨진다)', tide: '밀물 — 빨간 반쪽에서 건너가라', always: '늘 나가는 무기 — 패링하면 과열(더 자주 쏜다)', hunt: '흰 탄 찾아가기 — 나를 겨눈 탄은 보라, 그 옆이 흰색', vary: '공격 다양화 — 사수: 세 발·넓은 부채·연사, 돌격병: 연속 돌진, 포격병: 줄 포격', snipe: '저격 — I·F 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다. WASD로 그쪽의 가까운 적을 고르고 떼면 쏜다(회피 = 취소)' },
+  },
+  // 평타·무기 연출(사용자 "기본 공격이나 무기도 좀 더 화려했으면"): 선과 불티로만 — 부드러운 빛·연기는 쓰지 않는다(사용자가 고른 느낌). 청록만, 적 탄 아래 층.
+  // head = 평타 머리(밝고 짧게 — 꼬리는 sizes.shotLen·shotAlpha), muzzle = 쏠 때 앞으로 튀는 불티, heat = 과열(패링 뒤 가동 시간) 동안의 굵기 배율,
+  // missile = 머리 + 지나온 길을 따라 그리는 꼬리(trail: step마다 자리를 n개 기억해 잇는다 — 휘어 날면 꼬리도 휜다, 뒤로 갈수록 w[0] → w[1]로 가늘고 dim까지 어둡게), beam = 속 밝기와 양옆 가는 줄·닿는 곳 불티, drone = 몸, fan = 산탄이 나갈 때 부채꼴 불티,
+  // flinch = 맞은 몬스터의 움찔(밀림·부풂), number = 평타·무기 누적 피해 숫자(every초마다, big 이상 한 방은 제 숫자가 있어 뺀다), lag = 몬스터 체력 막대 잔상이 줄어드는 빠르기.
+  guns: {
+    head: { len: 0.34, w: 0.11, alpha: 0.95 },
+    muzzle: { n: 3, speed: 16, life: 0.07, size: 0.05, coneDeg: 26 },
+    heat: { shotScale: 1.4, headScale: 1.3, missileScale: 1.3 },
+    missile: { headLen: 0.62, headW: 0.16, headAlpha: 0.95, hitBurst: 0.9, launch: 0.5, trail: { n: 18, step: 0.16, w: [0.12, 0.02], dim: 0.2, alpha: 0.85 } },
+    beam: { coreAlpha: 0.9, rail: 0.27, railW: 0.045, railAlpha: 0.8, sparkEvery: 0.05, sparkSize: 0.7 },
+    drone: { r: 0.23, alpha: 0.95, spark: 0.35 },
+    fan: { n: 8, speed: 20, life: 0.09, size: 0.06 },
+    flinch: { sec: 0.1, push: 0.15, pop: 0.12 },
+    number: { every: 0.45, min: 12, big: 60, size: 15 },
+    lag: { hold: 0.25, rate: 0.9 },
+  },
+  // 일반 몬스터·보상·문(스테이지 설계 §6): 단순한 도형. 크기 [x 앞뒤, y 높이, z 옆] U
+  mobs: {
+    shooter: { r: 0.5, h: 1.3, barrel: [0.6, 0.14, 0.14] },
+    charger: { r: 0.62, len: 1.7, flat: 0.55, y: 0.5 },
+    mortar: { box: [1.2, 0.6, 1.2], barrel: [0.2, 1.1], tilt: 0.9 },
+    shield: { box: [0.8, 1.3, 0.9], plate: [0.14, 1.5, 1.7], plateAt: 0.62 },
+    bomber: { r: 0.5, fuse: [0.07, 0.35] },
+    totem: { r: 0.55, h: 2.3, cap: 0.5, auraAlpha: 0.1 },
+    markerR: 0.7, markerAlpha: 0.4, pop: 0.18, hitFlash: 0.08, dieSec: 0.22,
+    barW: 38, barH: 4, barY: 1.9,
+    rewardR: 0.45, rewardY: 1.0, rewardSpin: 1.6, rewardBob: 0.12, rewardGlow: 0.3, rewardFloorR: 1.0,
+    doorH: 2.4, doorPost: 0.22, doorGlow: 0.5, doorLight: 3,
+  },
   // 그리는 순서(아래 → 위, §7): 적 탄은 깊이와 상관없이 몸 위에
   draw: { order: { floor: 0, floorFx: 1, telegraph: 2, shadow: 3, shots: 4, actors: 5, bullets: 6, reflect: 7, fx: 8, marker: 9 } },
   body: {
@@ -95,10 +136,12 @@ export const LOOK = {
     bossChunks: { at: [0.75, 0.25], burst: 2.4, dust: 1.6, shakePx: 10, shakeSec: 0.2, jolt: 0.3 },   // 보스 체력이 이 몫을 지날 때 파편(50%는 2단계 넘어감이 맡는다)
     aura: { every: 0.14, glow: 0.6 },   // 무기 가동(패링 뒤): 몸에서 청록 알갱이가 오르는 간격, 몸 빛
     intro: { sec: 1.1, hold: 0.22 },    // 시작 장면: 길이, 카메라 당김   // 반격 기회(과열): 끝나기 blink초 전부터 깜빡, 탄 굵기, 몸 빛
+    // 스테이지: 몬스터 죽음(파편·작은 흔들림), 방 정리·방 번호 큰 글자, 보상 줍기, 보스 등장(당김), 방 넘어갈 때 어두워졌다 밝아짐
+    stage: { deathBurst: 1.1, deathShake: 5, deathShakeSec: 0.12, blockGap: 0.12, spawnGap: 0.2, clearSec: 1.3, clearEdge: 0.5, roomSec: 1.3, pickBurst: 1.6, pickNumber: 26, bossHold: 0.2, bossSec: 1.1, fade: 0.35, dashShake: 4, dashShakeSec: 0.1 },
     rush: { kickPx: 16, kickSec: 0.18, arriveShake: 10, arriveSec: 0.18 },
     slam: { shakePx: 10, shakeSec: 0.2 },
     // 원거리 재설계: 박치기 받아냄(근접 패링 위에 크게 튕김) · 난간 쿵 · 파도 시작 · 레이저 발사 떨림
-    slamParry: { jolt: 0.5, shakePx: 12, shakeSec: 0.2 },
+    slamParry: { jolt: 0.2, shakePx: 10, shakeSec: 0.16 },   // 받아쳐진 돌진: 크게 튕기면 경직처럼 보여 줄였다(사용자 2026-11-17)
     slamWall: { shakePx: 12, shakeSec: 0.22, dust: 1.8, dustLine: 5, dustLineSize: 0.9 },   // dustLine: 지나간 길 먼지 수
     wave: { shakePx: 6, shakeSec: 0.15, dust: 1.4 },
     laser: { shakePx: 4, shakeSec: 0.8 },
@@ -133,7 +176,8 @@ export const LOOK = {
       gearWake: -20, salvo: -12, bigBeam: -12, swarm: -16,   // 무기가 깨어남(패링), 무기 스킬
       heartbeat: -13, shatter: -9, puff: -25, puffBg: -33, gearSleep: -22,   // 탄 발사 박자(주 패턴·바탕), 무기가 꺼짐
          // 체력 위태, 보스가 부서짐
-      store: -13, storeFull: -11, throw: -9, throwHit: -10, throwBoom: -5, heal: -11,   // 모아 던지기(§4.11)
+      snipe: -5, store: -13, storeFull: -11, throw: -9, throwHit: -10, throwBoom: -5, heal: -11,   // 모아 던지기(§4.11)
+      door: -12, mobSpawn: -22,   // 스테이지: 문이 열림, 몬스터 등장
     },
   },
 };

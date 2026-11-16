@@ -1,7 +1,6 @@
-// 플레이어 자동 사격(§4.3): 늘 보스 가운데로, 5발 부채(±12°), 초당 12번. 가까울수록 많이 맞는다.
+// 플레이어 자동 사격(§4.3): 늘 겨눈 적(보스, 일반 방에선 가장 가까운 몬스터 — foes.js) 가운데로, 5발 부채(±12°), 초당 12번. 가까울수록 많이 맞는다.
 import { emit } from './events.js';
-import { segCircle } from './geom.js';
-import { damageBoss } from './boss.js';
+import { hitFoe, hurtFoe } from './foes.js';
 import { isDodging } from './player.js';
 
 export function createShots(cap) {
@@ -10,8 +9,8 @@ export function createShots(cap) {
 }
 
 export function fireShots(w) {
-  const s = w.shots, p = w.player, b = w.boss, S = w.rules.shots;
-  if (w.result || b.dead || w.execute) return;   // 처형 중엔 처형의 붙어 쏘기만
+  const s = w.shots, p = w.player, b = w.aim, S = w.rules.shots;
+  if (w.result || !b || b.dead || w.execute) return;   // 처형 중엔 처형의 붙어 쏘기만. 겨눌 적이 없으면 쏘지 않는다
   if (isDodging(w)) { s.nextAt = Math.max(s.nextAt, w.time); return; }
   if (w.time + 1e-9 < s.nextAt) return;
   s.nextAt = Math.max(s.nextAt + 1 / S.rate, w.time + 1 / S.rate - 1e-9);
@@ -28,16 +27,17 @@ export function fireShots(w) {
 }
 
 export function moveShots(w) {
-  const s = w.shots, b = w.boss, dt = w.rules.dt, S = w.rules.shots, R = w.rules.boss.r;
+  const s = w.shots, dt = w.rules.dt, S = w.rules.shots;
   for (let i = 0; i < s.cap; i++) {
     if (!s.alive[i]) continue;
     s.px[i] = s.x[i]; s.pz[i] = s.z[i];
     s.x[i] += s.vx[i] * dt; s.z[i] += s.vz[i] * dt; s.left[i] -= S.speed * dt;
-    if (!b.dead && segCircle(s.px[i], s.pz[i], s.x[i], s.z[i], b.x, b.z, R)) {
+    const f = hitFoe(w, s.px[i], s.pz[i], s.x[i], s.z[i]);
+    if (f) {
       s.alive[i] = 0;
       w.stats.shotsHit++;
-      damageBoss(w, S.dmg, 'shot');
-      emit(w, 'bossHit', { x: s.x[i], z: s.z[i] });
+      hurtFoe(w, f, S.dmg * (w.tries ? w.tries.shotMul * w.tries.shotBase : 1), 'shot', { fromX: s.px[i], fromZ: s.pz[i] });   // 집중 사격·늘 나가는 무기(실험)
+      if (f === w.boss) emit(w, 'bossHit', { x: s.x[i], z: s.z[i] });   // 몬스터는 hurtFoe가 mobHit을 낸다
       continue;
     }
     if (s.left[i] <= 0) s.alive[i] = 0;

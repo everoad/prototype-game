@@ -269,3 +269,29 @@ test('가까이서 근접 콤보를 시작해도 판의 탄은 그대로다', ()
   }
   assert.ok(seen >= 1, '근접 콤보가 한 번도 안 나옴');
 });
+
+// 사용자 2026-11-17: "돌진은 패링하면 여전히 뭔가 스턴 느낌이 나는데" — 받아쳐진 뒤 더 쉬던 0.4초를 뺐다(보통 숨만)
+test('흰 돌진을 패링한 뒤 보스는 보통 숨만 쉬고 바로 다음 공격을 준비한다', () => {
+  const B = RULES.brain;
+  let checked = 0;
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const w = brainWorld({ seed });
+    w.boss.opening = 2;   // 여는 순서의 셋째 = 흰 돌진
+    let hitAt = null, nextAt = null;
+    for (let k = 0; k < ticks(6) && nextAt == null; k++) {
+      const d = Math.hypot(w.player.x - w.boss.x, w.player.z - w.boss.z) - RULES.boss.r - RULES.player.bodyR;
+      const press = w.floor?.kind === 'slam' && w.floor.phase === 'dash' && d < RULES.floor.slam.speed * 0.05 && d > 0 && !w.player.parry.active;
+      step(w, { ...idle, parry: press });
+      for (const e of drainEvents(w)) {
+        if (e.type === 'slamHit' && (e.outcome === 'parry' || e.outcome === 'perfect')) hitAt = e.t;
+        else if (hitAt != null && nextAt == null && (e.type === 'windup' || e.type === 'meleeStart' || e.type === 'rushStart' || e.type === 'hop')) nextAt = e.t;   // 옆 뛰기도 다음 움직임이다
+      }
+    }
+    if (hitAt == null) continue;
+    checked++;
+    assert.ok(nextAt != null, `seed ${seed}: 다음 공격이 없음`);
+    assert.ok(nextAt - hitAt <= B.breath[1] + 0.05, `seed ${seed}: 패링 뒤 ${(nextAt - hitAt).toFixed(2)}초나 쉼`);
+    assert.ok(!(w.boss.stunUntil > hitAt), `seed ${seed}: 경직`);
+  }
+  assert.ok(checked >= 3, `패링한 판 ${checked}`);
+});

@@ -45,7 +45,17 @@ export function createFx(view, LOOK) {
     rise(x, z, color, n = 12) {
       for (let k = 0; k < n; k++) { const a = r01() * Math.PI * 2, d = 0.2 + r01() * 0.5; emit(x + Math.cos(a) * d, 0.2 + r01() * 0.6, z + Math.sin(a) * d, 0, 1.6 + r01() * 1.6, 0, 0.45 + r01() * 0.3, 0.07 + r01() * 0.04, color); }
     },
-    muzzle(x, z, angle) { emit(x + Math.cos(angle) * 0.6, bh() * 1.2, z + Math.sin(angle) * 0.6, 0, 0, 0, 0.04, 0.16, 'cyan'); },
+    // 총구: 번쩍임 + 앞으로 튀는 불티 몇 개(선처럼 짧고 빠르게)
+    muzzle(x, z, angle) {
+      const M = LOOK.guns.muzzle, mx = x + Math.cos(angle) * 0.6, mz = z + Math.sin(angle) * 0.6, y = bh() * 1.2;
+      emit(mx, y, mz, 0, 0, 0, 0.04, 0.16, 'cyan');
+      for (let k = 0; k < M.n; k++) { const a = angle + (r01() - 0.5) * M.coneDeg * Math.PI / 180, s = M.speed * (0.7 + r01() * 0.6); emit(mx, y, mz, Math.cos(a) * s, 0, Math.sin(a) * s, M.life, M.size, 'cyan'); }
+    },
+    // 산탄이 나갈 때: 부채꼴로 튀는 불티(spread = 부채 너비, 라디안)
+    fan(x, z, angle, spread) {
+      const Fn = LOOK.guns.fan, y = bh() * 1.2;
+      for (let k = 0; k < Fn.n; k++) { const a = angle + (k / (Fn.n - 1) - 0.5) * spread, s = Fn.speed * (0.8 + r01() * 0.4); emit(x + Math.cos(a) * 0.7, y, z + Math.sin(a) * 0.7, Math.cos(a) * s, 0, Math.sin(a) * s, Fn.life, Fn.size, 'cyan'); }
+    },
     clearSparkle(x, z, r) {
       const n = r === Infinity ? 40 : 14, rr = r === Infinity ? 9 : r;
       for (let k = 0; k < n; k++) { const a = r01() * Math.PI * 2, d = Math.sqrt(r01()) * rr; emit(x + Math.cos(a) * d, bh(), z + Math.sin(a) * d, 0, 1.5 + r01(), 0, 0.3 + r01() * 0.2, 0.07, 'purple'); }
