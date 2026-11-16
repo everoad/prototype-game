@@ -4,11 +4,15 @@ import { K } from './rules.js';
 import { emit } from './events.js';
 import { hurtPlayer, dodgeOverlap, isInvuln } from './player.js';
 import { openCounterChance } from './rewards.js';
+import { headAim } from './dragonBody.js';
+
+// 빔이 나오는 곳: 용이면 입, 아니면 보스 몸 가운데
+const origin = b => (b.mouth ? [b.mouth.x, b.mouth.z] : [b.x, b.z]);
 
 export function startLaser(w, run) {
-  const L = w.rules.laser, b = w.boss;
-  const a = Math.atan2(w.player.z - b.z, w.player.x - b.x);
-  const beam = { x: b.x, z: b.z, angle: a, base: a, dir: w.rng.next() < 0.5 ? -1 : 1, born: w.time, fireAt: w.time + L.aim, endAt: w.time + L.aim + L.sweepSec, run: run?.id ?? 8, fired: false, len: 0 };
+  const L = w.rules.laser, b = w.boss, [ox, oz] = origin(b);
+  const a = headAim(w, ox, oz);
+  const beam = { x: ox, z: oz, angle: a, base: a, dir: w.rng.next() < 0.5 ? -1 : 1, born: w.time, fireAt: w.time + L.aim, endAt: w.time + L.aim + L.sweepSec, run: run?.id ?? 8, fired: false, len: 0 };
   w.beams.push(beam);
   emit(w, 'laserAim', { x: b.x, z: b.z, angle: a, dir: beam.dir });
   return beam;
@@ -27,8 +31,8 @@ export function updateBeams(w) {
   const L = w.rules.laser, b = w.boss, p = w.player, R = w.rules;
   for (let k = w.beams.length - 1; k >= 0; k--) {
     const m = w.beams[k];
-    m.x = b.x; m.z = b.z;   // 빔은 보스 몸에서 나온다(보스는 쏘며 움직인다)
-    if (w.time < m.fireAt - L.lockBefore) { m.base = Math.atan2(p.z - m.z, p.x - m.x); m.angle = m.base; }
+    [m.x, m.z] = origin(b);   // 빔은 보스 몸(용이면 입)에서 나온다(보스는 쏘며 움직인다)
+    if (w.time < m.fireAt - L.lockBefore) { m.base = headAim(w, m.x, m.z); m.angle = m.base; }
     if (w.time >= m.fireAt && !m.fired) { m.fired = true; emit(w, 'laserFire', { x: m.x, z: m.z, angle: m.base, dir: m.dir }); }
     if (w.time >= m.fireAt) {
       const u = Math.min(1, (w.time - m.fireAt) / L.sweepSec);

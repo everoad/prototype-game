@@ -89,6 +89,23 @@ export function createSfx(ctx, LOOK) {
     bomb: (t, v) => { tone(t, 'sine', 95, 30, 0.8, v); noise(t, 0.7, v * 0.9, 'lowpass', 1600, 200); tone(t, 'sawtooth', 160, 60, 0.5, v * 0.4); },
     pickup: (t, v) => { tone(t, 'triangle', 880, 880, 0.08, v); tone(t + 0.07, 'triangle', 1320, 1320, 0.12, v); },
     itemSpawn: (t, v) => tone(t, 'sine', 660, 700, 0.15, v),
+    missile: (t, v) => noise(t, 0.12, v, 'bandpass', 1200, 3000, 2),
+    beam: (t, v) => { tone(t, 'sawtooth', 520, 500, 0.35, v * 0.5); noise(t, 0.35, v * 0.5, 'highpass', 4000); },
+    burst: (t, v) => noise(t, 0.05, v, 'highpass', 3000),
+    drone: (t, v) => tone(t, 'square', 1400, 1400, 0.02, v),
+    gearWake: (t, v) => { tone(t, 'triangle', 660, 990, 0.12, v); tone(t + 0.05, 'sine', 1320, 1320, 0.1, v * 0.5); },
+    salvo: (t, v) => { for (let k = 0; k < 6; k++) noise(t + k * 0.03, 0.12, v * 0.6, 'bandpass', 1000, 3200, 2); },
+    bigBeam: (t, v) => { tone(t, 'sawtooth', 220, 180, 1.5, v * 0.5); noise(t, 1.5, v * 0.5, 'bandpass', 2400, 1600, 1.5); },
+    swarm: (t, v) => { for (let k = 0; k < 4; k++) tone(t + k * 0.04, 'square', 1200 + k * 200, 1600 + k * 200, 0.08, v * 0.5); },
+    heartbeat: (t, v) => { tone(t, 'sine', 62, 44, 0.13, v); tone(t + 0.19, 'sine', 56, 40, 0.15, v * 0.7); },
+    shatter: (t, v, o) => { noise(t, 0.22, v, 'bandpass', 2600, 500, 1.2); tone(t, 'sine', 120, 50, 0.25, v * 0.8, o.detune || 0); },
+    // 모아 던지기(§4.11): 착(모임) · 가득 · 던짐 · 명중(음이 오름) · 마지막 한 발 · 회복
+    store: (t, v, o) => { tone(t, 'triangle', 780, 1170, 0.07, v, o.detune || 0); noise(t, 0.02, v * 0.5, 'highpass', 5000); },
+    storeFull: (t, v) => { tone(t, 'triangle', 1320, 1320, 0.09, v); tone(t + 0.07, 'triangle', 1760, 1760, 0.14, v); },
+    throw: (t, v) => { noise(t, 0.2, v, 'bandpass', 500, 3400, 1.5); tone(t, 'sawtooth', 180, 620, 0.16, v * 0.5); },
+    throwHit: (t, v, o) => { tone(t, 'sine', 190, 95, 0.13, v, o.detune || 0); noise(t, 0.05, v * 0.5, 'highpass', 3200); },
+    throwBoom: (t, v) => { tone(t, 'sine', 75, 30, 0.55, v); noise(t, 0.28, v * 0.7, 'lowpass', 1400, 300); tone(t, 'triangle', 880, 440, 0.25, v * 0.3); },
+    heal: (t, v) => { [660, 880, 1320].forEach((f, k) => tone(t + k * 0.06, 'sine', f, f, 0.22, v * (1 - k * 0.2))); },
     execShot: (t, v, o) => { noise(t, 0.07, v, 'bandpass', 2600, 700, 2); tone(t, 'square', 260, 120, 0.09, v * 0.4, o.detune || 0); },
   };
 

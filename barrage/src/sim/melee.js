@@ -9,6 +9,8 @@ import { parryActive, parryAge } from './parry.js';
 import { addStagger, separateBodies } from './boss.js';
 import { K } from './rules.js';
 import { openCounterChance, startFullCounter, healOn } from './rewards.js';
+import { bodyFace, isDragon } from './dragonBody.js';
+import { storeAdd } from './store.js';
 
 const D = Math.PI / 180;
 const COLOR_KIND = { white: K.WHITE, gold: K.GOLD, red: K.RED };
@@ -27,7 +29,13 @@ export function updateRush(w) {
   if (!r) return true;
   const t = w.time - r.start;
   if (r.phase === 'crouch') {
-    if (!r.locked && t < R.rush.crouch - R.rush.lockBefore) { r.tx = w.player.x; r.tz = w.player.z; }
+    if (!r.locked && t < R.rush.crouch - R.rush.lockBefore) {
+      if (isDragon(w)) {   // 용: 보는 쪽으로 플레이어 거리만큼(멈추는 거리보다 가까우면 제자리 — 뒤로 미끄러지지 않는다)
+        const d = Math.max(Math.hypot(w.player.x - b.x, w.player.z - b.z), R.boss.r + R.player.bodyR + R.rush.gap);
+        r.tx = b.x + Math.cos(b.face) * d; r.tz = b.z + Math.sin(b.face) * d;
+      }
+      else { r.tx = w.player.x; r.tz = w.player.z; }
+    }
     else r.locked = true;
     if (t < R.rush.crouch) return false;
     const dx = r.tx - b.x, dz = r.tz - b.z, d = Math.hypot(dx, dz) || 1;
@@ -55,7 +63,7 @@ export function startCombo(w, combo) {
 
 function spawnArea(w, kind, color) {
   const M = w.rules.melee[kind], b = w.boss;
-  const face = Math.atan2(w.player.z - b.z, w.player.x - b.x);
+  const face = bodyFace(w);   // 용이면 보는 쪽(발톱)
   b.face = face;
   const off = kind === 'slam' ? M.offset : 0;
   const area = { kind, shape: kind === 'slam' ? 'circle' : 'sector', x: b.x + Math.cos(face) * off, z: b.z + Math.sin(face) * off, face, R: M.R, half: (M.halfDeg ?? 180) * D, color, warn: M.warn, born: w.time, hit: false };
@@ -78,7 +86,8 @@ export function resolveHit(w, { color, src, dmg, stagger, kindName = 'melee', la
     p.parry.caught++;
     w.stats.parries++; if (perfect) w.stats.perfects++;
     emit(w, 'parry', { kind: 'melee', perfect, gold, first: true, chain: 1, x: p.x, z: p.z, last, attack: kindName });
-    addStagger(w, perfect ? stagger[1] : stagger[0]);
+    const sv = perfect ? stagger[1] : stagger[0];
+    if (!storeAdd(w, { perfect, gold, stagger: sv, x: p.x, z: p.z, kind: 'melee' })) addStagger(w, sv);   // 모아 던지기(§4.11): 무력화는 모은 탄이 든다(가득이면 바로)
     if (perfect) healOn(w);
     return { outcome: perfect ? 'perfect' : 'parry', kind };
   }

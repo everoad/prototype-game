@@ -13,25 +13,29 @@ export function createBullets(cap) {
     cap, live: 0, free, nFree: cap,
     x: f(), z: f(), px: f(), pz: f(), vx: f(), vz: f(), r: f(), born: f(), holdUntil: f(),
     kind: u(), src: u(), alive: u(), perfect: u(), grazed: u(), gold: u(),
+    thrown: u(), last: u(), mul: f(), stag: f(),   // 모아 던진 탄(§4.11): 배율·무력화·마지막 발
   };
 }
 
 const parryable = kind => kind === K.WHITE || kind === K.GOLD;
 
-// 탄 하나를 낸다. 흰·금은 주는 속도와 무관하게 parrySpeed, 플레이어 minParrySpawn 안이면 보통 탄으로 바꾼다.
+// 탄 하나를 낸다. 흰·금은 주는 속도와 무관하게 parrySpeed. 0.4초 규칙(§4.4): 플레이어 패링 원까지 0.4초 안에 닿을 자리에서 생기면
+// 색을 지킨 채 그 자리에 잠깐 멈췄다(hold) 출발해 0.4초를 맞춘다 — 받아칠 탄이 사라지지 않게(예전엔 보통 탄으로 바꿨다).
 export function spawnBullet(w, kind, x, z, angle, speed, src = 0) {
   const b = w.bullets, R = w.rules.bullets;
   if (b.nFree === 0) return -1;
+  let hold = 0;
+  speed *= R.speedMul ?? 1;   // 적 탄 전체 속도 배율(보라·빨강); 흰·금은 아래에서 한 속도로
   if (parryable(kind)) {
     speed = R.parrySpeed;
-    const p = w.player;
-    if (Math.hypot(x - p.x, z - p.z) < R.minParrySpawn) kind = K.NORMAL;
+    const p = w.player, d = Math.hypot(x - p.x, z - p.z);
+    if (d < R.minParrySpawn) hold = R.parryLead - Math.max(0, d - w.rules.player.parryR) / R.parrySpeed;
   }
   const i = b.free[--b.nFree];
   b.x[i] = b.px[i] = x; b.z[i] = b.pz[i] = z;
   b.vx[i] = Math.cos(angle) * speed; b.vz[i] = Math.sin(angle) * speed;
   b.r[i] = R.r[kind]; b.kind[i] = kind; b.src[i] = src;
-  b.born[i] = w.time; b.holdUntil[i] = 0; b.perfect[i] = 0; b.grazed[i] = 0; b.gold[i] = 0;
+  b.born[i] = w.time; b.holdUntil[i] = hold > 0 ? w.time + hold : 0; b.perfect[i] = 0; b.grazed[i] = 0; b.gold[i] = 0; b.thrown[i] = 0; b.last[i] = 0; b.mul[i] = 1; b.stag[i] = 0;
   b.alive[i] = 1; b.live++;
   return i;
 }
@@ -45,15 +49,15 @@ export function killBullet(w, i) {
 
 export const liveCount = w => w.bullets.live;
 
-// 움직이기: 되튄 탄은 멈춤(holdUntil)이 끝나면 보스를 향해 방향을 다시 잡는다. 판 밖 + 1 U면 지운다.
+// 움직이기: 멈춤(holdUntil) 동안은 그 자리(가까이 생긴 흰·금 탄, 받은 탄). 되튄 탄은 멈춤이 끝나면 보스를 향해 방향을 다시 잡는다. 판 밖 + 1 U면 지운다.
 export function moveBullets(w) {
   const b = w.bullets, dt = w.rules.dt, hx = w.rules.board.hx + 1, hz = w.rules.board.hz + 1;
   const boss = w.boss, rs = w.rules.bullets.reflectSpeed;
   for (let i = 0; i < b.cap; i++) {
     if (!b.alive[i]) continue;
     b.px[i] = b.x[i]; b.pz[i] = b.z[i];
+    if (w.time < b.holdUntil[i]) continue;
     if (b.kind[i] === K.REFLECT) {
-      if (w.time < b.holdUntil[i]) continue;
       const dx = boss.x - b.x[i], dz = boss.z - b.z[i], d = Math.hypot(dx, dz) || 1;
       b.vx[i] = dx / d * rs; b.vz[i] = dz / d * rs;
     }

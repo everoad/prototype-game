@@ -3,7 +3,7 @@
 import { K, RULES } from '../sim/rules.js';
 
 export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
-  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null };
+  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, later: [], beatAt: -1e9 };
   const F = () => LOOK.feel, on = k => F().on[k] !== false;
   const stop = (now, sec, opt) => (on('stop') ? timeFx.hitstop(now, sec, opt) : 0);
   const slow = (now, s, sec, opt) => on('slow') && timeFx.slow(now, s, sec, opt);
@@ -33,6 +33,8 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
 
   function handle(events, now) {
     flushHits(now);
+    // 예약해 둔 연출(보스가 부서지는 파편 등) — 실제 시간으로
+    for (let k = st.later.length - 1; k >= 0; k--) if (now >= st.later[k].at) { const it = st.later[k]; st.later.splice(k, 1); it.fn(now); }
     let pinged = new Set();
     for (const e of events) {
       switch (e.type) {
@@ -40,7 +42,8 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'denied':
           sfx.play('tick');
           if (e.what === 'dodge' && e.why === 'charges') hud.shakePips(now);
-          else if (e.what === 'shield' || e.what === 'bomb') hud.shakeStock?.(now, e.what);   // 사용권 칸이 흔들림(몸 어둡게는 패링·회피 잠김 뜻)
+          else if (e.what === 'shield' || e.what === 'bomb' || e.what === 'skill') hud.shakeStock?.(now, e.what);
+          else if (e.what === 'throw') hud.shakeStock?.(now, 'store');   // 던질 것이 없음·못 던지는 때   // 사용권 칸이 흔들림(몸 어둡게는 패링·회피 잠김 뜻)
           else actors.dim(now);
           break;
         case 'parry': {
@@ -131,6 +134,8 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'laserCut': sfx.stop?.('laserBeam'); break;
         case 'orbFire': sfx.play('orb'); break;
         case 'hop': sfx.play('whoosh', { detune: -700 }); break;
+        case 'tailStart': sfx.play('swing', { detune: -900 }); break;     // 용 꼬리 감기
+        case 'wingStart': sfx.play('whoosh', { detune: -400 }); break;    // 용 날개 들기
         // 그로기 처형(§5.8): 바짝 붙어 쏘기(총·활) — 영화처럼
         case 'executeStart': {
           const X = F().execute;
@@ -177,14 +182,114 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         }
         case 'itemSpawn': sfx.play('itemSpawn'); break;
         case 'itemPick': if (on('sparks')) fx.spark(e.x, e.z, 'item', 0.8); sfx.play('pickup'); break;
-        case 'phase': { const P = F().phase; shake(P.shakePx, P.shakeSec); sfx.play('roar'); break; }
-        case 'bossDeath': { const D = F().death; stop(now, D.stop, { override: true }); slow(now, D.slow, D.slowSec); shake(D.shakePx, D.shakeSec); fx.burst(e.x, e.z, 'orange', 3); sfx.play('death'); break; }
-        case 'playerDeath': sfx.play('death'); if (on('edge')) fx.edge('red', 1.0); break;
+        // 보조 무기(§4.10): 작게. 산탄은 한 번 패링에 여러 발이라 같은 틱엔 한 번만
+        case 'weaponFire':
+          if (e.kind === 'burst') { if (!pinged.has(`burst:${e.t}`)) { pinged.add(`burst:${e.t}`); sfx.play('burst'); } }
+          else sfx.play(e.kind);
+          break;
+        case 'weaponHit': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', e.kind === 'missile' ? 0.6 : 0.25); break;   // 명중 불꽃(작게)
+        case 'gearToggle': sfx.play('tick'); break;
+        case 'weaponWake': sfx.play('gearWake'); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.7); break;   // 받아쳐서 무기가 깨어남
+        case 'weaponSkill': {
+          const X = F().weaponSkill;
+          shake(X.shakePx, X.shakeSec);
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', 1.2);
+          sfx.play({ missile: 'salvo', beam: 'bigBeam', drone: 'swarm' }[e.kind] ?? 'salvo');
+          break;
+        }
+        // 모아 던지기(§4.11): 모임(착, 한 칸마다 음이 오름) → 던짐(큰 순간 + 회복 빛) → 명중(음이 오르다 마지막 한 발)
+        case 'storeAdd': {
+          const X = F().store;
+          fx.tracer?.(e.x, e.z, e.px, e.pz, 'cyan', 0.8);
+          if (on('sparks')) fx.spark(e.px, e.pz, 'cyan', 0.6);
+          actors.ringFlash?.(now);
+          sfx.play('store', { detune: (e.n - 1) * X.storeCent });
+          if (e.full) sfx.play('storeFull', { delay: 0.06 });
+          break;
+        }
+        case 'throw': {
+          const X = F().store;
+          st.throwHits = 0;
+          stop(now, X.stop);
+          shake(X.shakePx, X.shakeSec);
+          if (on('punch')) camera.punch(X.punch, X.punchSec);
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', X.burst);
+          actors.ringFlash?.(now);
+          sfx.play('throw');
+          if (e.heal > 0) {
+            fx.rise?.(e.x, e.z, 'heal', X.healRise);
+            if (on('numbers')) fx.number(null, null, `+${Math.round(e.heal)}`, 'heal', X.healNumber);
+            if (on('edge')) fx.edge('heal', X.healEdgeSec);
+            sfx.play('heal', { delay: 0.05 });
+          }
+          break;
+        }
+        case 'throwHit': {
+          const X = F().store;
+          actors.bossJolt?.(now, e.last ? 0.5 : X.hitJolt);
+          hud.flashStagger(now);
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', e.last ? X.lastBurst : X.hitBurst);
+          sfx.play('throwHit', { detune: st.throwHits * X.hitCent });
+          st.throwHits++;
+          if (e.last) {
+            stop(now, X.lastStop);
+            shake(X.lastShake, X.lastShakeSec);
+            fx.flashAt(e.x, e.z, 'white'); fx.flashAt(e.x, e.z, 'cyan');
+            if (on('numbers')) fx.number(e.x, e.z, Math.round(e.total), 'cyan', X.number);
+            sfx.play('throwBoom');
+          }
+          break;
+        }
+        case 'phase': {   // 2단계 넘어감: 싸움의 고비 — 정지·당김·자주 파편과 가장자리·큰 글자·보스 몸이 부푼다
+          const P = F().phase;
+          stop(now, P.stop, { override: true });
+          shake(P.shakePx, P.shakeSec);
+          if (on('punch')) camera.punch(P.punch, P.punchSec);
+          if (on('sparks') && e.x != null) fx.burst(e.x, e.z, 'purple', P.burst);
+          if (on('edge')) fx.edge('purple', P.edgeSec);
+          hud.banner?.(now, `${e.n}단계`, P.bannerSec);
+          actors.bossPulse?.(now);
+          sfx.play('roar');
+          break;
+        }
+        case 'bossDeath': {   // 승리: 정지·느려짐 + 카메라 당김, 금빛 가장자리, 금이 가며 파편이 몇 번 터지고 마지막에 크게
+          const D = F().death;
+          stop(now, D.stop, { override: true }); slow(now, D.slow, D.slowSec); shake(D.shakePx, D.shakeSec);
+          fx.burst(e.x, e.z, 'orange', 3); sfx.play('death');
+          camera.hold?.(D.hold, D.holdSec);
+          if (on('edge')) fx.edge('gold', D.edgeSec);
+          D.chunks.forEach((t, k) => st.later.push({ at: now + t, fn: () => {
+            const a = k * 2.4, d = 0.9;
+            fx.burst(e.x + Math.cos(a) * d, e.z + Math.sin(a) * d, k % 2 ? 'purple' : 'orange', D.chunkBurst);
+            shake(D.chunkShake, 0.12); sfx.play('shatter', { detune: k * 150 });
+          } }));
+          st.later.push({ at: now + D.chunks.at(-1) + D.finalAfter, fn: () => {
+            fx.burst(e.x, e.z, 'gold', D.finalBurst); fx.burst(e.x, e.z, 'orange', D.finalBurst * 0.7); fx.flashAt(e.x, e.z, 'gold');
+            shake(D.finalShake, 0.35); sfx.play('shatter', { detune: -500 }); sfx.play('slamWall');
+          } });
+          break;
+        }
+        case 'playerDeath': {   // 패배: 느려짐·청록 파편·붉은 가장자리, 몸이 사라진다
+          const P = F().playerDeath;
+          stop(now, P.stop, { override: true }); slow(now, P.slow, P.slowSec); shake(P.shakePx, P.shakeSec);
+          if (e.x != null) fx.burst(e.x, e.z, 'cyan', P.burst);
+          if (on('edge')) fx.edge('red', P.edgeSec);
+          actors.playerDown?.(now);
+          sfx.play('death');
+          break;
+        }
         case 'heal': if (on('numbers')) fx.number(null, null, `+${e.amount}`, 'cyan', 18); break;
         default: break;
       }
     }
   }
 
-  return { handle, flushHits };
+  // 상태 연출(사건이 아니라 지금 상태): 체력 위태면 심장 소리가 박자마다
+  function tick(w, now) {
+    const L = F().lowHp, p = w.player;
+    if (w.result || p.hp <= 0 || p.hp > w.rules.player.hp * L.at) return;
+    if (now - st.beatAt >= L.beat) { st.beatAt = now; sfx.play('heartbeat'); }
+  }
+
+  return { tick, handle, flushHits };
 }

@@ -13,6 +13,7 @@ export function createPlayer(rules) {
     buffer: { parryUntil: -1, dodgeUntil: -1 },
     parry: { startedAt: -1, active: false, caught: 0, failUntil: -1 },
     stock: freshStock(rules), shieldUntil: -1, bombUntil: -1, lastHurt: null, dyingAt: null,   // 방패·폭탄 사용권, 구제 창(§4.9)
+    store: [], throwSum: 0,   // 모아 던지기(§4.11): 모은 것 { perfect, gold, stagger }
   };
 }
 
@@ -95,6 +96,7 @@ export function dodgeOverlap(w, kind) {
 // src = 낸 패턴 번호 1~7, 근접 8. (bx, bz) = 맞힌 탄(또는 보스) 자리 — 화면이 0.3초 표시한다.
 export function hurtPlayer(w, dmg, src, bx, bz) {
   if (isInvuln(w)) return false;
+  if (w.opts.hard) dmg *= w.rules.store.hard;   // &hard=1(§4.11): 받는 피해 배율
   const p = w.player, P = w.rules.player, before = p.hp;
   p.hp = Math.max(w.opts.lab ? 1 : 0, p.hp - dmg);   // 장면에서는 1 밑으로 내려가지 않는다
   p.lastHurt = { t: w.time, dmg: before - p.hp, src, rescued: false };   // 폭탄 구제(§4.9)
@@ -105,7 +107,7 @@ export function hurtPlayer(w, dmg, src, bx, bz) {
   clearBullets(w, p.x, p.z, P.hurtClearR);
   if (p.hp <= 0 && !w.result) {
     if (p.stock.bomb > 0) p.dyingAt = w.time + w.rules.bomb.rescue;   // 폭탄이 있으면 구제 창만큼 죽음을 미룬다(items.useItems가 끝낸다)
-    else { w.result = 'lose'; emit(w, 'playerDeath'); }
+    else { w.result = 'lose'; emit(w, 'playerDeath', { x: p.x, z: p.z }); }
   }
   return true;
 }

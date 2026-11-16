@@ -8,7 +8,8 @@ import { bossGroggy } from './boss.js';
 const QUIET = new Set(['stun', 'groggy', 'phaseChange', 'dead', 'rush', 'melee', 'wake', 'hop']);
 export function layersOn(w) {
   const b = w.boss;
-  return !!w.opts.ai && !w.opts.lab && !b.dead && !w.result && !QUIET.has(b.state) && !bossGroggy(w) && w.time >= (b.stunUntil ?? -1) && w.time >= (b.calmUntil ?? -1);
+  return !!w.opts.ai && !w.opts.lab && !b.dead && !w.result && !QUIET.has(b.state) && !bossGroggy(w) && w.time >= (b.stunUntil ?? -1) && w.time >= (b.calmUntil ?? -1)
+    && !(w.beams && w.beams.length);   // 레이저(조준~쓸기) 동안은 바탕 탄막·구슬도 쉰다
 }
 
 function fire(w, src, x, z, a, speed) {
@@ -22,7 +23,7 @@ export function updateLayers(w) {
   b.layer ??= { nextRing: w.time + St.ring, ringA: 0, nextSpiral: 0, spiralA: 0, orbA: 0, nextOrb: [w.time + St.orb, w.time + St.orb + half] };
   const Ly = b.layer;
   // 구슬 자리는 2단계 내내(쉴 때도) 보스를 따라 돈다 — 화면이 그린다
-  if (b.phase === 2) {
+  if (b.phase === 2 && b.kind !== 'dragon') {   // 쌍둥이 구슬은 원거리 보스만(용은 안 씀)
     Ly.orbA += L.orbs.spin * w.rules.dt;
     b.orbs ??= [{ x: 0, z: 0 }, { x: 0, z: 0 }];
     for (let k = 0; k < 2; k++) { const a = Ly.orbA + k * Math.PI; b.orbs[k].x = b.x + Math.cos(a) * L.orbs.r; b.orbs[k].z = b.z + Math.sin(a) * L.orbs.r; }
@@ -43,7 +44,7 @@ export function updateLayers(w) {
       Ly.nextSpiral = w.time + P.spiralEvery; Ly.spiralA += P.spiralStepDeg * Math.PI / 180;
       fire(w, S.background, b.x + Math.cos(Ly.spiralA) * m, b.z + Math.sin(Ly.spiralA) * m, Ly.spiralA, P.spiralSpeed);
     }
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < 2 && b.orbs; k++) {
       if (w.time < Ly.nextOrb[k]) continue;
       Ly.nextOrb[k] = w.time + L.orbs.every;
       Ly.nextOrb[1 - k] = Math.max(Ly.nextOrb[1 - k], w.time + half);

@@ -116,3 +116,97 @@ test('숙련 봇은 레이저를 맞지 않는다', () => {
   }
   assert.equal(n, 0);
 });
+
+test('패링하는 봇은 스킬 게이지가 차면 무기 스킬을 쓴다', () => {
+  const w = createWorld({ seed: 1, gear: 'all' }); w.player.invulnUntil = 1e9; w.boss.hp = w.boss.maxHp = 1e9;
+  const bot = createBot('1', 1);
+  let skills = 0;
+  for (let k = 0; k < ticks(60); k++) { step(w, bot(w)); skills += drainEvents(w).filter(e => e.type === 'weaponSkill').length; }
+  assert.ok(skills >= 2, `스킬 ${skills}번`);
+});
+
+// ── 용(설계 용 §9): 봇이 꼬리·날갯짓을 보고, 용 판에선 옆·뒤로도 돌아간다
+import { startTail, startWing } from '../src/sim/floor.js';
+import { zoneOf } from '../src/sim/dragonBody.js';
+
+// 용 하나(두뇌 없이), 플레이어를 용 기준 (deg, d)에 두고 공격 하나
+function dragonFace(start, deg, d, kind = '1', sec = 2) {
+  const w = createWorld({ ai: false, boss: 'dragon' });
+  w.boss.x = w.boss.px = 2; w.boss.z = w.boss.pz = 0; w.boss.face = 0;
+  const put = () => { const a = deg * Math.PI / 180; w.player.x = w.player.px = 2 + Math.cos(a) * d; w.player.z = w.player.pz = Math.sin(a) * d; };
+  put();
+  const bot = createBot(kind, 1);
+  for (let k = 0; k < ticks(0.3); k++) { step(w, bot(w)); put(); }
+  drainEvents(w);
+  start(w);
+  const ev = []; let done = false;
+  for (let k = 0; k < ticks(sec); k++) { if (!done) done = updateFloor(w); step(w, bot(w)); ev.push(...drainEvents(w)); }
+  return { w, ev };
+}
+
+test('숙련 봇은 흰 꼬리를 패링한다', () => {
+  const { w, ev } = dragonFace(w => startTail(w, 'white'), 180, 4);
+  assert.equal(hurtBy(ev, RULES.src.tail), 0);
+  assert.ok(w.stats.parries >= 1, `패링 ${w.stats.parries}`);
+});
+
+test('숙련 봇은 빨간 날갯짓을 구르기로 넘긴다', () => {
+  const { ev } = dragonFace(w => startWing(w, 'red', 1), 90, 4);
+  assert.equal(ev.find(e => e.type === 'waveHit')?.outcome, 'roll');
+  assert.equal(hurtBy(ev, RULES.src.wing), 0);
+});
+
+test('숙련 봇은 날갯짓 반원 밖에선 구르지 않는다', () => {
+  const { ev } = dragonFace(w => startWing(w, 'red', 1), -90, 4);
+  assert.equal(ev.filter(e => e.type === 'dodge').length, 0);
+});
+
+test('용 판 60초에 봇이 옆·뒤에 8% 넘게 머묾', () => {
+  let side = 0, all = 0;
+  for (const seed of [1, 2]) {
+    const w = createWorld({ seed, boss: 'dragon' }), bot = createBot('1', seed);
+    w.player.hp = w.player.maxHp = 1e9;
+    for (let k = 0; k < ticks(60) && !w.result; k++) { step(w, bot(w)); drainEvents(w); all++; if (zoneOf(w) !== 'front') side++; }
+  }
+  assert.ok(side / all > 0.08, `옆·뒤 ${(side / all * 100).toFixed(0)}%`);
+});
+
+// ── 모아 던지기(§4.11): 봇이 던진다 · 사용자 판에 맞춘 봇 user
+import { storeAdd } from '../src/sim/store.js';
+const stocked = (n, hp) => {
+  const w = createWorld({ ai: false, store: true });
+  for (let k = 0; k < n; k++) storeAdd(w, { perfect: true, gold: false, stagger: 14, x: 0, z: 0, kind: 'bullet' });
+  if (hp != null) w.player.hp = hp;
+  return w;
+};
+
+test('모아 던지기 판: 패링하는 봇은 가득이면, 또는 회복이 버려지지 않을 만큼 깎였으면 던진다', () => {
+  const bot = () => createBot('1', 1);
+  assert.equal(bot()(stocked(RULES.store.cap)).throw, true, '가득인데 안 던짐');
+  assert.equal(bot()(stocked(2)).throw, false, '체력이 꽉 찼는데 던짐');
+  assert.equal(bot()(stocked(2, RULES.player.hp - 2 * RULES.store.heal[1])).throw, true, '깎였는데 안 던짐');
+  assert.equal(bot()(stocked(0, 10)).throw, false);
+  const plain = createWorld({ ai: false });
+  assert.ok(!createBot('1', 1)(plain).throw, '기본 판에서 던짐');
+  assert.ok(!createBot('walk', 1)(stocked(RULES.store.cap)).throw, '패링 안 하는 봇이 던짐');
+  const auto = stocked(RULES.store.cap); auto.player.auto = { stage: 'back', start: 0, awayBase: 0, buffered: null }; auto.player.autoUntil = 1;
+  assert.ok(!createBot('1', 1)(auto).throw, '자동 반격 중에 누름(못 던지는데 틱 소리만 난다)');
+  const dying = stocked(RULES.store.cap); dying.player.dyingAt = 1;
+  assert.ok(!createBot('1', 1)(dying).throw, '구제 창에서 누름');
+});
+
+test('user 봇은 숙련 봇보다 많이 맞는다(사람 손에 맞춘 잣대)', () => {
+  const play = kind => {
+    let hits = 0, parries = 0;
+    for (const seed of [1, 2, 3]) {
+      const w = createWorld({ seed, gear: 'all' }), bot = createBot(kind, seed);
+      w.player.hp = 1e9; w.boss.hp = w.boss.maxHp = 1e9;
+      for (let k = 0; k < ticks(60); k++) { step(w, bot(w)); drainEvents(w); }
+      hits += w.stats.hits; parries += w.stats.parries;
+    }
+    return { hits, parries };
+  };
+  const u = play('user'), s = play('1');
+  assert.ok(u.hits > s.hits + 5, `맞음 user ${u.hits} 숙련 ${s.hits}`);
+  assert.ok(u.parries >= 24, `user 패링 ${u.parries}(3판)`);
+});

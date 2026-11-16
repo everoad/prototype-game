@@ -7,6 +7,7 @@ import { isDodging } from './player.js';
 import { killBullet } from './bullets.js';
 import { damageBoss, addStagger } from './boss.js';
 import { openCounterChance, healOn } from './rewards.js';
+import { storeRoom, storeAdd } from './store.js';
 
 export const parryActive = w => { const q = w.player.parry; return q.active && w.time < q.startedAt + w.rules.parry.window; };
 export const parryAge = w => w.time - w.player.parry.startedAt;
@@ -38,6 +39,17 @@ export function catchBullets(w) {
     if (k !== K.WHITE && k !== K.GOLD) continue;
     if (!segCircle(b.px[i], b.pz[i], b.x[i], b.z[i], p.x, p.z, R.player.parryR + b.r[i])) continue;
     const gold = k === K.GOLD;
+    if (storeRoom(w)) {   // 모아 던지기(§4.11): 날아가지 않고 모인다 — 피해·무력화는 던질 때
+      const x = b.x[i], z = b.z[i];
+      killBullet(w, i);
+      q.caught++;
+      w.stats.parries++; if (perfect) w.stats.perfects++;
+      emit(w, 'parry', { kind: 'bullet', perfect, gold, first: q.caught === 1, chain: q.caught, x, z, stored: true });
+      storeAdd(w, { perfect, gold, stagger: gold ? R.reflect.staggerGold : perfect ? R.reflect.staggerPerfect : R.reflect.staggerNormal, x, z, kind: 'bullet' });
+      if (perfect) healOn(w);
+      if (gold) openCounterChance(w, 'goldBullet');
+      continue;
+    }
     b.kind[i] = K.REFLECT; b.gold[i] = gold ? 1 : 0; b.perfect[i] = perfect ? 1 : 0;
     b.r[i] = R.bullets.r[K.REFLECT];
     b.holdUntil[i] = w.time + R.reflect.hold;
@@ -69,6 +81,18 @@ export function hitBossReflects(w) {
     if (!b.alive[i] || b.kind[i] !== K.REFLECT || w.time < b.holdUntil[i]) continue;
     if (!segCircle(b.px[i], b.pz[i], b.x[i], b.z[i], boss.x, boss.z, R.boss.r + b.r[i])) continue;
     const perfect = !!b.perfect[i], gold = !!b.gold[i], x = b.x[i], z = b.z[i];
+    if (b.thrown[i]) {   // 모아 던진 탄(§4.11): 피해·무력화 × 배율, 마지막 발에 합계
+      const mul = b.mul[i], stag = b.stag[i] * mul, last = !!b.last[i], S = R.store, p = w.player;
+      if (p.dyingAt != null) continue;   // 구제 창(보스가 피해를 받지 않는 동안)엔 닿아도 기다린다 — 피해 0으로 버려지지 않게
+      killBullet(w, i);
+      const dealt = damageBoss(w, (perfect ? S.dmg[1] : S.dmg[0]) * mul, 'throw');
+      p.throwSum = (p.throwSum ?? 0) + dealt;
+      emit(w, 'throwHit', { x, z, perfect, gold, dmg: dealt, last, total: p.throwSum });
+      if (last) { let flying = false; for (let j = 0; j < b.cap && !flying; j++) flying = !!b.alive[j] && !!b.thrown[j]; if (!flying) p.throwSum = 0; }   // 겹쳐 던진 것까지 다 닿으면 합계를 비운다
+      addStagger(w, stag);
+      if (boss.dead) return;
+      continue;
+    }
     killBullet(w, i);
     const dmg = perfect ? R.reflect.dmgPerfect : R.reflect.dmgNormal;
     emit(w, 'reflectHit', { x, z, perfect, gold, dmg });

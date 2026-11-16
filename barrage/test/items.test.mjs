@@ -20,8 +20,7 @@ test('시작 사용권은 방패 1·폭탄 1', () => {
 test('Q 방패: 둘레의 보라 탄만 지우고 흰·빨강은 남긴다', () => {
   const w = quietWorld(), p = w.player;
   spawnBullet(w, K.NORMAL, p.x + 1.0, p.z, 0, 0);
-  const wi = spawnBullet(w, K.WHITE, p.x - 1.0, p.z, 0, 0);
-  w.bullets.kind[wi] = K.WHITE;   // 가까이 생긴 흰 탄은 보통이 되는 0.4초 규칙을 시험에서만 비켜 간다
+  spawnBullet(w, K.WHITE, p.x - 1.0, p.z, 0, 0);   // 가까이 생긴 흰 탄은 멈췄다 출발(0.4초 규칙) — 색은 그대로
   spawnBullet(w, K.RED, p.x, p.z + 1.1, 0, 0);
   step(w, { ...idle, shield: true });
   const ev = drainEvents(w);

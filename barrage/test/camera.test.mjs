@@ -115,3 +115,16 @@ test('처형 당김은 release 전까지 유지되고, release 뒤 풀린다', (
   run(0.3);
   assert.ok(Math.abs(last.width - base) < base * 0.01, `release 뒤 ${last.width} / ${base}`);
 });
+
+// 숨은 창(높이 0)에서 화면 비율이 무한대·NaN이 된 화면이 있어도 카메라가 NaN에 갇히지 않는다(용 판 미리보기에서 화면이 검게 남던 것)
+test('화면 비율이 잠깐 망가져도 카메라는 다시 잡힌다', () => {
+  let last = null;
+  const view = { aspect: 16 / 9, canvas: { clientWidth: 1280 }, setView: v => { last = v; } };
+  const cam = createCamera(view, LOOK), w = createWorld({ seed: 1, ai: false });
+  let now = 0;
+  const run = sec => { for (let k = 0; k < Math.round(sec * 60); k++) { now += 1 / 60; cam.update(w, 1 / 60, now); } };
+  run(0.5);
+  for (const bad of [Infinity, NaN, 0]) { view.aspect = bad; run(0.1); }
+  view.aspect = 16 / 9; run(0.5);
+  assert.ok(Number.isFinite(last.width) && Number.isFinite(last.cx) && Number.isFinite(last.cz), JSON.stringify(last));
+});

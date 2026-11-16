@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { step } from '../src/sim/world.js';
 import { RULES, K } from '../src/sim/rules.js';
 import { spawnBullet, liveCount } from '../src/sim/bullets.js';
-import { quietWorld, idle, run, types } from './helpers.mjs';
+import { quietWorld, idle, run, types, ticks } from './helpers.mjs';
 
 test('흰·금 탄은 주는 속도와 무관하게 14 U/s', () => {
   const w = quietWorld();
@@ -14,11 +14,20 @@ test('흰·금 탄은 주는 속도와 무관하게 14 U/s', () => {
   assert.ok(Math.abs(w.bullets.vz[g] - RULES.bullets.parrySpeed) < 1e-9);
 });
 
-test('플레이어에게서 6.4 U 안에 생기는 흰·금 탄은 보통 탄이 된다', () => {
-  const w = quietWorld(); const p = w.player;
-  const near = spawnBullet(w, K.WHITE, p.x + 6.0, p.z, Math.PI, 14);
+test('플레이어 6.4 U 안에 생긴 흰·금 탄은 색을 지키고, 잠깐 멈췄다 출발해 패링 원까지 0.4초를 맞춘다', () => {
+  const w = quietWorld(); const p = w.player, b = w.bullets, P = RULES.player, B = RULES.bullets;
+  const near = spawnBullet(w, K.WHITE, p.x + 3.0, p.z, Math.PI, 14);
   const far = spawnBullet(w, K.GOLD, p.x + 6.5, p.z, Math.PI, 14);
-  assert.equal(w.bullets.kind[near], K.NORMAL); assert.equal(w.bullets.kind[far], K.GOLD);
+  assert.equal(b.kind[near], K.WHITE); assert.equal(b.kind[far], K.GOLD);
+  assert.equal(b.holdUntil[far], 0, '멀리 생긴 탄은 멈추지 않는다');
+  let reached = null;
+  for (let k = 0; k < ticks(1) && reached == null; k++) {
+    step(w, idle);
+    if (b.alive[near] && Math.hypot(b.x[near] - p.x, b.z[near] - p.z) <= P.parryR) reached = w.time;
+  }
+  assert.ok(reached != null, '닿지 않음');
+  assert.ok(reached >= 0.4 - RULES.dt, `패링 원까지 ${reached}초`);
+  assert.ok(B.minParrySpawn > 3);
 });
 
 test('빠른 탄도 판정 점을 건너뛰지 않는다', () => {
@@ -82,4 +91,17 @@ test('상한 400발을 넘으면 -1', () => {
   for (let k = 0; k < RULES.bullets.cap; k++) assert.notEqual(spawnBullet(w, K.NORMAL, 9, 6, 0, 0), -1);
   assert.equal(liveCount(w), RULES.bullets.cap);
   assert.equal(spawnBullet(w, K.NORMAL, 9, 6, 0, 0), -1);
+});
+
+// 사용자 2026-11-16 "탄환이 너무 빨라 보고 판단하고 피하기가 빡셈" — 적 탄 전체를 느리게(보라·빨강 = speedMul배, 흰·금 = 한 속도 자체를 낮춤)
+test('보라·빨강 탄은 speedMul배로 느려지고, 흰·금 탄은 예전 14의 같은 배율', () => {
+  const B = RULES.bullets;
+  assert.ok(B.speedMul > 0 && B.speedMul <= 0.8, `speedMul ${B.speedMul}`);
+  const w = quietWorld(); const p = w.player;
+  const n = spawnBullet(w, K.NORMAL, p.x + 9, p.z, Math.PI, 10);
+  const r = spawnBullet(w, K.RED, p.x + 9, p.z + 2, Math.PI, 18);
+  assert.ok(Math.abs(-w.bullets.vx[n] - 10 * B.speedMul) < 1e-9);
+  assert.ok(Math.abs(-w.bullets.vx[r] - 18 * B.speedMul) < 1e-9);
+  assert.ok(Math.abs(B.parrySpeed - 14 * B.speedMul) < 1e-9, `흰·금 ${B.parrySpeed}`);
+  assert.ok(Math.abs(B.minParrySpawn - (RULES.player.parryR + B.parryLead * B.parrySpeed)) < 1e-9, `0.4초 거리 ${B.minParrySpawn}`);
 });

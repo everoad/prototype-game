@@ -82,3 +82,20 @@ test('양손 키보드: J 패링, K 방패, L 폭탄, Shift 패링도 그대로'
   m.keyUp('KeyJ'); m.keyDown('ShiftLeft', 3);
   assert.equal(m.take().parry, true);
 });
+
+// 보조 무기(§4.10): 숫자 1~6으로 켜고 끔(시험용), 누른 순간 한 번
+test('숫자 1~4는 무기 켜고 끄기(누른 순간 한 번)', () => {
+  const m = createInputMap(0);
+  m.keyDown('Digit3', 0); m.keyDown('Digit3', 5);
+  assert.equal(m.take().toggle, 3);
+  assert.equal(m.take().toggle, 0);
+  m.keyUp('Digit3'); m.keyDown('Digit4', 9);
+  assert.equal(m.take().toggle, 4);
+});
+
+test('U·I·O는 무기 스킬(미사일·빔·드론), 누른 순간 한 번', () => {
+  const m = createInputMap(0);
+  m.keyDown('KeyU', 0); assert.equal(m.take().skill, 'missile'); assert.equal(m.take().skill, null);
+  m.keyDown('KeyI', 1); assert.equal(m.take().skill, 'beam');
+  m.keyDown('KeyO', 2); assert.equal(m.take().skill, 'drone');
+});

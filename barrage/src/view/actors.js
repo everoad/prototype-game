@@ -1,6 +1,7 @@
 // 몸: 플레이어(캡슐·총구·패링 고리·판정 점)와 보스(둥근 덩어리·눈). 몸짓은 sim 상태와 사건에서 읽는다(로직 ↔ 외형 분리).
 // 늘 보스를 본다(돌아보는 시간 없음), 가는 쪽으로 기울고 서면 살짝 튕긴다. 보스는 준비 때 다음 위협 색으로 번쩍인다(§5.1).
 import { canExecute } from '../sim/execute.js';
+import { createDragonView } from './dragonView.js';
 
 export function createActors(view, LOOK, opts = {}) {
   const THREE = view.THREE, C = LOOK.colors, S = LOOK.sizes, Bd = LOOK.body, L = view.layers;
@@ -25,6 +26,16 @@ export function createActors(view, LOOK, opts = {}) {
   const hitCore = new THREE.Mesh(flat(new THREE.CircleGeometry(0.15, 24)), markerMat(C.hitCore));
   for (const m of [ring, hitRim, hitCore]) { m.position.y = S.bh; L.marker.add(m); }
   let ringOn = opts.ring !== false;
+  // 모아 던지기(§4.11): 모인 구슬(패링 고리 안쪽을 돈다) + 패링 고리 위 칸(모인 만큼 밝게) — 들어오는 탄을 읽는 자리를 가리지 않게 작게
+  const storeCap = opts.storeCap ?? 0, storeOrbs = [], storeArcs = [];
+  for (let k = 0; k < storeCap; k++) {
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: C.cyan }));
+    orb.visible = false; L.actors.add(orb);
+    storeOrbs.push({ m: orb, from: null, at: -1e9 });
+    const gap = S.storeArcGapDeg * Math.PI / 180, span = Math.PI * 2 / storeCap - gap;
+    const arc = new THREE.Mesh(flat(new THREE.RingGeometry(0.8 - S.storeArcWidth, 0.8 + S.storeArcWidth, 20, 1, k * Math.PI * 2 / storeCap + gap / 2, span)), markerMat(C.cyan));
+    arc.visible = false; L.marker.add(arc); storeArcs.push(arc);
+  }
 
   // ── 보스
   const boss = new THREE.Group();
@@ -37,6 +48,9 @@ export function createActors(view, LOOK, opts = {}) {
   const bPose = new THREE.Group(); bPose.add(bBody, eyes);
   boss.add(bPose);
   L.actors.add(boss);
+  // 용(?boss=dragon): 둥근 몸 대신 상자 용 — 같은 재질이라 번쩍임·금 갈라짐이 그대로 보인다
+  const dragon = opts.boss === 'dragon' ? createDragonView(view, LOOK, bMat) : null;
+  if (dragon) { bPose.visible = false; boss.add(dragon.root); }
 
   // 처형 금빛 고리(§5.8): 그로기면 옅게, 곁(누르면 처형)이면 밝게 맥동
   const execRingMat = new THREE.MeshBasicMaterial({ color: C.gold, transparent: true, depthTest: false, depthWrite: false });
@@ -74,7 +88,7 @@ export function createActors(view, LOOK, opts = {}) {
   const trail = { until: -1e9, every: 0.08, nextAt: 0, near: false };
 
   // 몸짓 상태
-  const st = { flashColor: null, flashAt: -1, ringFlashAt: -1e9, dimAt: -1e9, stopAt: -1e9, moving: false, lunge: -1e9, shakeUntil: -1e9, shakeAmp: 0, joltAt: -1e9, jolt: 0, deadAt: null };
+  const st = { flashColor: null, flashAt: -1, ringFlashAt: -1e9, dimAt: -1e9, stopAt: -1e9, moving: false, lunge: -1e9, shakeUntil: -1e9, shakeAmp: 0, joltAt: -1e9, jolt: 0, deadAt: null, downAt: null, pulseAt: -1e9 };
   const lerp = (a, b, t) => a + (b - a) * t;
 
   function onEvents(events, now) {
@@ -83,6 +97,7 @@ export function createActors(view, LOOK, opts = {}) {
       else if (e.type === 'meleeHit') st.lunge = now;
       else if (e.type === 'bossHit') { st.shakeUntil = now + 0.06; st.shakeAmp = 0.04; }
       else if (e.type === 'orbFire' && orbs[e.k]) orbs[e.k].flashAt = now;
+      else if (e.type === 'storeAdd' && storeOrbs[e.n - 1]) { storeOrbs[e.n - 1].from = { x: e.x, z: e.z }; storeOrbs[e.n - 1].at = now; }   // 받은 자리에서 빨려 들어온다
     }
   }
 
@@ -108,6 +123,12 @@ export function createActors(view, LOOK, opts = {}) {
     body.visible = !blink; nose.visible = !blink;
     pMat.emissiveIntensity = now - st.dimAt < 0.15 ? 0 : 0.25;
     pMat.color.set(now - st.dimAt < 0.15 ? C.playerDark : C.player);
+    // 반격 기회(과열): 그동안 몸이 금빛, 끝나기 직전 깜빡
+    const od = p.overdriveUntil - w.time, OD = LOOK.feel.overdrive;
+    if (od > 0 && (od > OD.blink || Math.floor(now * 12) % 2 === 0)) { pMat.color.set(C.gold); pMat.emissive.set(C.gold); pMat.emissiveIntensity = OD.glow; }
+    else pMat.emissive.set(C.player);
+    // 패배: 몸이 사라진다(파편은 feel)
+    if (st.downAt != null) { body.visible = false; nose.visible = false; ring.visible = false; hitRim.visible = false; hitCore.visible = false; }
     // 잔상: trail 동안 every초마다 지금 자리에 하나
     const A = LOOK.feel.afterimage;
     if (now < trail.until && now >= trail.nextAt && LOOK.feel.on.afterimage !== false) {
@@ -127,6 +148,22 @@ export function createActors(view, LOOK, opts = {}) {
     const rf = now - st.ringFlashAt;
     ringMat.opacity = rf < 0.12 ? 1 : rf < 0.25 ? lerp(1, S.ringAlpha, (rf - 0.12) / 0.13) : S.ringAlpha;
     ring.visible = ringOn || rf < 0.25;
+    // 모인 구슬·고리 칸
+    const stored = p.store?.length ?? 0, full = stored >= storeCap && storeCap > 0;
+    for (let k = 0; k < storeCap; k++) {
+      const o = storeOrbs[k], arc = storeArcs[k], on = k < stored;
+      o.m.visible = on; arc.visible = on;
+      if (!on) continue;
+      const a = now * S.storeSpin + k * Math.PI * 2 / storeCap, R0 = w.rules.store.orbitR;
+      let ox = x + Math.cos(a) * R0, oz = z + Math.sin(a) * R0, oy = S.storeOrbY;
+      const u = Math.min(1, (now - o.at) / S.storeArrive);
+      if (o.from && u < 1) { const e2 = u * u * (3 - 2 * u); ox = lerp(o.from.x, ox, e2); oz = lerp(o.from.z, oz, e2); oy = lerp(S.bh, oy, e2); }
+      o.m.position.set(ox, oy, oz);
+      const pop = u < 1 ? 1.6 - 0.6 * u : 1, beat = full ? 1 + 0.18 * Math.sin(now * 16) : 1;
+      o.m.scale.setScalar(S.storeOrbR * (p.store[k].perfect ? 1.25 : 1) * pop * beat);
+      arc.position.set(x, S.bh, z);
+      arc.material.opacity = full ? 0.7 + 0.3 * Math.sin(now * 16) : 0.9;
+    }
 
     // 보스 자리·바라봄
     let bx = lerp(b.px, b.x, alpha), bz = lerp(b.pz, b.z, alpha);
@@ -161,6 +198,7 @@ export function createActors(view, LOOK, opts = {}) {
     if (k > 0) { bMat.emissive.set(st.flashColor); bMat.emissiveIntensity = k * (st.flashColor === C.windup.purple ? 0.35 : 1); }   // 특수 탄 없는 패턴은 약하게(§5.1)
     else if (b.stagger >= w.rules.stagger.max * 0.8) { bMat.emissive.set(C.bossCrack); bMat.emissiveIntensity = 0.06 + 0.05 * Math.sin(now * 14); }   // 곧 무너진다(§5.4)
     else bMat.emissiveIntensity = 0;
+    dragon?.update(w, now, charging ? st.flashColor : null);
     // 방패 거품: 켜진 동안, 끝나기 0.3초 전부터 깜빡
     const sh = p.shieldUntil - w.time;
     shieldBall.visible = shieldEdge.visible = sh > 0 && (sh > 0.3 || Math.floor(now * 20) % 2 === 0);
@@ -200,7 +238,16 @@ export function createActors(view, LOOK, opts = {}) {
       g.m.material.color.set(f ? C.orbFlash : C.normal);
     }
     // 죽음: 가라앉으며 작아진다
-    if (b.dead) { st.deadAt ??= now; const u = Math.min(1, (now - st.deadAt) / 1.2); boss.scale.setScalar(1 - 0.85 * u); boss.position.y = -0.8 * u; }
+    // 2단계 넘어감: 몸이 한 번 부푼다
+    const pu = (now - st.pulseAt) / 0.45;
+    boss.scale.setScalar(pu >= 0 && pu < 1 ? 1 + 0.22 * Math.sin(pu * Math.PI) : 1);
+    // 죽음: 금이 가듯 금빛으로 떨다가(파편이 터지는 동안) 마지막에 꺼지며 가라앉는다
+    if (b.dead) {
+      st.deadAt ??= now;
+      const D = LOOK.feel.death, t = now - st.deadAt, crack = D.chunks.at(-1) + D.finalAfter;
+      if (t < crack) { boss.scale.setScalar(1 + 0.05 * Math.sin(now * 70)); bMat.emissive.set(C.gold); bMat.emissiveIntensity = (0.15 + 0.6 * t / crack) * (0.6 + 0.4 * Math.sin(now * 45)); }
+      else { const u = Math.min(1, (t - crack) / 0.45); boss.scale.setScalar(1 - 0.95 * u); boss.position.y = -0.8 * u; bMat.emissiveIntensity = 0; }
+    }
   }
 
   return {
@@ -209,6 +256,8 @@ export function createActors(view, LOOK, opts = {}) {
     dodgeTrail(now, near) { if (near) { trail.near = true; for (const g of ghosts) if (now - g.born < LOOK.feel.afterimage.fade) { g.alpha = LOOK.feel.afterimage.alphaNear; g.m.material.color.set('#a8f0ff'); } return; } trail.until = now + 0.25; trail.nextAt = now; trail.near = false; },
     dashTrail(now) { trail.until = now + 0.2; trail.nextAt = now; trail.near = true; },
     bossJolt(now, amount) { st.joltAt = now; st.jolt = amount; },
+    bossPulse(now) { st.pulseAt = now; },
+    playerDown(now) { st.downAt = now; },
     dim(now) { st.dimAt = now; },
     toggleRing() { ringOn = !ringOn; return ringOn; },
     player, boss,

@@ -1,10 +1,10 @@
 // 판 기록: 피해 출처(패링 몫 셈), 패링·맞음 수 등. botrun과 결과 화면이 읽는다.
-export const DAMAGE_SOURCES = ['shot', 'overdrive', 'reflect', 'counter', 'groggy', 'execute', 'bomb'];
+export const DAMAGE_SOURCES = ['shot', 'overdrive', 'reflect', 'counter', 'groggy', 'execute', 'bomb', 'weapon', 'burst', 'throw'];
 
 export function createStats() {
   const dmg = {};
   for (const s of DAMAGE_SOURCES) dmg[s] = 0;
-  return { dmg, total: 0, hits: 0, grazes: 0, shotsFired: 0, shotsHit: 0, parries: 0, perfects: 0, hitsByPattern: {} };
+  return { dmg, total: 0, hits: 0, grazes: 0, shotsFired: 0, shotsHit: 0, parries: 0, perfects: 0, throws: 0, healed: 0, hitsByPattern: {} };
 }
 
 export function addDamage(stats, src, amount) {
@@ -16,5 +16,5 @@ export function addDamage(stats, src, amount) {
 export function parryShare(stats) {
   if (stats.total <= 0) return 0;
   const d = stats.dmg;
-  return (d.reflect + d.counter + d.overdrive + d.groggy + d.execute) / stats.total;
+  return (d.reflect + d.counter + d.overdrive + d.groggy + d.execute + d.burst + d.throw) / stats.total;   // burst = 패링 연계 산탄(§4.10)
 }

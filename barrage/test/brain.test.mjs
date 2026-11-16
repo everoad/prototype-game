@@ -216,3 +216,36 @@ test('그로기가 끝나면 빔·파도·차선이 남아 있지 않다', () =>
   }
   assert.ok(checked >= 3);
 });
+
+// 사용자 2026-11-16 "레이저가 너무 피하기 힘들다 — 주변 탄막도 많은데 광역까지": 레이저는 혼자, 더 느리게
+import { createBot as makeBot } from '../src/sim/bot.js';
+
+test('레이저가 켜진 동안(조준~쓸기)은 다른 탄이 새로 나오지 않는다', () => {
+  let lasers = 0;
+  for (const phase of [1, 2]) {
+    const w = brainWorld({ seed: 2, phase });
+    for (let k = 0; k < ticks(150); k++) {
+      const on = w.beams.length > 0;
+      step(w, idle);
+      for (const e of drainEvents(w)) {
+        if (e.type === 'laserAim') lasers++;
+        if (on && w.beams.length > 0 && (e.type === 'fire' || e.type === 'orbFire')) assert.fail(`${phase}단계 ${e.t.toFixed(2)}: 레이저 중 ${e.type} src ${e.src}`);
+      }
+    }
+  }
+  assert.ok(lasers >= 4, `레이저 ${lasers}번`);
+});
+
+test('걷기만 해도 레이저는 대개 비킨다(맞는 비율 0.2 이하)', () => {
+  let runs = 0, hits = 0;
+  for (const seed of [1, 2, 3, 4]) {
+    const w = createWorld({ seed, pattern: 8 }), bot = makeBot('walk', seed);
+    w.player.hp = 1e9;
+    for (let k = 0; k < ticks(30); k++) {
+      step(w, bot(w));
+      for (const e of drainEvents(w)) { if (e.type === 'laserAim') runs++; if (e.type === 'hurt' && e.src === 8) hits++; }
+    }
+  }
+  assert.ok(runs >= 10);
+  assert.ok(hits / runs <= 0.2, `레이저 ${hits}/${runs} = ${(hits / runs).toFixed(2)}`);
+});

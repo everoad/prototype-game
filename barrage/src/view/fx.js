@@ -10,7 +10,7 @@ export function createFx(view, LOOK) {
   const mk = layer => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#fff', depthTest: false, depthWrite: false }), N); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); layer.add(m); return m; };
   const air = mk(L.fx), dirt = mk(L.floorFx);
   dirt.material.depthTest = true;
-  const named = { white: C.white, gold: C.gold, red: C.red, cyan: C.cyan, purple: C.normal, orange: '#ff8a3c', grey: '#8e8a99', item: C.item };
+  const named = { white: C.white, gold: C.gold, red: C.red, cyan: C.cyan, purple: C.normal, orange: '#ff8a3c', grey: '#8e8a99', item: C.item, heal: C.heal };
   const bh = () => LOOK.sizes.bh;
   let rnd = 12345;   // 연출 전용 난수(sim 난수와 따로)
   const r01 = () => { rnd = (rnd * 1103515245 + 12345) >>> 0; return (rnd >>> 8) / 16777216; };
@@ -40,6 +40,10 @@ export function createFx(view, LOOK) {
     tracer(x1, z1, x2, z2, color, scale = 1) {
       const n = Math.round(7 * scale), y = bh() * 1.2;
       for (let i = 0; i <= n; i++) { const u = i / n; emit(x1 + (x2 - x1) * u, y, z1 + (z2 - z1) * u, 0, 0, 0, 0.07 * scale, 0.09 * scale, color); }
+    },
+    // 올라가는 알갱이(회복): 몸 둘레에서 위로 — 바닥 고리가 아니다
+    rise(x, z, color, n = 12) {
+      for (let k = 0; k < n; k++) { const a = r01() * Math.PI * 2, d = 0.2 + r01() * 0.5; emit(x + Math.cos(a) * d, 0.2 + r01() * 0.6, z + Math.sin(a) * d, 0, 1.6 + r01() * 1.6, 0, 0.45 + r01() * 0.3, 0.07 + r01() * 0.04, color); }
     },
     muzzle(x, z, angle) { emit(x + Math.cos(angle) * 0.6, bh() * 1.2, z + Math.sin(angle) * 0.6, 0, 0, 0, 0.04, 0.16, 'cyan'); },
     clearSparkle(x, z, r) {

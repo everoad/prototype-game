@@ -60,7 +60,7 @@ export function createBulletsView(view, LOOK, cap) {
   const areaGeo = (shape, R, half, ring = false) => {
     const key = `${shape}:${R}:${half}:${ring}`;
     if (!geoCache.has(key)) {
-      const g = ring ? new THREE.RingGeometry(Math.max(0.1, R - S.waveTele), R, 64) : shape === 'circle' ? new THREE.CircleGeometry(R, 48) : new THREE.CircleGeometry(R, 32, -half, half * 2);
+      const g = ring ? new THREE.RingGeometry(Math.max(0.1, R - S.waveTele), R, 64, 1, half < Math.PI ? -half : 0, half < Math.PI ? half * 2 : Math.PI * 2) : shape === 'circle' ? new THREE.CircleGeometry(R, 48) : new THREE.CircleGeometry(R, 32, -half, half * 2);
       g.rotateX(-Math.PI / 2);
       geoCache.set(key, g);
     }
@@ -147,6 +147,7 @@ export function createBulletsView(view, LOOK, cap) {
     const b = w.bullets, vis = S.bulletVisual, minR = S.bulletMinPx * view.unitsPerPx(), bh = S.bh;
     for (let i = 0; i < b.cap; i++) {
       if (!b.alive[i]) continue;
+      if (w.result === 'win' && b.kind[i] !== K.REFLECT) continue;   // 이긴 순간 남은 적 탄은 반짝이며 사라진다(main)
       const x = b.px[i] + (b.x[i] - b.px[i]) * alpha, z = b.pz[i] + (b.z[i] - b.pz[i]) * alpha;
       const r = Math.max(b.r[i] * vis, minR), k = b.kind[i];
       const yaw = Math.atan2(b.vz[i], b.vx[i]);
@@ -156,18 +157,20 @@ export function createBulletsView(view, LOOK, cap) {
       else if (k === K.GOLD) { put(meshes.gold, x, bh, z, r * 1.2, r * 1.2, r * 1.2, now * 3 + i, 0.6); put(meshes.goldRim, x, bh, z, r, r, r); }
       else if (k === K.RED) put(meshes.red, x, bh, z, r * 1.9, r * 0.8, r * 0.8, yaw);
       else {
-        const holding = w.time < b.holdUntil[i], big = b.perfect[i] ? 1.35 : 1;
+        const holding = w.time < b.holdUntil[i], big = (b.perfect[i] ? 1.35 : 1) * (b.thrown[i] ? S.thrownScale : 1);   // 모아 던진 탄(§4.11)은 크게
         put(meshes.reflect, x, bh, z, r * big, r * big, r * big);
-        if (!holding) put(meshes.reflectTail, x - Math.cos(yaw) * r * 1.6, bh, z - Math.sin(yaw) * r * 1.6, r * (b.perfect[i] ? 3.2 : 2.4), r * 0.6, r * 0.6, yaw);
+        if (!holding) put(meshes.reflectTail, x - Math.cos(yaw) * r * 1.6, bh, z - Math.sin(yaw) * r * 1.6, r * (b.perfect[i] ? 3.2 : 2.4) * (b.thrown[i] ? 1.8 : 1), r * 0.6 * (b.thrown[i] ? 1.4 : 1), r * 0.6, yaw);
       }
     }
     // 플레이어 탄(밝기는 매 화면 읽는다 — 수치 패널)
     meshes.shots.material.opacity = S.shotAlpha;
+    const over = w.time < w.player.overdriveUntil, shotW = S.shotWidth * (over ? LOOK.feel.overdrive.shotScale : 1);   // 반격 기회(과열): 금빛·굵게
+    meshes.shots.material.color.set(over ? C.gold : C.cyan);
     const s = w.shots;
     for (let i = 0; i < s.cap; i++) {
       if (!s.alive[i]) continue;
       const x = s.px[i] + (s.x[i] - s.px[i]) * alpha, z = s.pz[i] + (s.z[i] - s.pz[i]) * alpha;
-      put(meshes.shots, x, bh * 1.2, z, S.shotLen, S.shotWidth, S.shotWidth, Math.atan2(s.vz[i], s.vx[i]));
+      put(meshes.shots, x, bh * 1.2, z, S.shotLen, shotW, shotW, Math.atan2(s.vz[i], s.vx[i]));
     }
     // 쪼개지는 구슬의 흰 조각 표시
     const run = w.boss.run;
@@ -195,7 +198,7 @@ export function createBulletsView(view, LOOK, cap) {
     let ai = 0;
     const drawArea = a => {
       if (a.shape === 'lane') return;
-      const { edge, fill } = areaMeshes(ai++), ring = a.kind === 'wave';
+      const { edge, fill } = areaMeshes(ai++), ring = a.kind === 'wave' || a.kind === 'wing';   // 날갯짓 예고 = 반원 고리
       const g = areaGeo(a.shape, a.R, a.half, ring), c = colorOf[a.color] ?? C.white;
       const u = Math.min(1, (w.time - a.born) / a.warn);
       for (const m of AREA_PAIR(edge, fill)) { m.geometry = g; m.visible = true; m.position.x = a.x; m.position.z = a.z; m.rotation.y = -a.face; m.material.color.set(c); }
@@ -227,7 +230,9 @@ export function createBulletsView(view, LOOK, cap) {
     for (const v of w.waves ?? []) {
       const { band, front } = waveMeshes(wi++), c = colorOf[v.color] ?? C.white, th = w.rules.floor.wave.thick;
       // 받아낸 자리(gapAngle)만 끊긴다: 그 둘레 waveGap U를 비운 호
-      const gh = Number.isFinite(v.gapAngle) ? Math.min(Math.PI / 2, S.waveGap / Math.max(1, v.r)) : 0, a0 = Number.isFinite(v.gapAngle) ? v.gapAngle + gh : 0, span = Math.PI * 2 - gh * 2;
+      const gh = Number.isFinite(v.gapAngle) ? Math.min(Math.PI / 2, S.waveGap / Math.max(1, v.r)) : 0;
+      let a0 = Number.isFinite(v.gapAngle) ? v.gapAngle + gh : 0, span = Math.PI * 2 - gh * 2;
+      if (v.arc) { a0 = v.arc.face - v.arc.half; span = v.arc.half * 2; }   // 날갯짓: 그쪽 반원만(받아낸 끊김은 반원 안이라 생략)
       setRing(band.geometry, Math.max(0, v.r - th), v.r, a0, span); setRing(front.geometry, Math.max(0, v.r - S.waveFront), v.r, a0, span);
       band.visible = front.visible = true;
       band.position.x = front.position.x = v.x; band.position.z = front.position.z = v.z;

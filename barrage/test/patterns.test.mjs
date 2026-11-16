@@ -35,7 +35,7 @@ test('조준 차선은 발사 0.2초 전까지 따라오고 그 뒤 고정', () 
   assert.equal(lane.angle, a2);
 });
 
-test('모든 패턴의 흰·금 탄은 14 U/s이고 플레이어 6.4 U 밖에서만 생긴다', () => {
+test('모든 패턴의 흰·금 탄은 14 U/s이고 패링 원까지 0.4초 넘게 걸린다(가까우면 멈췄다 출발)', () => {
   let special = 0;
   for (const id of Object.keys(PATTERNS).map(Number)) {
     for (const d of [3, 7, 12]) {
@@ -47,8 +47,9 @@ test('모든 패턴의 흰·금 탄은 14 U/s이고 플레이어 6.4 U 밖에서
             special++;
             const sp = Math.hypot(w.bullets.vx[e.id], w.bullets.vz[e.id]);
             assert.ok(Math.abs(sp - RULES.bullets.parrySpeed) < 1e-9, `패턴 ${id} 속도 ${sp}`);
-            const dist = Math.hypot(e.x - w.player.x, e.z - w.player.z);
-            assert.ok(dist >= RULES.bullets.minParrySpawn - 1e-9, `패턴 ${id} 거리 ${d}: ${dist}`);
+            const dist = Math.hypot(e.x - w.player.x, e.z - w.player.z), hold = Math.max(0, w.bullets.holdUntil[e.id] - w.time);
+            const arrive = hold + Math.max(0, dist - RULES.player.parryR) / RULES.bullets.parrySpeed;
+            assert.ok(arrive >= 0.4 - 2 * RULES.dt, `패턴 ${id} 거리 ${d}: ${arrive}초`);
           }
         },
       });
@@ -91,4 +92,14 @@ test('쪼개지는 구슬은 터지기 전에 흰 조각 방향을 표시한다'
   let marked = false;
   runPattern(w, 4, { onTick: (w, run) => { if (!run.burst && run.marks?.length === 2) marked = true; } });
   assert.ok(marked);
+});
+
+// 조사 보고서(2026-11-16): 보스에 붙어 있으면 쪼개지는 구슬의 흰 조각이 보통 탄으로 바뀌어 사라졌다 — 받아칠 탄 보장
+test('보스에 붙어 있어도 쪼개지는 구슬의 흰 조각은 흰 탄으로 나온다', () => {
+  for (const d of [4.5, 5.5]) {
+    const w = quietWorld(); w.boss.x = w.player.x + d; w.boss.z = 0;
+    let whites = 0;
+    runPattern(w, 4, { onTick: w => { for (const e of fires(drainEvents(w))) if (e.kind === K.WHITE) whites++; } });
+    assert.equal(whites, RULES.patterns[4].whites, `거리 ${d}: 흰 조각 ${whites}`);
+  }
 });

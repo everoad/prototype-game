@@ -34,7 +34,7 @@ export function useItems(w, input) {
   if (p.dyingAt != null && w.time >= p.dyingAt - 1e-9 && !w.result) {
     p.dyingAt = null;
     w.result = 'lose';
-    emit(w, 'playerDeath');
+    emit(w, 'playerDeath', { x: w.player.x, z: w.player.z });
   }
 }
 

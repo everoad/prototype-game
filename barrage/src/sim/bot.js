@@ -1,6 +1,8 @@
 // 시범 봇(§9) — 게임 기능이 아니라 확인·영상·수치 맞추기용 도구.
 // 사람처럼: 0.2초 전 탄 모습을 보고 그만큼 앞으로 내다본다(그 사이 생긴 탄은 모름), 플레이어 둘레 10 U 안만 본다, 패링 타이밍이 흔들린다.
-// 종류: '1' 숙련 · 'some' 가끔 패링(기회 절반, ±0.08초) · 'dodge' 패링 안 함 · 'walk' 패링·회피 안 함 · 'turtle' 서서 패링만.
+// 종류: '1' 숙련 · 'some' 가끔 패링(기회 절반, ±0.08초) · 'dodge' 패링 안 함 · 'walk' 패링·회피 안 함 · 'turtle' 서서 패링만 ·
+//       'user' 사용자 판에 맞춘 봇(패링은 정확하지만 기회의 일부만, 탄은 늦게 보고 드물게 고쳐 움직여 더 맞는다 — RULES.bot.user).
+// 모아 던지기(§4.11) 판에서는 패링하는 봇이 던진다: 가득이거나, 회복이 버려지지 않을 만큼 깎였거나, 보스가 그로기거나, 체력이 위태로울 때.
 // 장판 공격(박치기 줄·파도·검기)과 레이저도 본다: 흰·금은 닿기 직전 패링, 걸어서 못 피하는 빨강(파도 등)은 닿기 dodgeLead초 전 구르기,
 // 박치기 줄·검기·빔은 움직임 셈의 위험에 넣는다(비킬 수 없으면 구른다).
 import { K } from './rules.js';
@@ -28,18 +30,20 @@ function slamSpan(w, qx, qz) {
   else { const sb = (b.x - a.x) * ux + (b.z - a.z) * uz; if (sb > s + half) return null; t0 = Math.max(0, sIn - sb) / F.speed; }
   return [t0, t0 + 2 * half / F.speed];
 }
+// 날갯짓 파도(arc)는 그 반원 안만 닿는다
+const inArc = (arc, cx, cz, qx, qz) => !arc || Math.abs(Math.atan2(Math.sin(Math.atan2(qz - cz, qx - cx) - arc.face), Math.cos(Math.atan2(qz - cz, qx - cx) - arc.face))) <= arc.half;
 // 파도: 앞면이 (qx,qz)의 몸에 닿기까지(퍼지는 것 + 아직 예고 중인 것). [{ t, color, key }]
 function waveHits(w, qx, qz, react) {
   const R = w.rules, F = R.floor.wave, out = [], body = R.player.bodyR;
   for (const v of w.waves) {
-    if (v.hitDone) continue;
+    if (v.hitDone || !inArc(v.arc, v.x, v.z, qx, qz)) continue;
     const d = Math.hypot(qx - v.x, qz - v.z);
     if (d + body < v.r - F.thick) continue;   // 이미 지나감
     out.push({ t: Math.max(0, (d - body - v.r) / F.speed), color: v.color, key: `wave:${Math.round(v.born * 120)}` });
   }
   const f = w.floor;
-  if (f && f.kind === 'wave' && !f.wave && f.born <= w.time - react + 1e-9) {
-    const d = Math.hypot(qx - w.boss.x, qz - w.boss.z), at = f.born + F.warn;
+  if (f && f.kind === 'wave' && !f.wave && f.born <= w.time - react + 1e-9 && inArc(f.arc, w.boss.x, w.boss.z, qx, qz)) {
+    const d = Math.hypot(qx - w.boss.x, qz - w.boss.z), at = f.born + f.area.warn;
     out.push({ t: at - w.time + Math.max(0, d - body - R.boss.r) / F.speed, color: f.color, key: `wave:${Math.round(at * 120)}` });
   }
   return out;
@@ -56,16 +60,19 @@ function beamAt(w, m, qx, qz, t, margin) {
 
 export function createBot(kind, seed) {
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
-  const parries = kind === '1' || kind === 'some' || kind === 'turtle';
+  const user = kind === 'user';
+  const parries = kind === '1' || kind === 'some' || kind === 'turtle' || user;
   const moves = kind !== 'turtle';
-  const dodges = kind === '1' || kind === 'some' || kind === 'dodge';
+  const dodges = kind === '1' || kind === 'some' || kind === 'dodge' || user;
   const jitterMax = kind === 'some' ? 0.08 : 0.04;
-  let ring = null, head = 0, frames = 0, nextThink = 0, mx = 0, mz = 0;
+  let ring = null, head = 0, frames = 0, nextThink = 0, mx = 0, mz = 0, skillTurn = 0;
+  let zoneGoal = null, lastBossState = null;   // 용 판: 머리 공격이 끝날 때 가끔 옆·뒤로 돌아간다({ off, R, until })
   const plans = new Map();   // 기회(탄 id·생긴 때 / 장판 born) → { parry: bool, jitter }
+  let userChance = 0.5, userB = null;   // user 봇: 받는 기회 몫과 규칙 묶음(판 규칙에서 한 번 읽는다)
 
   function snapshot(w, R) {
     if (!ring) {
-      const n = Math.round(R.bot.react / R.dt) + 1, cap = w.bullets.cap;
+      const n = Math.round((user ? R.bot.user.react : R.bot.react) / R.dt) + 1, cap = w.bullets.cap;
       ring = Array.from({ length: n }, () => ({ n: 0, t: 0, x: new Float64Array(cap), z: new Float64Array(cap), vx: new Float64Array(cap), vz: new Float64Array(cap), r: new Float64Array(cap), kind: new Uint8Array(cap), id: new Int32Array(cap), born: new Float64Array(cap) }));
     }
     const f = ring[head], b = w.bullets, p = w.player, reach = R.bot.sight + 6;
@@ -84,7 +91,7 @@ export function createBot(kind, seed) {
   function plan(key, isParryable) {
     let pl = plans.get(key);
     if (!pl) {
-      pl = { parry: parries && isParryable && (kind !== 'some' || rng.next() < 0.5), jitter: (rng.next() * 2 - 1) * jitterMax };
+      pl = { parry: parries && isParryable && (kind === 'some' ? rng.next() < 0.5 : !user || rng.next() < userChance), jitter: (rng.next() * 2 - 1) * jitterMax };
       plans.set(key, pl);
       if (plans.size > 2000) plans.delete(plans.keys().next().value);
     }
@@ -103,15 +110,34 @@ export function createBot(kind, seed) {
   }
 
   return function bot(w) {
-    const R = w.rules, B = R.bot, p = w.player, now = w.time;
+    const R = w.rules, B0 = R.bot, p = w.player, now = w.time;
+    const B = user ? (userB ??= { ...B0, react: B0.user.react, think: B0.user.think }) : B0;   // user: 늦게 보고 드물게 고쳐 움직인다
+    userChance = B0.user.chance;
     snapshot(w, R);
-    if (w.execute) return { mx: 0, mz: 0, parry: false, dodge: false };
-    if (parries && canExecute(w)) return { mx: 0, mz: 0, parry: true, dodge: false };   // 그로기 곁 = 처형
+    // 모아 던지기(§4.11): 던질 때
+    let toss = false;
+    if (w.opts.store && parries && p.store.length > 0) {
+      const S = R.store, n = p.store.length;
+      let heal = 0; for (const o of p.store) heal += o.perfect ? S.heal[1] : S.heal[0];
+      const free = p.dyingAt == null && !(p.auto && now < p.autoUntil);   // 못 던지는 때엔 누르지 않는다(틱 소리만 난다)
+      toss = free && (n >= S.cap || (n >= 2 && R.player.hp - p.hp >= heal) || bossGroggy(w) || p.hp <= R.player.hp * 0.25);
+    }
+    if (w.execute) return { mx: 0, mz: 0, parry: false, dodge: false, throw: false };
+    if (parries && canExecute(w)) return { mx: 0, mz: 0, parry: !toss, dodge: false, throw: toss };   // 그로기 곁 = (모은 것부터 던지고) 처형
     const f = delayed();
     const lag = f ? now - f.t : 0;
+    // 용 판 자리 정하기(설계 용 §9): 가까이서 받은 공격(발톱·장판)이 끝나면 chance꼴로 옆(±90°)이나 뒤(180°) 목표 자리를 sec초 지킨다.
+    // 이미 붙어 있을 때만 — 머리 공격 중에 멀리서 옆으로 돌면 조준 탄에 맞는다(봇 판에서 확인)
+    const Bz = B.zone, bs = w.boss.state, near = Math.hypot(p.x - w.boss.x, p.z - w.boss.z) < Bz.from;
+    if (moves && w.boss.kind === 'dragon' && bs === 'idle' && (lastBossState === 'floor' || lastBossState === 'melee') && near && !zoneGoal && rng.next() < Bz.chance) {
+      const pickSide = rng.next(), off = pickSide < 1 / 3 ? Math.PI / 2 : pickSide < 2 / 3 ? -Math.PI / 2 : Math.PI;
+      zoneGoal = { off, R: Bz.R[0] + rng.next() * (Bz.R[1] - Bz.R[0]), until: now + Bz.sec[0] + rng.next() * (Bz.sec[1] - Bz.sec[0]) };
+    }
+    lastBossState = bs;
+    if (zoneGoal && now >= zoneGoal.until) zoneGoal = null;
     let parry = false, dodge = false;
     // 근접 장판 + 검기(부채). 박치기 줄·파도 예고 원은 아래에서 따로 센다.
-    const seenAreas = [...w.melee.areas, ...w.floorAreas.filter(a => a.kind === 'sword')].filter(a => a.born <= now - B.react + 1e-9);
+    const seenAreas = [...w.melee.areas, ...w.floorAreas.filter(a => a.kind === 'sword' || a.kind === 'tail')].filter(a => a.born <= now - B.react + 1e-9);   // 부채꼴 장판(검기·꼬리)
     const slamOn = !!w.floor && w.floor.kind === 'slam' && w.floor.born <= now - B.react + 1e-9;
     const slamKey = slamOn ? `slam:${Math.round(w.floor.born * 120)}` : null;
     const slamParry = slamOn && w.floor.color !== 'red' && plan(slamKey, true).parry;
@@ -215,8 +241,11 @@ export function createBot(kind, seed) {
             const db = Math.hypot(qx - w.boss.x, qz - w.boss.z);
             // 패링하는 봇은 돌진·근접 동안 달아나지 않고 붙어서 받는다(사람도 그렇다 — 달아나면 패링 기회가 사라진다)
             const duel = parries && (w.boss.state === 'rush' || w.boss.state === 'melee' || w.boss.state === 'meleeWait' || !!w.melee.combo);
-            const [k0, k1] = parries && bossGroggy(w) ? B.execBand : duel ? B.duel : B.keep;   // 그로기면 다가가 처형
-            danger += (Math.max(0, k0 - db) + Math.max(0, db - k1)) * 0.6;
+            const [k0, k1] = parries && bossGroggy(w) ? B.execBand : duel ? B.duel : w.boss.kind === 'dragon' ? Bz.keep : B.keep;   // 용: 입이 앞으로 나와 있어 몸통에서 더 멀리   // 그로기면 다가가 처형
+            if (zoneGoal && !duel && !bossGroggy(w)) {   // 용 판 목표 자리(용이 돌면 따라 돈다)
+              const a = w.boss.face + zoneGoal.off, gx = w.boss.x + Math.cos(a) * zoneGoal.R, gz = w.boss.z + Math.sin(a) * zoneGoal.R;
+              danger += Math.hypot(qx - gx, qz - gz) * Bz.pull;
+            } else danger += (Math.max(0, k0 - db) + Math.max(0, db - k1)) * 0.6;
             const edge = Math.min(R.board.hx - Math.abs(qx), R.board.hz - Math.abs(qz));
             if (edge < 1.5) danger += (1.5 - edge) * 1.0;
           }
@@ -233,6 +262,13 @@ export function createBot(kind, seed) {
     if (dodges && !dodge && !parry && p.dodge.charges > 0 && !isDodging(w)) {
       for (const h of waves) if ((h.color === 'red' || !plan(h.key, true).parry) && h.t <= B.dodgeLead) dodge = true;
     }
-    return { mx, mz, parry, dodge };
+    // 무기 스킬(§4.10): 패링하는 봇은 게이지가 차면 낀 무기 스킬을 돌아가며 쓴다(시범용)
+    let skill = null;
+    const Wp = w.weapons, SK = R.weapons.skill;
+    if (parries && Wp && Wp.gauge >= SK.cost) {
+      const owned = ['missile', 'beam', 'drone'].filter(g => Wp.on.includes(g));
+      if (owned.length) { skill = owned[skillTurn % owned.length]; skillTurn++; }
+    }
+    return { mx, mz, parry, dodge, skill, throw: toss };
   };
 }

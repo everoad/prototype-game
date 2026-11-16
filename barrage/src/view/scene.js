@@ -40,7 +40,8 @@ export function createScene(canvas, LOOK, opts = {}) {
   for (let z = -hz; z <= hz; z++) gridPts.push(-hx, 0.005, z, hx, 0.005, z);
   const gridGeo = new THREE.BufferGeometry();
   gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3));
-  layers.floor.add(new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: LOOK.colors.grid })));
+  const gridMat = new THREE.LineBasicMaterial({ color: LOOK.colors.grid });
+  layers.floor.add(new THREE.LineSegments(gridGeo, gridMat));
   // 난간: 판 둘레 낮은 벽
   const railMat = new THREE.MeshLambertMaterial({ color: LOOK.colors.rail });
   const railTop = new THREE.MeshBasicMaterial({ color: LOOK.colors.railTop });
@@ -49,6 +50,15 @@ export function createScene(canvas, LOOK, opts = {}) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, railH, d), [railMat, railMat, railTop, railMat, railMat, railMat]);
     m.position.set(x, railH / 2, z); m.castShadow = true; m.receiveShadow = true;
     layers.floor.add(m);
+  }
+
+  // 판의 분위기: 0 = 1단계, 1 = 2단계(자줏빛) — 부드럽게 옮겨 간다
+  const C1 = { board: new THREE.Color(LOOK.colors.board), grid: new THREE.Color(LOOK.colors.grid), top: new THREE.Color(LOOK.colors.railTop) };
+  const C2 = { board: new THREE.Color(LOOK.colors.board2), grid: new THREE.Color(LOOK.colors.grid2), top: new THREE.Color(LOOK.colors.railTop2) };
+  let mood = 0;
+  function setMood(target, dt) {
+    mood += (target - mood) * Math.min(1, dt * 3);
+    floorMat.color.copy(C1.board).lerp(C2.board, mood); gridMat.color.copy(C1.grid).lerp(C2.grid, mood); railTop.color.copy(C1.top).lerp(C2.top, mood);
   }
 
   const view = { cx: 0, cz: 0, width: LOOK.camera.width, pitchDeg: LOOK.camera.pitches[0], yawDeg: LOOK.camera.yawDeg, offX: 0, offY: 0 };
@@ -70,6 +80,7 @@ export function createScene(canvas, LOOK, opts = {}) {
 
   function resize() {
     const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+    if (!(w > 0 && h > 0)) return;   // 숨은 창: 크기 0이면 지난 크기를 둔다
     renderer.setSize(w, h, false);
     aspect = w / h;
     setView({});
@@ -87,7 +98,7 @@ export function createScene(canvas, LOOK, opts = {}) {
   }
 
   return {
-    THREE, renderer, scene, camera, layers, view, setView, resize, unitsPerPx, project,
+    THREE, renderer, scene, camera, layers, view, setView, setMood, resize, unitsPerPx, project,
     get aspect() { return aspect; },
     render() { renderer.render(scene, camera); },
     canvas,

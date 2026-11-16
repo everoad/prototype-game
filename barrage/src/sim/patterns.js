@@ -5,14 +5,17 @@ import { K } from './rules.js';
 import { emit } from './events.js';
 import { spawnBullet, killBullet } from './bullets.js';
 import { startLaser } from './beams.js';
+import { headAim } from './dragonBody.js';
 
 const D = Math.PI / 180;
-const aimAt = w => Math.atan2(w.player.z - w.boss.z, w.player.x - w.boss.x);
+// 겨눔: 용이면 입에서 겨눔 한계 안으로(설계 용 §3), 아니면 보스 가운데에서 플레이어 쪽
+const aimAt = w => { const o = w.boss.mouth; return o ? headAim(w, o.x, o.z) : Math.atan2(w.player.z - w.boss.z, w.player.x - w.boss.x); };
 
-// 보스 몸에서 a 쪽으로 탄 하나.
+// 보스 몸(용이면 입)에서 a 쪽으로 탄 하나.
 function shoot(w, run, kind, a, speed, from = null) {
-  const m = w.rules.patterns.muzzle;
-  const x = from ? from[0] : w.boss.x + Math.cos(a) * m, z = from ? from[1] : w.boss.z + Math.sin(a) * m;
+  const m = w.rules.patterns.muzzle, o = w.boss.mouth;
+  const x = from ? from[0] : o ? o.x : w.boss.x + Math.cos(a) * m, z = from ? from[1] : o ? o.z : w.boss.z + Math.sin(a) * m;
+  if (o && Math.hypot(x - w.player.x, z - w.player.z) < w.rules.dragon.mouthGuard) return -1;   // 용 머리 밑(입 바로 앞)의 플레이어 위에서는 탄이 생기지 않는다 — 피할 틈 없이 맞지 않게
   const id = spawnBullet(w, kind, x, z, a, speed, run.id);
   if (id >= 0) emit(w, 'fire', { kind: w.bullets.kind[id], x, z, id, src: run.id });
   return id;
@@ -20,8 +23,8 @@ function shoot(w, run, kind, a, speed, from = null) {
 
 // 차선: 조준이면 발사 lockBefore 전까지 플레이어를 따라가고 그 뒤 고정. warn이 끝나면 그 각도로 쏜다.
 function addLane(w, run, kind, angle, aimed, speed) {
-  const L = w.rules.lanes, m = w.rules.patterns.muzzle;
-  const lane = { x: w.boss.x, z: w.boss.z, angle, aimed, warn: kind === K.RED ? L.redWarn : L.goldWarn, lockBefore: L.lockBefore, born: w.time, kind, speed, src: run.id, off: m };
+  const L = w.rules.lanes, m = w.rules.patterns.muzzle, o = w.boss.mouth;
+  const lane = { x: o ? o.x : w.boss.x, z: o ? o.z : w.boss.z, angle, aimed, warn: kind === K.RED ? L.redWarn : L.goldWarn, lockBefore: L.lockBefore, born: w.time, kind, speed, src: run.id, off: o ? 0 : m };
   w.lanes.push(lane);
   emit(w, 'lane', { kind, x: lane.x, z: lane.z, angle, aimed });
   return lane;
@@ -30,7 +33,7 @@ function addLane(w, run, kind, angle, aimed, speed) {
 export function updateLanes(w) {
   for (let k = w.lanes.length - 1; k >= 0; k--) {
     const l = w.lanes[k], age = w.time - l.born;
-    if (l.aimed && age < l.warn - l.lockBefore) l.angle = Math.atan2(w.player.z - l.z, w.player.x - l.x);
+    if (l.aimed && age < l.warn - l.lockBefore) l.angle = headAim(w, l.x, l.z);   // 용이면 겨눔 한계 안
     if (age >= l.warn) {
       const from = [l.x + Math.cos(l.angle) * l.off, l.z + Math.sin(l.angle) * l.off];
       shoot(w, { id: l.src }, l.kind, l.angle, l.speed, from);

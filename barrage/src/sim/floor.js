@@ -2,6 +2,7 @@
 //  몸통 박치기: 보스 몸 너비 줄이 판 끝까지(발사 0.2초 전까지 따라옴) → 30 U/s로 들이받음. 몸이 닿는 순간이 타격.
 //  지면 파도: 보스 둘레 원 0.4초 → 고리가 판 끝까지 퍼짐(걸어서는 못 피함). 앞면이 몸을 지나는 순간이 타격.
 //  검기: 12 U 앞까지 가는 부채꼴 0.4초 → 한 번에.
+//  용(설계 용 §4): 꼬리 휘두르기 = 뒤 부채꼴(검기와 같은 판정), 날갯짓 = 그쪽 반원으로만 퍼지는 파도. 박치기 줄은 용이 보는 쪽으로(bodyFace).
 // 판정은 근접과 같은 resolveHit(패링·아슬아슬·맞음). w.floor = 진행 중인 공격 하나, w.waves = 퍼지는 파도들(따로 이어 간다).
 import { emit } from './events.js';
 import { inSector, clampToBoard } from './geom.js';
@@ -9,13 +10,14 @@ import { separateBodies } from './boss.js';
 import { resolveHit } from './melee.js';
 import { openCounterChance } from './rewards.js';
 import { reach } from './beams.js';
+import { bodyFace } from './dragonBody.js';
 
 const D = Math.PI / 180;
 const aimAt = w => Math.atan2(w.player.z - w.boss.z, w.player.x - w.boss.x);
 const inset = (R, r) => ({ hx: R.board.hx - r, hz: R.board.hz - r });
 
 export function startSlam(w, color) {
-  const R = w.rules, F = R.floor.slam, b = w.boss, face = aimAt(w);
+  const R = w.rules, F = R.floor.slam, b = w.boss, face = bodyFace(w);
   const area = { kind: 'slam', shape: 'lane', x: b.x, z: b.z, face, len: reach(R.board, b.x, b.z, face), width: F.width, color, warn: F.warn, born: w.time, hit: false };
   w.floorAreas.push(area);
   w.floor = { kind: 'slam', color, born: w.time, area, phase: 'warn', hitDone: false, left: 0 };
@@ -24,12 +26,30 @@ export function startSlam(w, color) {
   emit(w, 'slamStart', { color, x: b.x, z: b.z, angle: face });
 }
 
-export function startWave(w, color) {
+// arc = { face, half }이면 그 반원으로만 퍼지는 파도(용의 날갯짓) — 예고 장판 kind 'wing'
+export function startWave(w, color, arc = null) {
   const R = w.rules, F = R.floor.wave, b = w.boss;
-  const area = { kind: 'wave', shape: 'circle', x: b.x, z: b.z, face: aimAt(w), R: R.boss.r + F.teleR, half: Math.PI, color, warn: F.warn, born: w.time, hit: false };
+  const area = { kind: arc ? 'wing' : 'wave', shape: 'circle', x: b.x, z: b.z, face: arc ? arc.face : aimAt(w), R: R.boss.r + F.teleR, half: arc ? arc.half : Math.PI, color, warn: arc ? R.dragon.wing.warn : F.warn, born: w.time, hit: false };
   w.floorAreas.push(area);
-  w.floor = { kind: 'wave', color, born: w.time, area };
-  emit(w, 'windup', { color, kind: 'wave' });
+  w.floor = { kind: 'wave', color, born: w.time, area, arc };
+  emit(w, 'windup', { color, kind: arc ? 'wing' : 'wave' });
+}
+
+// 용 날갯짓: side = +1 왼쪽(보는 쪽에서 반시계) · −1 오른쪽
+export function startWing(w, color, side) {
+  const b = w.boss;
+  startWave(w, color, { face: b.face + side * Math.PI / 2, half: w.rules.dragon.wing.halfDeg * D });
+  emit(w, 'wingStart', { color, side, x: b.x, z: b.z });
+}
+
+// 용 꼬리 휘두르기: 뒤 부채꼴, 예고 뒤 한 번에(검기와 같은 길)
+export function startTail(w, color) {
+  const R = w.rules, T = R.dragon.tail, b = w.boss, face = b.face + Math.PI;
+  const area = { kind: 'tail', shape: 'sector', x: b.x, z: b.z, face, R: T.R, half: T.halfDeg * D, color, warn: T.warn, born: w.time, hit: false };
+  w.floorAreas.push(area);
+  w.floor = { kind: 'tail', color, born: w.time, area };
+  emit(w, 'windup', { color, kind: 'tail' });
+  emit(w, 'tailStart', { color, x: b.x, z: b.z, angle: face });
 }
 
 export function startSword(w, color) {
@@ -52,7 +72,7 @@ export function updateFloor(w) {
   if (f.kind === 'slam') {
     const F = R.floor.slam, a = f.area;
     if (f.phase === 'warn') {
-      if (w.time < f.born + F.warn - F.lockBefore) { a.face = aimAt(w); a.len = reach(R.board, b.x, b.z, a.face); b.face = a.face; }
+      if (w.time < f.born + F.warn - F.lockBefore) { a.face = bodyFace(w); a.len = reach(R.board, b.x, b.z, a.face); b.face = a.face; }
       if (w.time < f.born + F.warn - 1e-9) return false;
       f.phase = 'dash'; a.hit = true;
       f.left = reach(inset(R, R.boss.r), b.x, b.z, a.face);
@@ -85,8 +105,8 @@ export function updateFloor(w) {
   // 파도: 예고 뒤 고리가 퍼진다. 고리가 플레이어에 닿거나 판을 나갈 때까지 이 공격은 끝나지 않는다(그동안 주 패턴과 겹치지 않게, §5.3).
   if (f.kind === 'wave') {
     if (!f.wave) {
-      if (w.time < f.born + R.floor.wave.warn - 1e-9) return false;
-      f.wave = { x: b.x, z: b.z, r: R.boss.r, color: f.color, born: w.time, hitDone: false, gapAngle: null };
+      if (w.time < f.born + f.area.warn - 1e-9) return false;
+      f.wave = { x: b.x, z: b.z, r: R.boss.r, color: f.color, born: w.time, hitDone: false, gapAngle: null, arc: f.arc ?? null };
       w.waves.push(f.wave);
       f.area.hit = true; dropArea(w, f.area);
       emit(w, 'waveStart', { color: f.color, x: b.x, z: b.z });
@@ -95,14 +115,14 @@ export function updateFloor(w) {
     if (f.wave.hitDone || !w.waves.includes(f.wave)) { w.floor = null; return true; }
     return false;
   }
-  if (f.kind === 'sword') {
-    const F = R.floor.sword, a = f.area;
+  if (f.kind === 'sword' || f.kind === 'tail') {
+    const F = f.kind === 'tail' ? R.dragon.tail : R.floor.sword, a = f.area;
     if (!a.hit && w.time >= f.born + F.warn - 1e-9) {
       a.hit = true;
       if (f.color === 'red') w.redHitAt = w.time;
-      emit(w, 'meleeHit', { shape: 'sector', color: f.color, x: a.x, z: a.z, sword: true });
+      emit(w, 'meleeHit', { shape: 'sector', color: f.color, x: a.x, z: a.z, sword: f.kind === 'sword', tail: f.kind === 'tail' });
       if (inSector(p.x, p.z, R.player.bodyR, a.x, a.z, a.R, a.face, a.half)) {
-        const res = resolveHit(w, { color: f.color, src: R.src.sword, dmg: F.dmg, stagger: F.stagger, kindName: 'sword' });
+        const res = resolveHit(w, { color: f.color, src: R.src[f.kind], dmg: F.dmg, stagger: F.stagger, kindName: f.kind });
         if (res.outcome === 'roll' && res.newRed) openCounterChance(w, 'redDodge');
       }
     }
@@ -119,10 +139,11 @@ export function updateWaves(w) {
     const v = w.waves[k];
     v.r += F.speed * R.dt;
     const d = Math.hypot(p.x - v.x, p.z - v.z);
-    if (!v.hitDone && d + R.player.bodyR >= v.r - F.thick && d - R.player.bodyR <= v.r) {
+    const inArc = !v.arc || Math.abs(Math.atan2(Math.sin(Math.atan2(p.z - v.z, p.x - v.x) - v.arc.face), Math.cos(Math.atan2(p.z - v.z, p.x - v.x) - v.arc.face))) <= v.arc.half;   // 날갯짓: 그 반원 밖이면 안 닿는다
+    if (!v.hitDone && inArc && d + R.player.bodyR >= v.r - F.thick && d - R.player.bodyR <= v.r) {
       v.hitDone = true;
       if (v.color === 'red') w.redHitAt = w.time;
-      const res = resolveHit(w, { color: v.color, src: R.src.wave, dmg: F.dmg, stagger: F.stagger, kindName: 'wave', x: p.x, z: p.z });
+      const res = resolveHit(w, { color: v.color, src: v.arc ? R.src.wing : R.src.wave, dmg: F.dmg, stagger: F.stagger, kindName: v.arc ? 'wing' : 'wave', x: p.x, z: p.z });
       if (res.outcome === 'parry' || res.outcome === 'perfect') v.gapAngle = Math.atan2(p.z - v.z, p.x - v.x);   // 받아낸 자리만 고리가 끊긴다
       emit(w, 'waveHit', { outcome: res.outcome, color: v.color, x: p.x, z: p.z });
       if (res.outcome === 'roll' && res.newRed) openCounterChance(w, 'redDodge');

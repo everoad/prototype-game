@@ -213,3 +213,95 @@ test('방패·폭탄을 못 쓰면 틱 소리와 사용권 칸 흔들림(몸은 
   assert.equal(r.has('actors.dim').length, 0);
   assert.ok(r.has('hud.shakeStock').some(c => c[2] === 'bomb'));
 });
+
+// 보조 무기(§4.10): 소리는 작게, 칼날이 지운 탄은 불꽃만
+test('무기 발사 소리와 켜고 끄기 소리', () => {
+  const r = rig();
+  r.feel.handle([ev('weaponFire', { kind: 'missile', x: 0, z: 0, angle: 0 }), ev('weaponFire', { kind: 'drone', x: 0, z: 0, angle: 0 }), ev('weaponFire', { kind: 'beam', x: 0, z: 0, angle: 0 })], 1);
+  const names = r.has('sfx.play').map(c => c[1]);
+  assert.ok(names.includes('missile') && names.includes('drone') && names.includes('beam'), JSON.stringify(names));
+  const g = rig();
+  g.feel.handle([ev('gearToggle', { kind: 'drone', on: false })], 1);
+  assert.ok(g.has('sfx.play').some(c => c[1] === 'tick'));
+});
+
+// 처형 연출 수치가 주석에 먹혀 없어졌던 일(2026-11-16) — 모든 값이 숫자인지
+test('연출 수치는 모두 유한한 숫자(처형·폭탄·방패)', () => {
+  const need = { execute: ['hold', 'holdSec', 'duckDb', 'duckSec', 'stop', 'shakePx', 'shakeSec', 'slow', 'slowSec', 'edgeSec', 'burst', 'number', 'shotCent', 'shotShake', 'shotShakeSec'],
+    bomb: ['stop', 'shakePx', 'shakeSec', 'punch', 'punchSec', 'burst', 'rescueEdge'] };
+  for (const [k, keys] of Object.entries(need)) for (const f of keys) assert.ok(Number.isFinite(LOOK.feel[k][f]), `LOOK.feel.${k}.${f} = ${LOOK.feel[k][f]}`);
+});
+
+test('무기가 보스에 맞으면 작은 청록 불꽃', () => {
+  const r = rig();
+  r.feel.handle([ev('weaponHit', { kind: 'missile', x: 3, z: 0 })], 1);
+  assert.ok(r.has('fx.spark').some(c => c[3] === 'cyan'));
+});
+
+// 패링으로 깨어나는 무기·무기 스킬(§4.10)
+test('무기가 깨어나면 작은 차임, 무기 스킬은 종류별 소리와 흔들림, 못 쓰면 틱', () => {
+  const r = rig();
+  r.feel.handle([ev('weaponWake', { x: 0, z: 0 })], 1);
+  r.feel.handle([ev('weaponSkill', { kind: 'missile', x: 0, z: 0 }), ev('weaponSkill', { kind: 'beam', x: 0, z: 0 }), ev('weaponSkill', { kind: 'drone', x: 0, z: 0 })], 2);
+  const names = r.has('sfx.play').map(c => c[1]);
+  for (const n of ['gearWake', 'salvo', 'bigBeam', 'swarm']) assert.ok(names.includes(n), `${n}: ${JSON.stringify(names)}`);
+  assert.ok(r.has('camera.shake').length >= 3);
+  const d = rig();
+  d.feel.handle([ev('denied', { what: 'skill', why: 'gauge', kind: 'beam' })], 1);
+  assert.ok(d.has('sfx.play').some(c => c[1] === 'tick'));
+  assert.ok(d.has('hud.shakeStock').some(c => c[2] === 'skill'));
+  assert.equal(d.has('actors.dim').length, 0);
+});
+
+// ── 모아 던지기(§4.11): 모이는 소리, 던지는 큰 순간, 회복 빛, 마지막 한 발
+test('모일 때: 탄이 몸으로 빨려 들어오고, 쌓인 수만큼 음이 오른다. 가득이면 따로 울린다', () => {
+  const { feel, has } = rig(), X = LOOK.feel.store;
+  feel.handle([ev('storeAdd', { x: 1, z: 2, px: 0, pz: 0, n: 3, full: false })], 1);
+  const s = has('sfx.play').find(c => c[1] === 'store');
+  assert.equal(s[2].detune, 2 * X.storeCent);
+  assert.equal(has('fx.tracer').length, 1);
+  assert.ok(!has('sfx.play').some(c => c[1] === 'storeFull'));
+  feel.handle([ev('storeAdd', { x: 1, z: 2, px: 0, pz: 0, n: 4, full: true })], 2);
+  assert.ok(has('sfx.play').some(c => c[1] === 'storeFull'));
+});
+
+test('던지기 = 큰 순간: 정지·흔들림·소리, 회복이 있으면 초록 숫자·가장자리·소리', () => {
+  const { feel, has } = rig(), X = LOOK.feel.store;
+  feel.handle([ev('throw', { x: 0, z: 0, n: 3, heal: 10, mul: 1.2 })], 1);
+  assert.deepEqual(has('timeFx.hitstop')[0].slice(1, 2), [X.stop]);
+  assert.equal(has('camera.shake').length, 1);
+  assert.ok(has('sfx.play').some(c => c[1] === 'throw'));
+  assert.ok(has('sfx.play').some(c => c[1] === 'heal'));
+  assert.ok(has('fx.number').some(c => c[3] === '+10' && c[4] === 'heal'));
+  assert.ok(has('fx.edge').some(c => c[1] === 'heal'));
+  assert.equal(has('fx.rise').length, 1);
+  const none = rig();
+  none.feel.handle([ev('throw', { x: 0, z: 0, n: 1, heal: 0, mul: 1 })], 1);
+  assert.ok(!none.has('sfx.play').some(c => c[1] === 'heal'));
+  assert.equal(none.has('fx.number').length, 0);
+});
+
+test('던진 탄 명중: 발마다 음이 오르고, 마지막 한 발에 정지·흔들림·합계 숫자', () => {
+  const { feel, has } = rig(), X = LOOK.feel.store;
+  feel.handle([ev('throwHit', { x: 5, z: 0, dmg: 180, last: false, total: 180, perfect: true })], 1);
+  assert.equal(has('timeFx.hitstop').length, 0);
+  assert.equal(has('fx.number').length, 0);
+  assert.ok(has('sfx.play').some(c => c[1] === 'throwHit'));
+  feel.handle([ev('throwHit', { x: 5, z: 0, dmg: 180, last: true, total: 540, perfect: true })], 1.1);
+  assert.deepEqual(has('timeFx.hitstop')[0].slice(1, 2), [X.lastStop]);
+  assert.ok(has('fx.number').some(c => c[3] === 540 && c[5] === X.number));
+  assert.ok(has('sfx.play').some(c => c[1] === 'throwBoom'));
+  assert.ok(has('camera.shake').length >= 1);
+});
+
+test('던질 것이 없을 때 U = 칸이 흔들린다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('denied', { what: 'throw', why: 'empty' })], 1);
+  assert.ok(has('hud.shakeStock').some(c => c[2] === 'store'));
+});
+
+test('모아 던지기 연출 수치는 모두 유한한 수, 소리 음량이 있다', () => {
+  for (const [k, v] of Object.entries(LOOK.feel.store)) assert.ok(Number.isFinite(v), `LOOK.feel.store.${k} = ${v}`);
+  for (const n of ['store', 'storeFull', 'throw', 'throwHit', 'throwBoom', 'heal']) assert.ok(Number.isFinite(LOOK.sound.db[n]), `소리 ${n}`);
+  assert.ok(/^#[0-9a-f]{6}$/i.test(LOOK.colors.heal));
+});
