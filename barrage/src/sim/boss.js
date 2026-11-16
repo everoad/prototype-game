@@ -17,6 +17,7 @@ export const bossGroggy = w => w.time < w.boss.groggyUntil;
 export function damageBoss(w, amount, src, raw = false) {
   const b = w.boss;
   if (b.dead) return 0;
+  if (w.player.dyingAt != null) return 0;   // 구제 창(체력 0) 동안엔 쏘던 탄으로 이길 수 없다 — 폭탄은 창을 먼저 닫고 친다
   let total = amount;
   addDamage(w.stats, src, amount);
   if (!raw && src === 'shot' && w.time < w.player.overdriveUntil) {

@@ -10,7 +10,7 @@ export function createFx(view, LOOK) {
   const mk = layer => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#fff', depthTest: false, depthWrite: false }), N); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); layer.add(m); return m; };
   const air = mk(L.fx), dirt = mk(L.floorFx);
   dirt.material.depthTest = true;
-  const named = { white: C.white, gold: C.gold, red: C.red, cyan: C.cyan, purple: C.normal, orange: '#ff8a3c', grey: '#8e8a99' };
+  const named = { white: C.white, gold: C.gold, red: C.red, cyan: C.cyan, purple: C.normal, orange: '#ff8a3c', grey: '#8e8a99', item: C.item };
   const bh = () => LOOK.sizes.bh;
   let rnd = 12345;   // 연출 전용 난수(sim 난수와 따로)
   const r01 = () => { rnd = (rnd * 1103515245 + 12345) >>> 0; return (rnd >>> 8) / 16777216; };

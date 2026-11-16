@@ -1,5 +1,5 @@
 // 판 기록: 피해 출처(패링 몫 셈), 패링·맞음 수 등. botrun과 결과 화면이 읽는다.
-export const DAMAGE_SOURCES = ['shot', 'overdrive', 'reflect', 'counter', 'groggy', 'execute'];
+export const DAMAGE_SOURCES = ['shot', 'overdrive', 'reflect', 'counter', 'groggy', 'execute', 'bomb'];
 
 export function createStats() {
   const dmg = {};

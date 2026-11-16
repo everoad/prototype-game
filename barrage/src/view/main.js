@@ -86,7 +86,7 @@ function frame(now, dtReal) {
 attachInput(window, canvas, map, {
   onKey(code) {
     if (code === 'F4') location.reload();
-    else if (code === 'Escape') ui.paused = !ui.paused;
+    else if (code === 'Escape') { ui.paused = !ui.paused; map.clearPresses(); }
     else if (code === 'F1') ui.debug = !ui.debug;
     else if (code === 'KeyV' && pitchFixed == null) { pitchIdx = (pitchIdx + 1) % LOOK.camera.pitches.length; camera.setPitch(LOOK.camera.pitches[pitchIdx]); }
     else if (code === 'KeyG') actors.toggleRing();

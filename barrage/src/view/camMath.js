@@ -29,6 +29,7 @@ export function framingPoints(w, LOOK) {
   }
   // 박치기 줄 끝(판 끝까지 깔림), 레이저 빔 끝(판 안으로 자름)
   for (const a of w.floorAreas ?? []) if (a.shape === 'lane') out.push({ x: a.x + Math.cos(a.face) * a.len, z: a.z + Math.sin(a.face) * a.len, r: C.laneMargin });
+  for (const it of w.items ?? []) out.push({ x: it.x, z: it.z, r: C.laneMargin });   // 아이템(§4.9)이 화면 밖에 생기지 않게
   for (const m of w.beams ?? []) { const d = exitDist(R.board, m.x, m.z, m.angle); out.push({ x: m.x + Math.cos(m.angle) * d, z: m.z + Math.sin(m.angle) * d, r: C.laneMargin }); }
   return out;
 }

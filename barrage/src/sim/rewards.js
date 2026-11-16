@@ -15,7 +15,7 @@ export function openCounterChance(w, src) {
 
 // 회복 변형(?heal=1)에서만: 완벽 패링·완전 패링 반격.
 export function healOn(w) {
-  if (!w.opts.heal) return;
+  if (!w.opts.heal || w.player.dyingAt != null) return;   // 구제 창 동안엔 회복 없음(체력이 보이는 채 죽지 않게)
   const p = w.player, before = p.hp;
   p.hp = Math.min(w.rules.player.hp, p.hp + w.rules.heal.amount);
   if (p.hp > before) emit(w, 'heal', { amount: p.hp - before });

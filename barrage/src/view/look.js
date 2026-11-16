@@ -12,6 +12,7 @@ export const LOOK = {
     windup: { white: '#ffffff', gold: '#ffc23d', red: '#ff3d47', purple: '#a14fe0' },
     // 패링할 수 없는 것의 밝은 쪽(흰·금 금지): 구슬 쏠 때 번쩍 = 옅은 자주, 레이저 속·끝 = 옅은 빨강
     orbFlash: '#d9a8ff', beamCore: '#ffb3b8', beamTip: '#ff8a91',
+    item: '#a6ff4d',   // 아이템(방패·폭탄 사용권, §4.9) — 아직 아무 뜻이 없던 연두(청록 플레이어와 멀게)
   },
   sizes: {
     bulletVisual: 1.4,     // 화면 크기 = 판정 반지름 × 이것
@@ -32,6 +33,7 @@ export const LOOK = {
     beamCore: 0.35, beamAlpha: 0.9, sweepAlpha: 0.12, beamTip: 0.32,
     orbR: 0.42, orbFlashSec: 0.12,
     execRing: 0.35, execRingAlpha: [0.25, 0.9], letterbox: 0.11,   // 처형 금빛 고리(보스 몸 + 이만큼, 그로기 / 곁일 때 밝기), 검은 띠 높이(화면 높이 몫)
+    shieldAlpha: 0.22, shieldEdge: 0.6, itemR: 0.42, itemBlink: 3, itemGlow: 0.35,   // 방패 원판(탄 높이)·테 밝기, 아이템 크기, 사라지기 전 깜빡이는 초, 바닥 빛 밝기
   },
   // 그리는 순서(아래 → 위, §7): 적 탄은 깊이와 상관없이 몸 위에
   draw: { order: { floor: 0, floorFx: 1, telegraph: 2, shadow: 3, shots: 4, actors: 5, bullets: 6, reflect: 7, fx: 8, marker: 9 } },
@@ -75,6 +77,8 @@ export const LOOK = {
     laser: { shakePx: 4, shakeSec: 0.8 },
     phase: { shakePx: 12, shakeSec: 0.5 },
     afterimage: { count: 3, fade: 0.22, alpha: 0.35, alphaNear: 0.6 },
+    // 폭탄(§4.9): 짧은 정지(예산 안)·크게 흔들림·당김·청록 파편. 구제면 청록 가장자리 더
+    bomb: { stop: 0.06, shakePx: 16, shakeSec: 0.35, punch: 0.04, punchSec: 0.3, burst: 3, rescueEdge: 0.5 },
     // 그로기 처형(§5.8) — 영화처럼: 검은 띠·카메라 당김 유지·정적 → 붙어 쏘기(한 발마다 shotCent 음 올림) → 큰 한 발(정지·느려짐·금빛 가장자리).
     execute: {
       hold: 0.14, holdSec: 4, duckDb: -30,   // holdSec = 안전 한도일 뿐 — 당김은 처형이 끝날 때(executeEnd → release) 풀린다(사용자 2026-11-16) duckSec: 0.22, stop: 0.12, shakePx: 24, shakeSec: 0.45, slow: 0.3, slowSec: 0.5, edgeSec: 0.6, burst: 3, number: 44,
@@ -89,6 +93,7 @@ export const LOOK = {
       rushCharge: -14, rushArrive: -10, swing: -16, slam: -10, counterChance: -12, fullCounter: -10, execute: -8,
       groggy: -10, wake: -18, roar: -10, death: -8, clear: -20,
       laserCharge: -16, laserBeam: -15, slamWall: -8, orb: -30, execShot: -9,
+      shield: -14, shieldBlock: -26, bomb: -6, pickup: -12, itemSpawn: -20,
     },
   },
 };

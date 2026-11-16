@@ -43,6 +43,22 @@ export function createActors(view, LOOK, opts = {}) {
   const execRing = new THREE.Mesh((() => { const g = new THREE.RingGeometry(S.bossR + S.execRing - 0.1, S.bossR + S.execRing, 64); g.rotateX(-Math.PI / 2); return g; })(), execRingMat);
   execRing.position.y = 0.05; execRing.visible = false; L.marker.add(execRing);
 
+  // 방패 거품(청록, §4.9)과 아이템(초록 — 방패 = 고리, 폭탄 = 다면체, 둘 다 바닥 고리)
+  const shieldMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, depthTest: false, depthWrite: false });
+  const shieldEdgeMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, depthTest: false, depthWrite: false });
+  const shieldBall = new THREE.Mesh(flat(new THREE.CircleGeometry(1, 48)), shieldMat);
+  const shieldEdge = new THREE.Mesh(flat(new THREE.RingGeometry(0.94, 1, 48)), shieldEdgeMat);
+  shieldBall.visible = shieldEdge.visible = false; L.marker.add(shieldBall, shieldEdge);
+  const itemMat = new THREE.MeshBasicMaterial({ color: C.item });
+  const itemFloorMat = new THREE.MeshBasicMaterial({ color: C.item, transparent: true, depthWrite: false, opacity: S.itemGlow });
+  const itemGeo = { shield: new THREE.TorusGeometry(1, 0.28, 8, 20), bomb: new THREE.DodecahedronGeometry(1, 0) };
+  const itemFloorGeo = (() => { const g = new THREE.CircleGeometry(1, 32); g.rotateX(-Math.PI / 2); return g; })();   // 바닥 고리는 파도 뜻이라 옅은 빛 원판
+  const itemPool = [];
+  function itemMeshes(i) {
+    if (!itemPool[i]) { const body = new THREE.Mesh(itemGeo.shield, itemMat), floor = new THREE.Mesh(itemFloorGeo, itemFloorMat); floor.position.y = 0.01; L.actors.add(body); L.floorFx.add(floor); itemPool[i] = { body, floor }; }
+    return itemPool[i];
+  }
+
   // 2단계 쌍둥이 구슬: 작은 자주 구 둘, 쏠 때 흰 번쩍
   const orbs = [0, 1].map(() => {
     const m = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ color: C.normal }));
@@ -145,6 +161,26 @@ export function createActors(view, LOOK, opts = {}) {
     if (k > 0) { bMat.emissive.set(st.flashColor); bMat.emissiveIntensity = k * (st.flashColor === C.windup.purple ? 0.35 : 1); }   // 특수 탄 없는 패턴은 약하게(§5.1)
     else if (b.stagger >= w.rules.stagger.max * 0.8) { bMat.emissive.set(C.bossCrack); bMat.emissiveIntensity = 0.06 + 0.05 * Math.sin(now * 14); }   // 곧 무너진다(§5.4)
     else bMat.emissiveIntensity = 0;
+    // 방패 거품: 켜진 동안, 끝나기 0.3초 전부터 깜빡
+    const sh = p.shieldUntil - w.time;
+    shieldBall.visible = shieldEdge.visible = sh > 0 && (sh > 0.3 || Math.floor(now * 20) % 2 === 0);
+    if (shieldBall.visible) {
+      for (const m of [shieldBall, shieldEdge]) { m.position.set(x, S.bh, z); m.scale.setScalar(w.rules.shield.r); }
+      shieldMat.opacity = S.shieldAlpha * (0.8 + 0.2 * Math.sin(now * 12)); shieldEdgeMat.opacity = S.shieldEdge;
+    }
+    // 아이템: 떠서 돌고, 사라지기 itemBlink초 전부터 깜빡
+    let ii = 0;
+    for (const it of w.items ?? []) {
+      const g = itemMeshes(ii++), left = it.born + w.rules.items.life - w.time;
+      const show = left > S.itemBlink || Math.floor(now * 8) % 2 === 0;
+      g.body.visible = g.floor.visible = show;
+      g.body.geometry = itemGeo[it.kind];
+      g.body.position.set(it.x, S.bh * 2 + 0.15 * Math.sin(now * 3 + ii), it.z);
+      g.body.rotation.set(it.kind === 'shield' ? Math.PI / 2 : 0, now * 2, 0);
+      g.body.scale.setScalar(S.itemR);
+      g.floor.position.x = it.x; g.floor.position.z = it.z; g.floor.scale.setScalar(w.rules.items.pickR);
+    }
+    for (; ii < itemPool.length; ii++) itemPool[ii].body.visible = itemPool[ii].floor.visible = false;
     // 처형 고리
     const groggy = w.time < b.groggyUntil && !b.dead && !w.execute;
     execRing.visible = groggy;

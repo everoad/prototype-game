@@ -51,3 +51,24 @@ test('마지막 누른 시각을 기억한다(입력→화면 지연 재기)', (
   const m = createInputMap(0); m.keyDown('KeyW', 123); m.keyDown('ShiftLeft', 130);
   assert.equal(m.lastPressMs(), 130);
 });
+
+// 방패·폭탄(§4.9): Q·E는 누른 순간 한 번
+test('Q는 방패, E는 폭탄 — 누른 순간 한 번(자동 반복 무시)', () => {
+  const m = createInputMap(0);
+  m.keyDown('KeyQ', 0); m.keyDown('KeyQ', 5); m.keyDown('KeyE', 6);
+  const a = m.take();
+  assert.equal(a.shield, true); assert.equal(a.bomb, true);
+  m.keyDown('KeyQ', 10); m.keyDown('KeyE', 11);
+  const b = m.take();
+  assert.equal(b.shield, false); assert.equal(b.bomb, false);
+  m.keyUp('KeyQ'); m.keyDown('KeyQ', 20);
+  assert.equal(m.take().shield, true);
+});
+
+test('멈춘 동안 누른 Q·E는 버린다(풀자마자 사용권을 쓰지 않게)', () => {
+  const m = createInputMap(0);
+  m.keyDown('KeyQ', 0); m.keyDown('KeyE', 1);
+  m.clearPresses();
+  const i = m.take();
+  assert.equal(i.shield, false); assert.equal(i.bomb, false);
+});

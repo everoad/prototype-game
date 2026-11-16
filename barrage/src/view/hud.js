@@ -3,7 +3,7 @@
 export function createHud(canvas, LOOK) {
   const ctx = canvas.getContext('2d'), C = LOOK.colors;
   let dpr = 1, W = 0, H = 0;
-  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9 };
+  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9, stockShake: { shield: -1e9, bomb: -1e9 } };
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = canvas.clientWidth || window.innerWidth; H = canvas.clientHeight || window.innerHeight;
@@ -45,11 +45,18 @@ export function createHud(canvas, LOOK) {
       ctx.beginPath(); ctx.arc(px + 240 + k * 18 + shake, py + 6, 6, 0, Math.PI * 2);
       ctx.fillStyle = k < p.dodge.charges ? C.pip : C.pipEmpty; ctx.fill();
     }
+    // 방패·폭탄 사용권(§4.9)
+    if (p.stock) {
+      ctx.font = font(13, true); ctx.textAlign = 'left';
+      const sk = what => (now - st.stockShake[what] < 0.2 ? Math.sin((now - st.stockShake[what]) * 80) * 3 : 0);
+      ctx.fillStyle = p.stock.shield > 0 ? C.item : C.textDim; ctx.fillText(`Q 방패 ×${p.stock.shield}`, px + 300 + sk('shield'), py + 11);
+      ctx.fillStyle = p.stock.bomb > 0 ? C.item : C.textDim; ctx.fillText(`E 폭탄 ×${p.stock.bomb}`, px + 390 + sk('bomb'), py + 11);
+    }
     // 시간
     ctx.font = font(15, true); ctx.fillStyle = C.text; ctx.textAlign = 'right';
     ctx.fillText(mmss(w.time), W - 20, 34);
     ctx.font = font(12); ctx.fillStyle = C.textDim;
-    ctx.fillText('WASD 이동 · Shift/좌클릭 패링 · Space/우클릭 회피 · V 시점 · G 고리 · Esc 멈춤 · F4 다시', W - 20, H - 18);
+    ctx.fillText('WASD 이동 · Shift/좌클릭 패링 · Space/우클릭 회피 · Q 방패 · E 폭탄 · V 시점 · G 고리 · Esc 멈춤 · F4 다시', W - 20, H - 18);
     if (ui.bot) ctx.fillText(`봇: ${ui.bot}`, W - 20, 54);
     // F1 판정 보기
     if (ui.debug) debug(w, ui);
@@ -111,6 +118,7 @@ export function createHud(canvas, LOOK) {
     letterbox(now, on) { if (st.bars !== on) { st.bars = on; st.barsAt = now; } },
     get size() { return { W, H, dpr }; },
     shakePips(now) { st.pipShakeAt = now; },
+    shakeStock(now, what) { st.stockShake[what] = now; },
     flashStagger(now) { st.staggerFlashAt = now; },
   };
 }

@@ -84,6 +84,11 @@ export function createSfx(ctx, LOOK) {
     laserBeam: (t, v) => { noise(t, 0.8, v, 'bandpass', 1400, 900, 3); tone(t, 'sawtooth', 160, 150, 0.8, v * 0.45); },
     slamWall: (t, v) => { tone(t, 'sine', 55, 28, 0.5, v); noise(t, 0.35, v * 0.9, 'lowpass', 900, 300); },
     orb: (t, v) => tone(t, 'sine', 640, 520, 0.05, v),
+    shield: (t, v) => { tone(t, 'sine', 420, 840, 0.25, v); noise(t, 0.2, v * 0.4, 'highpass', 3000, 6000); },
+    shieldBlock: (t, v) => tone(t, 'sine', 1900, 1700, 0.03, v),
+    bomb: (t, v) => { tone(t, 'sine', 95, 30, 0.8, v); noise(t, 0.7, v * 0.9, 'lowpass', 1600, 200); tone(t, 'sawtooth', 160, 60, 0.5, v * 0.4); },
+    pickup: (t, v) => { tone(t, 'triangle', 880, 880, 0.08, v); tone(t + 0.07, 'triangle', 1320, 1320, 0.12, v); },
+    itemSpawn: (t, v) => tone(t, 'sine', 660, 700, 0.15, v),
     execShot: (t, v, o) => { noise(t, 0.07, v, 'bandpass', 2600, 700, 2); tone(t, 'square', 260, 120, 0.09, v * 0.4, o.detune || 0); },
   };
 

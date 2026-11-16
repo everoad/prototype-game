@@ -186,3 +186,30 @@ test('큰 한 발: 금·흰 섬광과 처형 피해 합계 숫자', () => {
   assert.ok(flashes.includes('gold') && flashes.includes('white'), JSON.stringify(flashes));
   assert.ok(r.has('fx.number').some(c => c[3] === 600), JSON.stringify(r.has('fx.number')));
 });
+
+// 방패·폭탄·아이템(§4.9)
+test('폭탄: 짧은 정지·크게 흔들림·폭발 소리, 구제면 청록 가장자리 더', () => {
+  const r = rig();
+  r.feel.handle([ev('bomb', { x: 0, z: 0, bx: 5, bz: 0, dmg: 300 })], 1);
+  assert.ok(r.has('timeFx.hitstop').some(c => c[1] === LOOK.feel.bomb.stop));
+  assert.ok(r.has('camera.shake').length >= 1);
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'bomb'));
+  const d = rig();
+  d.feel.handle([ev('deathbomb', { x: 0, z: 0, hp: 10 }), ev('bomb', { x: 0, z: 0, bx: 5, bz: 0, dmg: 300 })], 1);
+  assert.ok(d.has('fx.edge').some(c => c[1] === 'cyan'));
+});
+
+test('방패 켬·막음·아이템 줍기 소리', () => {
+  const r = rig();
+  r.feel.handle([ev('shieldOn', { x: 0, z: 0 }), ev('shieldBlock', { x: 1, z: 0 }), ev('itemPick', { kind: 'bomb', x: 0, z: 0 })], 1);
+  const names = r.has('sfx.play').map(c => c[1]);
+  assert.ok(names.includes('shield') && names.includes('shieldBlock') && names.includes('pickup'), JSON.stringify(names));
+});
+
+test('방패·폭탄을 못 쓰면 틱 소리와 사용권 칸 흔들림(몸은 어두워지지 않음)', () => {
+  const r = rig();
+  r.feel.handle([ev('denied', { what: 'bomb', why: 'stock' })], 1);
+  assert.ok(r.has('sfx.play').some(c => c[1] === 'tick'));
+  assert.equal(r.has('actors.dim').length, 0);
+  assert.ok(r.has('hud.shakeStock').some(c => c[2] === 'bomb'));
+});

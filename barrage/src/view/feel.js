@@ -39,7 +39,9 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'parryStart': actors.ringFlash(now); sfx.play('swish'); break;
         case 'denied':
           sfx.play('tick');
-          if (e.what === 'dodge' && e.why === 'charges') hud.shakePips(now); else actors.dim(now);
+          if (e.what === 'dodge' && e.why === 'charges') hud.shakePips(now);
+          else if (e.what === 'shield' || e.what === 'bomb') hud.shakeStock?.(now, e.what);   // 사용권 칸이 흔들림(몸 어둡게는 패링·회피 잠김 뜻)
+          else actors.dim(now);
           break;
         case 'parry': {
           if (e.kind === 'melee') {
@@ -159,6 +161,22 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           break;
         }
         case 'executeEnd': hud.letterbox?.(now, false); camera.release?.(); break;
+        // 방패·폭탄·아이템(§4.9)
+        case 'shieldOn': sfx.play('shield'); break;
+        case 'shieldBlock': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.4); sfx.play('shieldBlock'); break;
+        case 'deathbomb': if (on('edge')) fx.edge('cyan', F().bomb.rescueEdge); if (on('numbers')) fx.number(e.x, e.z, '구제', 'cyan', 26); break;
+        case 'bomb': {
+          const X = F().bomb;
+          stop(now, X.stop);
+          shake(X.shakePx, X.shakeSec);
+          if (on('punch')) camera.punch(X.punch, X.punchSec);
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', X.burst);
+          if (on('numbers') && e.dmg > 0) fx.number(e.bx, e.bz, Math.round(e.dmg), 'cyan', 28);
+          sfx.play('bomb');
+          break;
+        }
+        case 'itemSpawn': sfx.play('itemSpawn'); break;
+        case 'itemPick': if (on('sparks')) fx.spark(e.x, e.z, 'item', 0.8); sfx.play('pickup'); break;
         case 'phase': { const P = F().phase; shake(P.shakePx, P.shakeSec); sfx.play('roar'); break; }
         case 'bossDeath': { const D = F().death; stop(now, D.stop, { override: true }); slow(now, D.slow, D.slowSec); shake(D.shakePx, D.shakeSec); fx.burst(e.x, e.z, 'orange', 3); sfx.play('death'); break; }
         case 'playerDeath': sfx.play('death'); if (on('edge')) fx.edge('red', 1.0); break;

@@ -7,11 +7,12 @@ const AXIS = {
 };
 const PARRY = new Set(['ShiftLeft', 'ShiftRight']);
 const DODGE = new Set(['Space']);
+const SHIELD = new Set(['KeyQ']), BOMB = new Set(['KeyE']);   // 방패·폭탄 사용권(§4.9)
 
 export function createInputMap(yawRad) {
   const held = new Map();           // 코드 → 누른 차례
   const down = new Set();           // 지금 눌려 있는 패링·회피 키(자동 반복 거르기)
-  let order = 0, parry = false, dodge = false, last = 0;
+  let order = 0, parry = false, dodge = false, shield = false, bomb = false, last = 0;
   const sin = Math.sin(yawRad), cos = Math.cos(yawRad);
 
   function axis(name) {
@@ -26,19 +27,22 @@ export function createInputMap(yawRad) {
       down.add(code);
       if (PARRY.has(code)) { parry = true; last = tMs; }
       if (DODGE.has(code)) { dodge = true; last = tMs; }
+      if (SHIELD.has(code)) shield = true;
+      if (BOMB.has(code)) bomb = true;
     },
     keyUp(code) { held.delete(code); down.delete(code); },
     mouseDown(btn, tMs) { if (btn === 0) parry = true; if (btn === 2) dodge = true; last = tMs; },
     mouseUp() {},
     blur() { held.clear(); down.clear(); },
+    clearPresses() { shield = false; bomb = false; },   // 멈춘 동안 누른 Q·E(사용권)는 버린다
     // 화면 위(v) = 바닥 (−sin ψ, −cos ψ), 화면 오른쪽(h) = (cos ψ, −sin ψ)
     take() {
       const v = axis('v'), h = axis('h');
       let mx = -sin * v + cos * h, mz = -cos * v - sin * h;
       const len = Math.hypot(mx, mz);
       if (len > 1e-9) { mx /= len; mz /= len; } else { mx = 0; mz = 0; }
-      const out = { mx, mz, parry, dodge };
-      parry = false; dodge = false;
+      const out = { mx, mz, parry, dodge, shield, bomb };
+      parry = false; dodge = false; shield = false; bomb = false;
       return out;
     },
     lastPressMs: () => last,

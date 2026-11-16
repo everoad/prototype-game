@@ -11,6 +11,7 @@ import { tryParry, catchBullets, endParry, hitBossReflects } from './parry.js';
 import { updateLanes } from './patterns.js';
 import { autoActive, stepAuto } from './rewards.js';
 import { executeActive, canExecute, startExecute, stepExecute, endExecute } from './execute.js';
+import { useItems, shieldBullets, updateItemSpawns } from './items.js';
 import { initBrain, thinkBoss } from './brain.js';
 import { labName, setupLab, thinkLab } from './labs.js';
 import { updateLayers } from './layers.js';
@@ -24,7 +25,7 @@ export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, h
     tick: 0, time: 0, acc: 0, events: [], result: null,
     player: createPlayer(r),
     boss: createBoss(r),
-    bullets: createBullets(r.bullets.cap), shots: createShots(r.shots.cap), lanes: [], beams: [], waves: [], floor: null, floorAreas: [], melee: { areas: [], taken: true, rush: null, combo: null },
+    bullets: createBullets(r.bullets.cap), shots: createShots(r.shots.cap), lanes: [], beams: [], waves: [], items: [], floor: null, floorAreas: [], melee: { areas: [], taken: true, rush: null, combo: null },
     stats: createStats(),
     opts: { phase, pattern, lab: labName(lab), heal, ai },
   };
@@ -46,8 +47,10 @@ export function step(w, input) {
     if ((input.parry || w.time <= p.buffer.parryUntil) && canExecute(w)) startExecute(w);   // 그로기 곁 패링 키(미리 누른 것 포함) = 처형(§5.8)
     else tryParry(w, input);
   }
+  useItems(w, input);   // Q 방패·E 폭탄(§4.9)
   separateBodies(w);
   p.face = Math.atan2(b.z - p.z, b.x - p.x);   // 몸은 늘 보스를 본다(돌아보는 시간 없음)
+  updateItemSpawns(w);
   // 보스(두뇌가 패턴·돌진·근접을 돌린다) · 차선
   if (w.opts.lab) thinkLab(w); else { thinkBoss(w); updateLayers(w); }
   updateBeams(w);
@@ -58,6 +61,7 @@ export function step(w, input) {
   moveShots(w);
   // 탄 이동 · 판정
   moveBullets(w);
+  shieldBullets(w);       // 방패: 보라 탄은 닿기 전에 지운다
   catchBullets(w);        // 패링 원(0.8)이 판정 점보다 넓다 — 맞기 전에 받는다
   hitPlayerBullets(w);
   hitBossReflects(w);
@@ -88,5 +92,6 @@ const f = v => (v ?? 0).toFixed(6);
 export function stateHash(w) {
   const p = w.player, b = w.boss;
   const live = w.bullets ? w.bullets.live : 0;
-  return [w.tick, f(p.x), f(p.z), p.hp, f(b.x), f(b.z), b.hp ?? 0, live, w.rng.peek().toFixed(9)].join('|');
+  const st = p.stock ? `${p.stock.shield}${p.stock.bomb}` : '', it = w.items ? w.items.map(i => `${i.kind[0]}${f(i.x)},${f(i.z)}`).join(';') : '';
+  return [w.tick, f(p.x), f(p.z), p.hp, f(b.x), f(b.z), b.hp ?? 0, live, w.rng.peek().toFixed(9), st, it, p.dyingAt ?? ''].join('|');
 }

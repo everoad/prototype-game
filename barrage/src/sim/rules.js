@@ -51,6 +51,10 @@ export const RULES = {
     reach: 2.0, share: 0.08, shotShare: 0.1, knock: 2.0, backDist: 4, standOff: 2.4,
     dashIn: 0.15, shots: [0.25, 0.35, 0.45], final: 0.6, back: 0.3,
   },
+  // 방패·폭탄 사용권(§4.9): 시작에 들고 오는 수, 최대, 보스전 아이템 간격·수명·보스와 떨어진 거리·줍는 거리
+  items: { start: { shield: 1, bomb: 1 }, max: 3, every: 25, life: 10, minFromBoss: 5, pickR: 1.0 },
+  shield: { sec: 1.5, r: 1.2 },                        // 보라 탄만 지움
+  bomb: { invuln: 1.5, share: 0.04, rescue: 0.15 },   // rescue = 맞은 뒤 이 안에 폭탄이면 그 한 대를 되돌림
   fullCounter: { dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },
   heal: { amount: 3 },   // ?heal=1 변형만(§4.7)
   // 순간 돌진(§5.3): 움츠림 → 0.2초 전 자리 고정 → 25 U/s, 몸 사이 1.0 U(가운데끼리 3.1)에서 멈춤. 피해 없음.
