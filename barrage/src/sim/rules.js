@@ -23,9 +23,9 @@ export const RULES = {
   src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14 },
   // 두 겹 탄막의 아래(§5.4): 바탕 고리(+ 2단계 느린 나선), 2단계 쌍둥이 구슬. 흰·금 없음.
   layers: {
-    bg1: { every: 1.6, n: 12, speed: 6 },
-    bg2: { every: 1.1, n: 16, speed: 6, spiralEvery: 0.2, spiralStepDeg: 13, spiralSpeed: 5 },
-    orbs: { r: 2.5, spin: 1.2, every: 0.8, speed: 11 },
+    bg1: { every: 2.2, n: 10, speed: 6 },
+    bg2: { every: 1.6, n: 12, speed: 6, spiralEvery: 0.3, spiralStepDeg: 13, spiralSpeed: 5 },
+    orbs: { r: 2.5, spin: 1.2, every: 1.2, speed: 11 },
     start: { ring: 0.8, orb: 0.4 },   // 판 시작 뒤 첫 고리·첫 구슬(둘째 구슬은 every/2 늦게 — 엇갈림)
     resume: 0.3,                       // 쉬었다 다시 쏠 때 첫 발까지
   },
@@ -86,12 +86,12 @@ export const RULES = {
   patterns: {
     muzzle: 1.2,
     1: { volleys: [0, 0.3, 0.6], n: 7, nSparse: 3, spreadDeg: 60, speed: 11.5 },                        // 조준 부채, 가운데 흰(사이 10° — 걸어서 빠질 틈)
-    2: { rings: [0, 0.35, 0.7, 1.05, 1.4], n: 40, nSparse: 22, gapSlots: 6, gapSparse: 2, twistDeg: 4.1, speed: 10, whites: [2, 3], whitesSparse: [1, 1] },   // 고리, 마지막 고리 금 1
+    2: { rings: [0, 0.4, 0.8, 1.2], n: 32, nSparse: 16, gapSlots: 5, gapSparse: 2, twistDeg: 4.1, speed: 10, whites: [2, 3], whitesSparse: [1, 1] },   // 고리, 마지막 고리 금 1
     3: { at: [0, 0.35, 0.7], atSparse: [0], speed: 18 },                                          // 빨간 창(조준 차선)
-    4: { speed: 4, r: 0.5, burstDist: 7, minTravel: 0.25, burstAt: 1.5, n: 18, nSparse: 9, whites: 2, whitesSparse: 1, fragSpeed: 11, maxSec: 2.5 },   // 쪼개지는 구슬
-    5: { dur: 3.2, every: 0.07, everySparse: 0.12, arms: 3, stepDeg: 8, whiteEvery: 6, speed: 10 },     // 나선
-    6: { dur: 1.2, every: 0.05, everySparse: 0.1, speed: 18 },                                        // 연발, 끝 금(조준 차선)
-    7: { spacing: 0.5, spacingSparse: 1.0, speed: 9, gap: 1.6, nearGap: 1.5, farGap: [5, 7], plugWhites: 3, reds: 3, redLen: 3, maxSec: 4 },   // 탄 벽
+    4: { speed: 4, r: 0.5, burstDist: 7, minTravel: 0.25, burstAt: 1.5, n: 14, nSparse: 7, whites: 2, whitesSparse: 1, fragSpeed: 11, maxSec: 2.5 },   // 쪼개지는 구슬
+    5: { dur: 3.2, every: 0.09, everySparse: 0.18, arms: 3, stepDeg: 8, whiteEvery: 6, speed: 10 },     // 나선
+    6: { dur: 1.2, every: 0.07, everySparse: 0.14, speed: 18 },                                        // 연발, 끝 금(조준 차선)
+    7: { spacing: 0.65, spacingSparse: 1.3, speed: 9, gap: 1.6, nearGap: 1.5, farGap: [5, 7], plugWhites: 3, reds: 3, redLen: 3, maxSec: 4 },   // 탄 벽
   },
   bullets: {
     cap: 600,              // 동시에 판에 있는 적 탄 상한(두 겹 탄막 몫)
