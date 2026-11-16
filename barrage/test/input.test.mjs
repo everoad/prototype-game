@@ -72,3 +72,13 @@ test('멈춘 동안 누른 Q·E는 버린다(풀자마자 사용권을 쓰지 �
   const i = m.take();
   assert.equal(i.shield, false); assert.equal(i.bomb, false);
 });
+
+// 양손 키보드(사용자 2026-11-16): J 패링, K 방패, L 폭탄 — Shift·Q·E·마우스도 그대로
+test('양손 키보드: J 패링, K 방패, L 폭탄, Shift 패링도 그대로', () => {
+  const m = createInputMap(0);
+  m.keyDown('KeyJ', 0); m.keyDown('KeyK', 1); m.keyDown('KeyL', 2);
+  const a = m.take();
+  assert.deepEqual([a.parry, a.shield, a.bomb], [true, true, true]);
+  m.keyUp('KeyJ'); m.keyDown('ShiftLeft', 3);
+  assert.equal(m.take().parry, true);
+});

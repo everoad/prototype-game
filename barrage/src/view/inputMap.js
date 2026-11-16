@@ -5,9 +5,10 @@ const AXIS = {
   KeyW: ['v', 1], ArrowUp: ['v', 1], KeyS: ['v', -1], ArrowDown: ['v', -1],
   KeyD: ['h', 1], ArrowRight: ['h', 1], KeyA: ['h', -1], ArrowLeft: ['h', -1],
 };
-const PARRY = new Set(['ShiftLeft', 'ShiftRight']);
+// 양손 키보드(사용자 2026-11-16): 왼손 WASD·Space, 오른손 J 패링·K 방패·L 폭탄(U·I·O는 나중 스킬 자리). Shift·Q·E·마우스도 그대로.
+const PARRY = new Set(['ShiftLeft', 'ShiftRight', 'KeyJ']);
 const DODGE = new Set(['Space']);
-const SHIELD = new Set(['KeyQ']), BOMB = new Set(['KeyE']);   // 방패·폭탄 사용권(§4.9)
+const SHIELD = new Set(['KeyQ', 'KeyK']), BOMB = new Set(['KeyE', 'KeyL']);   // 방패·폭탄 사용권(§4.9)
 
 export function createInputMap(yawRad) {
   const held = new Map();           // 코드 → 누른 차례
