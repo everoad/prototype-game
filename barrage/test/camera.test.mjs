@@ -97,3 +97,21 @@ test('박치기 줄 끝과 레이저 빔 끝을 담는다', () => {
   assert.ok(p.some(q => Math.abs(q.x - (6 - 15.5)) < 1e-6 && Math.abs(q.z) < 1e-6), '줄 끝 없음');
   assert.ok(p.some(q => Math.abs(q.x - 6) < 1e-6 && Math.abs(q.z - RULES.board.hz) < 1e-6), '빔 끝 없음');
 });
+
+// 처형(§5.8): 카메라 당김은 처형이 끝날 때까지(정지·느려짐으로 실제 시간이 길어져도) — 끝나면 release로 푼다
+import { createCamera } from '../src/view/camera.js';
+test('처형 당김은 release 전까지 유지되고, release 뒤 풀린다', () => {
+  let last = null;
+  const view = { aspect: 16 / 9, canvas: { clientWidth: 1280 }, setView: v => { last = v; } };
+  const cam = createCamera(view, LOOK), w = createWorld({ seed: 1, ai: false });
+  let now = 0;
+  const run = sec => { for (let k = 0; k < Math.round(sec * 60); k++) { now += 1 / 60; cam.update(w, 1 / 60, now); } };
+  run(1);
+  const base = last.width;
+  cam.hold(LOOK.feel.execute.hold, LOOK.feel.execute.holdSec);
+  run(1.4);   // 처형 실제 길이(정지 0.12 + 0.3배 느려짐 포함) 약 1.37초
+  assert.ok(last.width < base * (1 - LOOK.feel.execute.hold * 0.9), `1.4초 뒤 풀림: ${last.width} / ${base}`);
+  cam.release();
+  run(0.3);
+  assert.ok(Math.abs(last.width - base) < base * 0.01, `release 뒤 ${last.width} / ${base}`);
+});

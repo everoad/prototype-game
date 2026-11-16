@@ -77,7 +77,7 @@ export const LOOK = {
     afterimage: { count: 3, fade: 0.22, alpha: 0.35, alphaNear: 0.6 },
     // 그로기 처형(§5.8) — 영화처럼: 검은 띠·카메라 당김 유지·정적 → 붙어 쏘기(한 발마다 shotCent 음 올림) → 큰 한 발(정지·느려짐·금빛 가장자리).
     execute: {
-      hold: 0.14, holdSec: 0.9, duckDb: -30, duckSec: 0.22, stop: 0.12, shakePx: 24, shakeSec: 0.45, slow: 0.3, slowSec: 0.5, edgeSec: 0.6, burst: 3, number: 44,
+      hold: 0.14, holdSec: 4, duckDb: -30,   // holdSec = 안전 한도일 뿐 — 당김은 처형이 끝날 때(executeEnd → release) 풀린다(사용자 2026-11-16) duckSec: 0.22, stop: 0.12, shakePx: 24, shakeSec: 0.45, slow: 0.3, slowSec: 0.5, edgeSec: 0.6, burst: 3, number: 44,
       shotCent: 300, shotShake: 6, shotShakeSec: 0.08,
     },
   },
