@@ -73,14 +73,31 @@ test('멈춘 동안 누른 Q·E는 버린다(풀자마자 사용권을 쓰지 �
   assert.equal(i.shield, false); assert.equal(i.bomb, false);
 });
 
-// 양손 키보드(사용자 2026-11-16): J 패링, K 방패, L 폭탄 — Shift·Q·E·마우스도 그대로
-test('양손 키보드: J 패링, K 방패, L 폭탄, Shift 패링도 그대로', () => {
+// 키 배치(사용자 2026-11-17): 윗줄 U·I·O = 공격, 가운뎃줄 J·K·L = 패링·이동기, 방패·폭탄은 Q·E만
+test('J 패링 · K·L 이동기(방패·폭탄이 아니다) · Q·E 방패·폭탄 · Shift 패링도 그대로', () => {
   const m = createInputMap(0);
   m.keyDown('KeyJ', 0); m.keyDown('KeyK', 1); m.keyDown('KeyL', 2);
   const a = m.take();
-  assert.deepEqual([a.parry, a.shield, a.bomb], [true, true, true]);
-  m.keyUp('KeyJ'); m.keyDown('ShiftLeft', 3);
+  assert.deepEqual([a.parry, a.shield, a.bomb, a.move1, a.move2], [true, false, false, true, true]);
+  m.keyDown('KeyQ', 3); m.keyDown('KeyE', 4);
+  const b = m.take();
+  assert.deepEqual([b.shield, b.bomb], [true, true]);
+  m.keyUp('KeyJ'); m.keyDown('ShiftLeft', 5);
   assert.equal(m.take().parry, true);
+});
+
+test('I는 누르고 있는 동안 hold, F는 hold가 아니다. 멈춘 동안 누른 O·K·L은 버린다', () => {
+  const m = createInputMap(0);
+  m.keyDown('KeyF', 0);
+  assert.equal(m.take().hold, false);
+  m.keyDown('KeyI', 1);
+  assert.equal(m.take().hold, true); assert.equal(m.take().hold, true);
+  m.keyUp('KeyI');
+  assert.equal(m.take().hold, false);
+  m.keyDown('KeyO', 2); m.keyDown('KeyK', 3); m.keyDown('KeyL', 4);
+  m.clearPresses();
+  const a = m.take();
+  assert.deepEqual([a.orb, a.move1, a.move2], [false, false, false]);
 });
 
 // 보조 무기(§4.10): 숫자 1~6으로 켜고 끔(시험용), 누른 순간 한 번

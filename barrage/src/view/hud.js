@@ -1,6 +1,7 @@
 // 겹 화면(2D 캔버스, §7): 보스 체력(깎인 꼬리)·무력화·단계, 플레이어 체력·회피 충전 점, 시간, 멈춤·결과, F1 판정 보기.
 // 녹화는 이 캔버스를 WebGL 화면 위에 합쳐 찍는다. 가장자리 연출(Task 14)도 이 캔버스에 그린다(ctx).
-import { BASE_TRIES } from '../sim/tries.js';
+import { BASE_TRIES, tryKey } from '../sim/tries.js';
+import { CARDS, GROUPS, kitCards, kitAll } from '../sim/cards.js';
 import { BUILD } from './version.js';
 
 // 결과 화면 밝기: 승리·패배 순간에서 since초 — 늦게(큰 순간을 먼저 보여 주고) 서서히 뜬다
@@ -13,7 +14,7 @@ export function resultAlpha(result, since, R) {
 export function createHud(canvas, LOOK) {
   const ctx = canvas.getContext('2d'), C = LOOK.colors;
   let dpr = 1, W = 0, H = 0;
-  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9, stockShake: { shield: -1e9, bomb: -1e9, skill: -1e9, store: -1e9 }, banner: null, fadeAt: -1e9, fadeSec: 0 };
+  const st = { trail: 1, trailHold: 0, lastHp: 1, pipShakeAt: -1e9, staggerFlashAt: -1e9, bars: false, barsAt: -1e9, stockShake: { shield: -1e9, bomb: -1e9, skill: -1e9, store: -1e9 }, banner: null, fadeAt: -1e9, fadeSec: 0, gains: [], blink: null };
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     W = canvas.clientWidth || window.innerWidth; H = canvas.clientHeight || window.innerHeight;
@@ -43,7 +44,7 @@ export function createHud(canvas, LOOK) {
     if (away) {
       const left = w.enemies.reduce((n, m) => n + (m.dead ? 0 : 1), 0);
       ctx.textAlign = 'center'; ctx.font = font(18, true); ctx.fillStyle = C.text; ctx.fillText(`방 ${S.room + 1} / ${S.of}`, W / 2, by + 12);
-      ctx.font = font(13); ctx.fillStyle = C.textDim; ctx.fillText(S.phase === 'fight' ? (S.surviveUntil != null ? `버티기 ${Math.max(0, S.surviveUntil - w.time).toFixed(0)}초` : `남은 적 ${left}`) : S.phase === 'reward' ? '보상 하나를 고르세요' : '문으로 →', W / 2, by + 32);
+      ctx.font = font(13); ctx.fillStyle = C.textDim; ctx.fillText(S.phase === 'fight' ? (S.surviveUntil != null ? `버티기 ${Math.max(0, S.surviveUntil - w.time).toFixed(0)}초` : `남은 적 ${left}`) : S.phase === 'reward' ? '하나를 골라 그 위에 서세요' : S.phase === 'replace' ? `칸이 찼습니다 — 버릴 카드 위에 서세요(새 카드: ${LOOK.names.card[S.pending.id]})` : '문으로 →', W / 2, by + 32);
     } else {
     bar(bx, by, bw, 14, st.trail, C.hpTrail);
     ctx.fillStyle = C.hp; ctx.fillRect(bx, by, bw * hp, 14);
@@ -60,7 +61,7 @@ export function createHud(canvas, LOOK) {
     ctx.font = font(12); ctx.fillStyle = C.textDim; ctx.fillText('체력', px, py - 6);
     bar(px, py, 220, 12, p.hp / w.rules.player.hp, C.playerHp);
     const shake = now - st.pipShakeAt < 0.2 ? Math.sin((now - st.pipShakeAt) * 80) * 3 : 0;
-    for (let k = 0; k < w.rules.dodge.charges; k++) {
+    for (let k = 0; k < (p.dodge.max ?? w.rules.dodge.charges); k++) {
       ctx.beginPath(); ctx.arc(px + 240 + k * 18 + shake, py + 6, 6, 0, Math.PI * 2);
       ctx.fillStyle = k < p.dodge.charges ? C.pip : C.pipEmpty; ctx.fill();
     }
@@ -69,7 +70,7 @@ export function createHud(canvas, LOOK) {
       const names = { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론' };
       ctx.font = font(12, true); ctx.textAlign = 'left';
       let gx = px;
-      ['missile', 'burst', 'beam', 'drone'].forEach((g, k) => {
+      if (!w.kit) ['missile', 'burst', 'beam', 'drone'].forEach((g, k) => {   // 스테이지는 낀 것 HUD(오른쪽 아래)가 무기를 보여 준다
         const label = `${k + 1} ${names[g]}`;
         ctx.fillStyle = w.weapons.on.includes(g) ? C.cyan : C.textDim; ctx.fillText(label, gx, py - 24);
         gx += ctx.measureText(label).width + 10;
@@ -92,7 +93,7 @@ export function createHud(canvas, LOOK) {
     }
     // 모아 던지기(§4.11): 모은 칸 + U 던지기(모은 것이 있으면 밝게, 가득이면 맥동)
     if (w.opts.store) {
-      const cap = w.rules.store.cap, n = p.store.length, full = n >= cap;
+      const cap = p.storeCap ?? w.rules.store.cap, n = p.store.length, full = n >= cap;
       const sk = now - st.stockShake.store < 0.2 ? Math.sin((now - st.stockShake.store) * 80) * 3 : 0;
       for (let k = 0; k < cap; k++) {
         ctx.beginPath(); ctx.arc(px + 8 + k * 18 + sk, py - 46, full ? 6.5 + Math.sin(now * 16) : 6, 0, Math.PI * 2);
@@ -107,8 +108,8 @@ export function createHud(canvas, LOOK) {
     if (p.stock) {
       ctx.font = font(13, true); ctx.textAlign = 'left';
       const sk = what => (now - st.stockShake[what] < 0.2 ? Math.sin((now - st.stockShake[what]) * 80) * 3 : 0);
-      ctx.fillStyle = p.stock.shield > 0 ? C.item : C.textDim; ctx.fillText(`K 방패 ×${p.stock.shield}`, px + 300 + sk('shield'), py + 11);
-      ctx.fillStyle = p.stock.bomb > 0 ? C.item : C.textDim; ctx.fillText(`L 폭탄 ×${p.stock.bomb}`, px + 390 + sk('bomb'), py + 11);
+      ctx.fillStyle = p.stock.shield > 0 ? C.item : C.textDim; ctx.fillText(`Q 방패 ×${p.stock.shield}`, px + 300 + sk('shield'), py + 11);
+      ctx.fillStyle = p.stock.bomb > 0 ? C.item : C.textDim; ctx.fillText(`E 폭탄 ×${p.stock.bomb}`, px + 390 + sk('bomb'), py + 11);
     }
     // 반격 기회(과열, §4.6): 남은 시간 금빛 막대(끝나기 전 깜빡)
     const od = p.overdriveUntil - w.time;
@@ -141,7 +142,8 @@ export function createHud(canvas, LOOK) {
       }
     }
     // 실험 기믹(?try=): 켠 것의 이름을 왼쪽 위에
-    const extra = w.tries ? w.tries.names.filter(n => !BASE_TRIES.includes(n)) : [];   // 기본 판으로 올린 것은 적지 않는다
+    const mine = w.kit ? kitAll(w).map(id => CARDS[id].try).filter(Boolean) : [];   // 카드가 켠 것과 방의 특징은 실험이 아니다(낀 것 HUD·방이 보여 준다)
+    const extra = w.tries ? w.tries.names.filter(n => !BASE_TRIES.includes(n) && !mine.includes(n) && n !== S?.feature) : [];   // 기본 판으로 올린 것은 적지 않는다
     if (extra.length) {
       ctx.textAlign = 'left'; ctx.font = font(12, true); ctx.fillStyle = C.cyan; ctx.fillText('실험', 20, 66);
       ctx.font = font(12); ctx.fillStyle = C.textDim;
@@ -154,7 +156,8 @@ export function createHud(canvas, LOOK) {
     ctx.font = font(15, true); ctx.fillStyle = C.text; ctx.textAlign = 'right';
     ctx.fillText(mmss(w.time), W - 20, 34);
     ctx.font = font(12); ctx.fillStyle = C.textDim;
-    ctx.fillText(`WASD 이동 · J/Shift 패링 · Space 회피 · K/Q 방패 · L/E 폭탄 · ${w.opts.store ? 'U 모은 탄 던지기' : 'U/I/O 무기 스킬'} · 1~4 무기 · V 시점 · Esc 멈춤 · F4 다시${w.stage ? ' · R 방 다시(죽은 뒤)' : ''}`, W - 20, H - 18);
+    ctx.fillText(w.kit ? `Esc 멈춤(조작 안내) · V 시점 · F4 처음부터${w.result === 'lose' ? ' · R 이 방 다시' : ''}` : `WASD 이동 · J/Shift 패링 · Space 회피 · Q 방패 · E 폭탄 · ${w.opts.store ? 'U 던지기 · I 저격' : 'U/I/O 무기 스킬'} · 1~4 무기 · V 시점 · Esc 멈춤 · F4 다시`, W - 20, H - 18);   // 스테이지는 짧게(낀 것 HUD가 키를 보여 준다)
+    if (w.kit) kitBar(w, ui);
     ctx.fillText(`빌드 ${BUILD}`, W - 20, ui.bot ? 70 : 54);
     if (ui.bot) ctx.fillText(`봇: ${ui.bot}`, W - 20, 54);
     // F1 판정 보기
@@ -175,19 +178,75 @@ export function createHud(canvas, LOOK) {
       t.last = frac;
       if (now > t.hold) t.v = Math.max(frac, t.v - Lg.rate * (ui.dt ?? 0.016));
       if (t.v < frac) t.v = frac;
-      tr.set(m.id, t); if (tr.size > 96) tr.clear();
+      tr.set(m.id, t); if (tr.size > Lg.keep) tr.clear();
       bar(s.x - M.barW / 2, s.y, M.barW, M.barH, t.v, C.hpTrail);
       ctx.fillStyle = C.hp; ctx.fillRect(s.x - M.barW / 2, s.y, M.barW * Math.max(0, Math.min(1, frac)), M.barH);
     }
-    ctx.textAlign = 'center'; ctx.font = font(14, true);
+    // 고르는 자리: 이름(가까이 가면 한 줄 설명). 바꿔 끼우는 중 = "버리기: 이름" · "무르기"
+    const p = w.player;
     for (const r of S.rewards) {
-      const s = ui.project(r.x, r.z, 0), ready = w.time >= r.born + w.rules.stage.rewardDelay;
+      const s = ui.project(r.x, r.z, 0), ready = S.phase === 'replace' ? r.armed : w.time >= r.born + w.rules.stage.rewardDelay;
+      const card = r.kind === 'card' || r.kind === 'held', name = LOOK.names.card[r.what] ?? LOOK.names.reward[r.what] ?? r.what;
       ctx.globalAlpha = ready ? 1 : 0.45;
-      ctx.fillStyle = r.kind === 'weapon' ? C.cyan : r.kind === 'charge' ? C.item : C.heal;
-      ctx.fillText(r.kind === 'heal' ? `체력 +${w.rules.stage.heal}` : LOOK.names.reward[r.what] ?? r.what, s.x, s.y + 22);
+      ctx.textAlign = 'center'; ctx.font = font(14, true);
+      ctx.fillStyle = r.kind === 'cancel' ? C.textDim : r.kind === 'held' ? C.text : card ? C.cyan : r.kind === 'charge' ? C.item : C.heal;
+      const label = r.kind === 'cancel' ? '무르기' : r.kind === 'held' ? `버리기: ${name}` : r.kind === 'heal' ? `체력 +${w.rules.stage.heal}` : card ? `${LOOK.names.group[CARDS[r.what].group]} · ${name}` : name;
+      ctx.fillText(label, s.x, s.y + 22);
+      if (card && Math.hypot(p.x - r.x, p.z - r.z) <= LOOK.kit.near) { ctx.font = font(12); ctx.fillStyle = C.textDim; ctx.fillText(LOOK.names.cardLine[r.what] ?? '', s.x, s.y + 40); }
       ctx.globalAlpha = 1;
     }
+    ctx.textAlign = 'center'; ctx.font = font(14, true);
     if (S.door) { const s = ui.project(S.door.x, S.door.z, M.doorH + 0.4); ctx.fillStyle = Math.floor(now * 3) % 2 ? C.door : C.text; ctx.fillText('다음 방', s.x, s.y); }
+  }
+
+  // 낀 것 HUD(한 판의 뼈대 §8): 오른쪽 아래에 무기 2칸 · 탄 기술 1칸 · 이동기 2칸 · 몸(낀 만큼). 키가 있는 칸에는 키 글자, 빈 칸은 흐리게.
+  // 칸의 자리: 오른쪽 끝에서 왼쪽으로 채워 나간다(몸 카드가 늘면 왼쪽으로 자란다)
+  function kitLayout(w) {
+    const Kt = LOOK.kit, R = w.rules.cards.slots, out = [];
+    const body = kitCards(w, 'body'), counts = { weapon: R.weapon, orb: R.orb, move: R.move, body: body.length };
+    let x = W - 20;
+    for (const g of [...GROUPS].reverse()) {
+      const sw = g === 'body' ? Kt.bodyW : Kt.slotW;
+      for (let k = counts[g] - 1; k >= 0; k--) { x -= sw; out.push({ group: g, slot: k, x, y: H - Kt.bottom - Kt.slotH, w: sw, h: Kt.slotH }); x -= Kt.gap; }
+      if (counts[g] > 0) x -= Kt.groupGap - Kt.gap;
+    }
+    return out;
+  }
+  function slotAt(w, group, slot) {
+    const s = kitLayout(w).find(c => c.group === group && c.slot === slot);
+    return s ? { x: s.x + s.w / 2, y: s.y + s.h / 2 } : { x: W - 60, y: H - LOOK.kit.bottom };
+  }
+  function kitBar(w, ui) {
+    const Kt = LOOK.kit, now = ui.now, cells = kitLayout(w), KEY = { orb: 'O', move1: 'K', move2: 'L' };
+    const seen = new Set();
+    for (const c of cells) {
+      const id = kitCards(w, c.group)[c.slot] ?? null, card = id ? CARDS[id] : null;
+      const key = card && card.key ? KEY[tryKey(w, card.try)] : c.group === 'orb' ? 'O' : c.group === 'move' ? (c.slot === 0 ? 'K' : 'L') : null;
+      const gain = st.gains.find(g => g.group === c.group && g.slot === c.slot), lit = gain ? Math.max(0, 1 - (now - gain.at - Kt.fly) / Kt.flash) : 0;
+      const blink = st.blink === c.group && id && Math.floor(now * Kt.blink) % 2 === 0;
+      ctx.fillStyle = blink ? 'rgba(255,255,255,0.28)' : id ? 'rgba(53,224,208,0.16)' : 'rgba(255,255,255,0.05)';
+      ctx.fillRect(c.x, c.y, c.w, c.h);
+      if (gain && now - gain.at >= Kt.fly && lit > 0) { ctx.fillStyle = `rgba(53,224,208,${(0.6 * lit).toFixed(3)})`; ctx.fillRect(c.x, c.y, c.w, c.h); }
+      ctx.strokeStyle = id ? C.cyan : C.pipEmpty; ctx.lineWidth = 1; ctx.strokeRect(c.x + 0.5, c.y + 0.5, c.w - 1, c.h - 1);
+      ctx.font = font(12, true); ctx.textAlign = 'left';
+      ctx.fillStyle = id ? C.text : C.textDim;
+      const usesKey = key && (!card || card.key);
+      ctx.fillText(`${usesKey ? key + ' ' : ''}${id ? LOOK.names.card[id] : '—'}`, c.x + 7, c.y + c.h / 2 + 4, c.w - 12);
+      if (!seen.has(c.group)) { seen.add(c.group); }
+    }
+    // 갈래 이름(칸 묶음 위에 작게)
+    ctx.font = font(11); ctx.fillStyle = C.textDim; ctx.textAlign = 'left';
+    for (const g of GROUPS) { const first = cells.filter(c => c.group === g).sort((a2, b2) => a2.x - b2.x)[0]; if (first) ctx.fillText(LOOK.names.group[g], first.x, first.y - 5); }
+    // 주운 카드: 자리에서 칸까지 선이 그어진다
+    for (let k = st.gains.length - 1; k >= 0; k--) {
+      const g = st.gains[k], u = (now - g.at) / Kt.fly;
+      if (now - g.at > Kt.fly + Kt.flash) { st.gains.splice(k, 1); continue; }
+      if (u >= 1 || !ui.project) continue;
+      const a = ui.project(g.x, g.z, 1), b = slotAt(w, g.group, g.slot), e2 = u * u * (3 - 2 * u), t0 = Math.max(0, e2 - 0.35);
+      ctx.strokeStyle = C.cyan; ctx.lineWidth = Kt.lineW; ctx.globalAlpha = 0.9;
+      ctx.beginPath(); ctx.moveTo(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0); ctx.lineTo(a.x + (b.x - a.x) * e2, a.y + (b.y - a.y) * e2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
 
   function debug(w, ui) {
@@ -218,7 +277,35 @@ export function createHud(canvas, LOOK) {
     ctx.fillStyle = 'rgba(10,9,14,0.62)'; ctx.fillRect(0, 0, W, H);
     ctx.textAlign = 'center'; ctx.fillStyle = C.text;
     const s = w.stats;
-    if (w.result) {
+    if (w.result === 'win' && w.stage && ui.grade) {
+      // 스테이지를 끝냈다(한 판의 뼈대 §5): 등급을 크게, 시간(최고) · 맞음 · 완벽 · 다시, 그 판에 낀 카드, 새 기록. 차례로 찍힌다
+      const G = ui.grade, Rs = LOOK.feel.result, t = ui.resultT ?? 99, best = G.prev?.sec ?? null;
+      ctx.font = font(40, true); ctx.fillText(`스테이지 ${w.stage.id} 완료`, W / 2, H / 2 - 96);
+      if (t >= Rs.stamp[0]) {   // 등급: 크게 나타나 제 크기로 줄어든다
+        const k = Math.min(1, (t - Rs.stamp[0]) / Rs.pop), px = Rs.gradePx * (1.6 - 0.6 * k);
+        ctx.font = font(px, true); ctx.fillStyle = G.grade === 'S' ? C.cyan : C.text;
+        ctx.fillText(G.grade, W / 2 + 250, H / 2 - 66 + px * 0.2);
+        ctx.fillStyle = C.text;
+      }
+      const perfect = s.parries > 0 ? Math.round(s.perfects / s.parries * 100) : 0;
+      ctx.font = font(17);
+      ctx.fillText(`시간 ${mmss(w.stage.playSec)}${best != null ? ` (지난 최고 ${mmss(best)})` : ''} · 맞음 ${s.hits} · 완벽 ${perfect}% · 다시 ${w.stage.retries}`, W / 2, H / 2 - 44);
+      if (t >= Rs.stamp[1]) {
+        const cards = kitAll(w);
+        ctx.font = font(14, true); ctx.fillStyle = C.cyan;
+        ctx.fillText(cards.length ? cards.map(id => `[${LOOK.names.card[id]}]`).join(' ') : '[카드 없음]', W / 2, H / 2 - 12);
+      }
+      ctx.font = font(13); ctx.fillStyle = C.textDim;
+      ctx.fillText([...w.stage.times.map(x => `방 ${x.room} ${x.sec.toFixed(0)}초`), `보스 ${(w.time - w.stage.startedAt).toFixed(0)}초`].join(' · ') + ' (고르는 시간은 빼고 잰다)', W / 2, H / 2 + 14);
+      if (t >= Rs.stamp[2]) {
+        const fresh = G.rec && (G.rec.isNew.sec || G.rec.isNew.grade);
+        ctx.font = font(16, true); ctx.fillStyle = fresh ? C.cyan : C.textDim;
+        ctx.fillText(!G.counts ? '(기록 없음 — 연습 옵션이 붙은 판)' : fresh ? `새 기록!${G.rec.isNew.sec ? ' 가장 빠른 시간' : ''}${G.rec.isNew.sec && G.rec.isNew.grade ? ' ·' : ''}${G.rec.isNew.grade ? ' 가장 높은 등급' : ''}` : `최고 ${mmss(G.rec.best.sec)} · ${G.rec.best.grade}`, W / 2, H / 2 + 44);
+      }
+      ctx.font = font(13); ctx.fillStyle = C.textDim;
+      ctx.fillText('F4 한 판 더', W / 2, H / 2 + 74);
+      ctx.textAlign = 'right'; ctx.font = font(11); ctx.fillText(`seed ${G.seed}`, W - 20, H - 40); ctx.textAlign = 'center';
+    } else if (w.result) {
       ctx.font = font(40, true); ctx.fillText(w.result === 'win' ? (w.stage ? '스테이지 완료' : '승리') : '패배', W / 2, H / 2 - 60);
       ctx.font = font(16);
       ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
@@ -227,8 +314,13 @@ export function createHud(canvas, LOOK) {
     } else {
       ctx.font = font(32, true); ctx.fillText('멈춤', W / 2, H / 2 - 100);
       ctx.font = font(15);
-      const rows = ['WASD·방향키 — 이동(누르는 그 틱에 최고 속도)', 'Shift·마우스 왼쪽 — 패링(흰·금 탄, 흰·금 근접)', 'Space·마우스 오른쪽 — 회피(2회 충전, 시작부터 무적)', '쏘기는 자동(보스 쪽, 붙을수록 많이 맞음)', w.opts.store ? 'U — 받아서 모은 탄 던지기(피해 + 회복, 최대 4개)' : 'U·I·O — 무기 스킬(패링 게이지 3칸)', 'K·Q 방패 · L·E 폭탄(아이템으로 얻은 만큼)', 'V 시점 45°/60° · G 패링 고리 · F1 판정 보기 · F4 다시 · Esc 이어서'];
+      const rows = ['WASD·방향키 — 이동(누르는 그 틱에 최고 속도)', 'J·Shift·마우스 왼쪽 — 패링(흰·금 탄, 흰·금 근접)', 'Space·마우스 오른쪽 — 회피(충전제, 시작부터 무적)', '쏘기는 자동(겨눈 적 쪽, 붙을수록 많이 맞음)', w.opts.store ? 'U 던지기(피해 + 회복) · I 저격(누르고 있기 — WASD로 적 고르기, 떼면 쏜다) · O 탄 기술' : 'U·I·O — 무기 스킬(패링 게이지 3칸)', 'K · L — 이동기(얻은 차례대로)', 'Q 방패 · E 폭탄(얻은 만큼)', 'V 시점 45°/60° · G 패링 고리 · F1 판정 보기 · F4 다시 · Esc 이어서'];
       rows.forEach((t, k) => ctx.fillText(t, W / 2, H / 2 - 56 + k * 24));
+      if (w.kit) {   // 낀 카드와 한 줄 설명
+        const cards = kitAll(w), y0 = H / 2 - 56 + rows.length * 24 + 14;
+        ctx.font = font(13); ctx.fillStyle = C.cyan;
+        cards.forEach((id, k) => ctx.fillText(`${LOOK.names.group[CARDS[id].group]} · ${LOOK.names.card[id]} — ${LOOK.names.cardLine[id]}`, W / 2, y0 + k * 20));
+      }
     }
     ctx.globalAlpha = 1;
   }
@@ -250,6 +342,9 @@ export function createHud(canvas, LOOK) {
     shakeStock(now, what) { st.stockShake[what] = now; },
     flashStagger(now) { st.staggerFlashAt = now; },
     banner(now, text, sec) { st.banner = { text, at: now, sec }; },
+    cardGain(now, e) { st.gains.push({ at: now, group: e.group, slot: e.slot, x: e.x, z: e.z }); },   // 주운 카드: 자리 → 그 칸으로 선, 칸이 빛난다
+    blinkGroup(group) { st.blink = group; },   // 바꿔 끼우는 동안 그 갈래의 칸이 깜빡인다(null = 멈춤)
+    slotAt,
     fadeIn(now, sec) { st.fadeAt = now; st.fadeSec = sec; },
   };
 }

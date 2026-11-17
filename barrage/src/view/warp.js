@@ -25,3 +25,9 @@ export function rayInBoard(B, x, z, angle, len) {
   const tz = sa > 1e-9 ? (B.hz - z) / sa : sa < -1e-9 ? (-B.hz - z) / sa : Infinity;
   return Math.max(0, Math.min(len, tx, tz));
 }
+
+// 그리기용 시각: 판이 끝나면 sim 시각은 멈춘다(화면이 판을 더 돌리지 않는다). 끝낸 한 방의 섬광·바람 줄·밀림이 얼어붙지 않게,
+// 끝난 뒤에는 끝난 순간(resultAt — 화면 시각)부터 실제로 흐른 시간만큼 더한다.
+export function viewTime(simTime, result, now, resultAt) {
+  return result && resultAt != null ? simTime + Math.max(0, now - resultAt) : simTime;
+}

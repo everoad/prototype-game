@@ -244,3 +244,128 @@ test('스테이지: 패링하는 봇은 돌격병의 몸을 받아치고, 패링
   assert.ok(dashes >= 3, `돌진 ${dashes}`);
   assert.ok((b.w.stats.hitsByPattern[RULES.src.charger] ?? 0) <= 1, `맞음 ${b.w.stats.hitsByPattern[RULES.src.charger]}`);
 });
+
+// 한 판의 뼈대 §5: 자폭병의 흰 심지 원은 받아칠 것이다
+test('봇이 자폭병의 흰 원을 받아친다(튕겨 보낸다)', async () => {
+  const { spawnMob } = await import('../src/sim/foes.js');
+  let bounced = 0, games = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const w = createWorld({ seed, store: true });
+    w.boss.away = true; w.shots.nextAt = 1e9;
+    const bot = createBot('1', seed);
+    const m = spawnMob(w, 'bomber', w.player.x + 4, w.player.z, 0);
+    m.nextAt = w.time;
+    games++;
+    for (let k = 0; k < Math.round(4 / RULES.dt); k++) { step(w, bot(w)); if (drainEvents(w).some(e => e.type === 'bomberBounce')) { bounced++; break; } }
+  }
+  assert.ok(bounced >= games - 1, `받아친 판 ${bounced}/${games}`);
+});
+
+// ── 한 판의 뼈대 §9: 봇의 카드 고르기(기준 판 = 무기 → 탄 기술 → 이동기 → 몸, 체력이 80% 아래면 보급)
+// 방을 비우고(몬스터를 다 지운다) 봇이 줍고 문으로 갈 때까지 돌린다. 돌려주는 것 = 주운 것(rewardPick 사건)
+async function pickWith(w, bot, sec = 25) {
+  const { CARDS } = await import('../src/sim/cards.js');
+  const room = w.stage.room, picks = [];
+  for (let k = 0; k < Math.round(sec / RULES.dt) && w.stage.room === room && w.stage.phase !== 'boss'; k++) {
+    if (w.stage.phase === 'fight') { if (w.stage.surviveUntil != null) w.stage.surviveUntil = w.time; for (const m of w.enemies) m.dead = true; }
+    step(w, bot(w));
+    for (const e of drainEvents(w)) if (e.type === 'rewardPick') picks.push(e);
+  }
+  return { picks, CARDS };
+}
+const stageOf = (opts = {}) => createWorld({ stage: 1, tries: 'always,vary,snipe', ...opts });
+
+test('봇은 방 1 뒤에 무기 카드를 줍고, 그 뒤로 탄 기술 → 이동기 → 몸 차례를 따른다(없으면 다음 차례)', async () => {
+  const { kitAll } = await import('../src/sim/cards.js');
+  for (const seed of [1, 2, 3]) {
+    const w = stageOf({ seed }), bot = createBot('user', seed);
+    w.player.invulnUntil = 1e9;
+    const got = [];
+    for (let r = 0; r < 4; r++) { const { picks, CARDS } = await pickWith(w, bot); assert.equal(picks.length, 1, `seed ${seed} 방 ${r + 1}에서 줍지 못함`); got.push(picks[0].kind === 'card' ? CARDS[picks[0].what].group : 'supply'); }
+    assert.equal(got[0], 'weapon', `seed ${seed}: 방 1 뒤 ${got[0]}`);
+    assert.equal(w.weapons.on.length, 2);
+    assert.ok(got.slice(1).every(g => g !== 'weapon'), `seed ${seed}: 무기 칸이 찼는데 무기를 고름 ${got}`);
+    assert.equal(new Set(got.filter(g => g !== 'supply')).size, got.filter(g => g !== 'supply').length, `seed ${seed}: 같은 갈래를 두 번 ${got}`);
+    assert.ok(kitAll(w).length >= 3, `seed ${seed}: 낀 것 ${kitAll(w)}`);
+    assert.equal(w.stage.phase, 'boss');
+  }
+});
+
+test('봇은 체력이 80% 아래면 보급을 줍는다', async () => {
+  const w = stageOf({ seed: 4 }), bot = createBot('user', 4);
+  w.player.hp = RULES.player.hp * 0.5; w.player.invulnUntil = 1e9;
+  const { picks } = await pickWith(w, bot);
+  assert.equal(picks.length, 1);
+  assert.equal(picks[0].kind, 'heal');
+});
+
+test('봇의 picks: 갈래 차례를 바꾸거나 카드 이름을 적을 수 있다 — 적은 카드는 칸이 차 있으면 첫 칸을 버리고 낀다', async () => {
+  const w = stageOf({ seed: 5 }), bot = createBot('user', 5, { picks: ['body', 'move'] });
+  w.player.invulnUntil = 1e9;
+  const a = await pickWith(w, bot);
+  assert.notEqual(a.picks[0].kind === 'card' ? a.CARDS[a.picks[0].what].group : 'supply', 'weapon', 'picks에 없는 무기를 고름');
+  const w2 = stageOf({ seed: 6, kit: ['missile', 'burst'] });
+  w2.player.invulnUntil = 1e9;
+  for (let k = 0; k < 10 && w2.stage.phase === 'fight'; k++) { for (const m of w2.enemies) m.dead = true; step(w2, { mx: 0, mz: 0, parry: false, dodge: false }); }
+  const want = w2.stage.rewards[0].what;   // 방 1 뒤의 첫 카드는 무기 — 칸은 이미 찼다
+  const bot2 = createBot('user', 6, { picks: [want] });
+  const b = await pickWith(w2, bot2);
+  assert.equal(b.picks.length, 1);
+  assert.equal(b.picks[0].what, want);
+  assert.equal(b.picks[0].dropped, 'missile', '첫 칸을 버리지 않음');
+  assert.deepEqual([...w2.weapons.on].sort(), ['burst', want].sort());
+});
+
+test('갈래로 고를 때 칸이 찬 갈래는 건너뛴다 — 바꿔 끼우기에 들어가지 않고 문이 열린다', async () => {
+  const w = stageOf({ seed: 7, kit: ['missile', 'burst'] }), bot = createBot('user', 7, { picks: ['weapon'] });
+  w.player.invulnUntil = 1e9;
+  let replaced = false;
+  const room = w.stage.room;
+  for (let k = 0; k < Math.round(25 / RULES.dt) && w.stage.room === room; k++) {
+    if (w.stage.phase === 'fight') for (const m of w.enemies) m.dead = true;
+    step(w, bot(w));
+    if (w.stage.phase === 'replace') replaced = true;
+    drainEvents(w);
+  }
+  assert.equal(replaced, false);
+  assert.equal(w.stage.room, room + 1, '문으로 가지 못함');
+  assert.deepEqual(w.weapons.on, ['missile', 'burst']);
+});
+
+test('봇이 낀 갈고리를 K(이동기 칸)로 쓴다', () => {
+  let used = 0;
+  for (let seed = 1; seed <= 3 && !used; seed++) {
+    const w = stageOf({ seed, kit: ['missile', 'sky'] }), bot = createBot('user', seed);
+    for (let k = 0; k < Math.round(40 / RULES.dt) && !w.result && !used; k++) {
+      const input = bot(w);
+      step(w, input);
+      if (drainEvents(w).some(e => e.type === 'ropeStart')) { used++; assert.equal(input.move1, true, '줄이 걸린 틱에 K를 누르지 않음'); }
+    }
+  }
+  assert.ok(used > 0, '40초 동안 갈고리를 한 번도 쓰지 않음');
+});
+
+test('봇의 greedy: 체력이 낮아도 보급 대신 차례대로 카드를 줍는다(조합을 재는 도구용)', async () => {
+  const w = stageOf({ seed: 4 }), bot = createBot('user', 4, { greedy: true });
+  w.player.hp = RULES.player.hp * 0.5; w.player.invulnUntil = 1e9;
+  const { picks } = await pickWith(w, bot);
+  assert.equal(picks.length, 1);
+  assert.equal(picks[0].kind, 'card');
+});
+
+// 한 판의 뼈대 §9: 무기의 차이 — 산탄을 든 봇은 붙어 싸운다(붙을수록 센 무기라서)
+test('산탄을 든 봇은 미사일을 든 봇보다 가까이 선다', () => {
+  const dist = kit => {
+    const all = [];
+    for (const seed of [1, 2, 3]) {
+      const w = stageOf({ seed, kit }), bot = createBot('user', seed);
+      w.player.invulnUntil = 1e9;
+      for (let k = 0; k < Math.round(14 / RULES.dt) && w.stage.phase === 'fight'; k++) { step(w, bot(w)); drainEvents(w); if (k % 12 === 0 && w.aim && !w.aim.dead) all.push(Math.hypot(w.aim.x - w.player.x, w.aim.z - w.player.z)); }
+    }
+    all.sort((a, b) => a - b);
+    return all[Math.floor(all.length / 2)];
+  };
+  const burst = dist(['burst']), missile = dist(['missile']);
+  assert.ok(burst < missile - 1, `산탄 ${burst.toFixed(2)} U · 미사일 ${missile.toFixed(2)} U`);
+  assert.ok(burst <= RULES.bot.room.keepBurst[1] + 0.8, `산탄을 든 봇의 거리 ${burst.toFixed(2)}`);
+});

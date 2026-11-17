@@ -23,7 +23,7 @@ export function createTriesView(view, LOOK) {
   gust.count = 0; gust.frustumCulled = false; gust.instanceMatrix.setUsage(THREE.DynamicDrawUsage); gust.visible = false; L.fx.add(gust);
   const hash = k => { const s = Math.sin(k * 127.1) * 43758.5453; return s - Math.floor(s); };
   // 조준점: 가운데가 빈 십자 + 점(고리는 쓰지 않는다 — 고리는 패링·파도의 뜻)
-  const cross = new THREE.Group(), crossMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false });
+  const cross = new THREE.Group(), crossMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: LOOK.tries.snipe.cross.alpha, depthWrite: false, depthTest: false });
   {
     const Cr = LOOK.tries.snipe.cross, bar = flat(new THREE.PlaneGeometry(1, 1));
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -118,12 +118,12 @@ export function createTriesView(view, LOOK) {
     if (sn) {
       const len = w.rules.tries.snipe.len;
       if (sn.on) {
-        const x = lerp(p.px, p.x, alpha), z = lerp(p.pz, p.z, alpha), pulse = 0.85 + 0.15 * Math.sin(now * 18);
+        const x = lerp(p.px, p.x, alpha), z = lerp(p.pz, p.z, alpha), pulse = Sv.aimPulse[0] + Sv.aimPulse[1] * Math.sin(now * Sv.aimPulse[2]);
         lay(aimLine, x, z, sn.angle, len, Sv.aimW, Sv.y, Sv.aimAlpha * pulse);
         lay(aimGlow, x, z, sn.angle, len, Sv.glowW, Sv.y - 0.01, Sv.glowAlpha);
         cross.visible = true; cross.position.set(lerp(sn.rpx, sn.rx, alpha), Sv.cross.y, lerp(sn.rpz, sn.rz, alpha)); cross.rotation.y = now * Sv.cross.spin;
       }
-      const since = w.time - sn.firedAt;
+      const since = (view.simTime ?? w.time) - sn.firedAt;
       let shown = 0;
       if (since >= 0 && since < Gv.sec + len / Gv.wave) {
         const ca = Math.cos(sn.fa), sa = Math.sin(sn.fa), inside = rayInBoard(w.rules.board, sn.fx, sn.fz, sn.fa, len);
@@ -132,15 +132,15 @@ export function createTriesView(view, LOOK) {
           if (u <= 0 || u >= 1) continue;
           let dx = -sa * side + ca * Gv.sweep, dz = ca * side + sa * Gv.sweep;   // 바깥 + 쏜 쪽으로 비스듬히
           const dl = Math.hypot(dx, dz); dx /= dl; dz /= dl;
-          const ease = 1 - (1 - u) * (1 - u), off = Gv.start + Gv.dist * ease * (0.6 + 0.8 * hash(k + 50));
+          const ease = 1 - (1 - u) * (1 - u), off = Gv.start + Gv.dist * ease * (Gv.vary[0] + Gv.vary[1] * hash(k + 50));
           dummy.position.set(sn.fx + ca * s + dx * off, Gv.y, sn.fz + sa * s + dz * off);
           dummy.rotation.set(0, -Math.atan2(dz, dx), 0);
-          dummy.scale.set(Gv.len * (1 - u) * (0.6 + 0.8 * hash(k + 9)), 1, Gv.w * (1 - u * 0.5));
+          dummy.scale.set(Gv.len * (1 - u) * (Gv.vary[0] + Gv.vary[1] * hash(k + 9)), 1, Gv.w * (1 - u * 0.5));
           dummy.updateMatrix(); gust.setMatrixAt(shown++, dummy.matrix);
         }
       }
       gust.count = shown; gust.visible = shown > 0; gust.instanceMatrix.needsUpdate = true;
-      if (since >= 0 && since < Sv.flashSec) { const k = 1 - since / Sv.flashSec; lay(aimFlash, sn.fx, sn.fz, sn.fa, len, Sv.flashW * (0.3 + 0.7 * k), Sv.y + 0.01, k); }
+      if (since >= 0 && since < Sv.flashSec) { const k = 1 - since / Sv.flashSec; lay(aimFlash, sn.fx, sn.fz, sn.fa, len, Sv.flashW * (Sv.flashShrink[0] + Sv.flashShrink[1] * k), Sv.y + 0.01, k); }
     }
     // 줄: 플레이어 몸에서 말뚝 꼭대기까지
     const to = X?.rope.to;

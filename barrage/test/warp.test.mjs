@@ -57,3 +57,12 @@ test('줄이 판 안에 머무는 길이: 판 끝까지, len을 넘지 않는다
   assert.ok(Math.abs(rayInBoard(B, 0, 0, Math.PI, 4) - 4) < 1e-9);
   assert.ok(Math.abs(rayInBoard(B, 0, 0, Math.PI / 4, 30) - 7 * Math.SQRT2) < 1e-9);
 });
+
+// 독립 검토: 판이 끝나면 sim 시각이 멈춰 저격의 섬광·바람 줄·밀림이 얼어붙었다 → 그리기용 시각은 끝난 뒤에도 흐른다
+import { viewTime } from '../src/view/warp.js';
+test('그리기용 시각: 판이 도는 동안은 sim 시각, 끝난 뒤에는 끝난 순간부터 실제 시간만큼 더 흐른다', () => {
+  assert.equal(viewTime(12.5, null, 100, null), 12.5);
+  assert.equal(viewTime(12.5, 'win', 100, 100), 12.5);
+  assert.ok(Math.abs(viewTime(12.5, 'win', 100.4, 100) - 12.9) < 1e-9);
+  assert.equal(viewTime(12.5, 'lose', 100.4, null), 12.5, '끝난 순간을 아직 모르면 그대로');
+});

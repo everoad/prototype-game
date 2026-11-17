@@ -28,15 +28,23 @@ export function createActors(view, LOOK, opts = {}) {
   for (const m of [ring, hitRim, hitCore]) { m.position.y = S.bh; L.marker.add(m); }
   let ringOn = opts.ring !== false;
   // 모아 던지기(§4.11): 모인 구슬(패링 고리 안쪽을 돈다) + 패링 고리 위 칸(모인 만큼 밝게) — 들어오는 탄을 읽는 자리를 가리지 않게 작게
-  const storeCap = opts.storeCap ?? 0, storeOrbs = [], storeArcs = [];
-  for (let k = 0; k < storeCap; k++) {
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: C.cyan }));
-    orb.visible = false; L.actors.add(orb);
-    storeOrbs.push({ m: orb, from: null, at: -1e9 });
-    const gap = S.storeArcGapDeg * Math.PI / 180, span = Math.PI * 2 / storeCap - gap;
-    const arc = new THREE.Mesh(flat(new THREE.RingGeometry(0.8 - S.storeArcWidth, 0.8 + S.storeArcWidth, 20, 1, k * Math.PI * 2 / storeCap + gap / 2, span)), markerMat(C.cyan));
-    arc.visible = false; L.marker.add(arc); storeArcs.push(arc);
+  // 칸 수는 판 중에 늘 수 있다(몸 카드 "탄 칸 +1") — 수가 바뀌면 고리의 칸을 다시 짠다
+  let storeCap = 0;
+  const storeOrbs = [], storeArcs = [];
+  function buildStore(cap) {
+    for (const o of storeOrbs) { L.actors.remove(o.m); o.m.geometry.dispose(); o.m.material.dispose(); }
+    for (const a of storeArcs) { L.marker.remove(a); a.geometry.dispose(); a.material.dispose(); }
+    storeOrbs.length = 0; storeArcs.length = 0; storeCap = cap;
+    for (let k = 0; k < storeCap; k++) {
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: C.cyan }));
+      orb.visible = false; L.actors.add(orb);
+      storeOrbs.push({ m: orb, from: null, at: -1e9 });
+      const gap = S.storeArcGapDeg * Math.PI / 180, span = Math.PI * 2 / storeCap - gap;
+      const arc = new THREE.Mesh(flat(new THREE.RingGeometry(0.8 - S.storeArcWidth, 0.8 + S.storeArcWidth, 20, 1, k * Math.PI * 2 / storeCap + gap / 2, span)), markerMat(C.cyan));
+      arc.visible = false; L.marker.add(arc); storeArcs.push(arc);
+    }
   }
+  buildStore(opts.storeCap ?? 0);
 
   // ── 보스
   const boss = new THREE.Group();
@@ -151,6 +159,7 @@ export function createActors(view, LOOK, opts = {}) {
     ringMat.opacity = rf < 0.12 ? 1 : rf < 0.25 ? lerp(1, S.ringAlpha, (rf - 0.12) / 0.13) : S.ringAlpha;
     ring.visible = ringOn || rf < 0.25;
     // 모인 구슬·고리 칸
+    if (storeCap > 0 && p.storeCap != null && p.storeCap !== storeCap) buildStore(p.storeCap);
     const stored = p.store?.length ?? 0, full = stored >= storeCap && storeCap > 0;
     for (let k = 0; k < storeCap; k++) {
       const o = storeOrbs[k], arc = storeArcs[k], on = k < stored;
@@ -172,7 +181,7 @@ export function createActors(view, LOOK, opts = {}) {
     if (now < st.shakeUntil) { bx += (Math.random() - 0.5) * st.shakeAmp; bz += (Math.random() - 0.5) * st.shakeAmp; }
     const jt = now - st.joltAt;
     if (jt < 0.12) { const k = Math.sin(jt / 0.12 * Math.PI) * st.jolt, a = Math.atan2(b.z - p.z, b.x - p.x); bx += Math.cos(a) * k; bz += Math.sin(a) * k; }
-    if (w.tries?.snipe) { const o = warpAt(LOOK.tries.snipe.warp, w.tries.snipe, bx, bz, w.time, [0, 0]); bx += o[0]; bz += o[1]; }   // 저격에 맞아 젖혀진다(그림만)
+    if (w.tries?.snipe) { const o = warpAt(LOOK.tries.snipe.warp, w.tries.snipe, bx, bz, view.simTime ?? w.time, [0, 0]); bx += o[0]; bz += o[1]; }   // 저격에 맞아 젖혀진다(그림만)
     boss.position.set(bx, 0, bz);
     boss.rotation.y = -b.face;
     boss.visible = !b.away;   // 일반 방(스테이지)에서는 보스가 자리에 없다

@@ -4,7 +4,7 @@ import { K, RULES } from '../sim/rules.js';
 import { rayInBoard } from './warp.js';
 
 export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
-  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, later: [], beatAt: -1e9, pillarAt: -1e9, burnAt: -1e9, blockAt: -1e9, spawnAt: -1e9, puffAt: -1e9, puffBgAt: -1e9, bossHpR: null, charged: false, auraAt: -1e9 };
+  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, salvo: { how: null, stopped: true, droneN: 0 }, later: [], beatAt: -1e9, pillarAt: -1e9, burnAt: -1e9, blockAt: -1e9, spawnAt: -1e9, puffAt: -1e9, puffBgAt: -1e9, bossHpR: null, charged: false, auraAt: -1e9 };
   const F = () => LOOK.feel, on = k => F().on[k] !== false;
   const stop = (now, sec, opt) => (on('stop') ? timeFx.hitstop(now, sec, opt) : 0);
   const slow = (now, s, sec, opt) => on('slow') && timeFx.slow(now, s, sec, opt);
@@ -193,6 +193,10 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'itemPick': if (on('sparks')) fx.spark(e.x, e.z, 'item', 0.8); sfx.play('pickup'); break;
         // 보조 무기(§4.10): 작게. 산탄은 한 번 패링에 여러 발이라 같은 틱엔 한 번만
         case 'weaponFire':
+          if (e.salvo) {   // 한 방의 발사: 발마다 소리를 내지 않는다(소리·모습은 'salvo'가 한 번에) — 난사만 몇 발에 한 번
+            if (e.kind === 'drone') { if (st.salvo.droneN++ % F().salvo.droneEvery === 0) sfx.play('drone', { detune: 300 }); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.guns.drone.spark); }
+            break;
+          }
           if (e.kind === 'burst') {   // 부채 하나에 한 번: 소리 + 부채꼴 불티(첫 발의 각도 = 부채의 왼쪽 끝)
             if (!pinged.has(`burst:${e.t}`)) { pinged.add(`burst:${e.t}`); sfx.play('burst'); const sp = RULES.weapons.burst.spreadDeg * Math.PI / 180; if (on('sparks')) fx.fan?.(e.x, e.z, e.angle + sp / 2, sp); }
           } else {
@@ -201,7 +205,33 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
             if (on('sparks') && e.kind === 'drone') fx.spark(e.x, e.z, 'cyan', LOOK.guns.drone.spark);
           }
           break;
-        case 'weaponHit': if (on('sparks')) { if (e.kind === 'missile') fx.burst(e.x, e.z, 'cyan', LOOK.guns.missile.hitBurst); else fx.spark(e.x, e.z, 'cyan', 0.3); } break;   // 명중: 미사일은 터지고 작은 탄은 불꽃
+        case 'weaponHit':   // 명중: 미사일은 터지고 작은 탄은 불꽃. 산탄의 한 방이 맞으면 아주 잠깐 멈춘다(한 방에 한 번 — 저격의 한 방은 빼고)
+          if (on('sparks')) { if (e.kind === 'missile') fx.burst(e.x, e.z, 'cyan', LOOK.guns.missile.hitBurst); else fx.spark(e.x, e.z, 'cyan', LOOK.guns.pellet.hit); }
+          if (e.salvo && e.kind === 'burst' && !st.salvo.stopped && st.salvo.how !== 'snipe') { st.salvo.stopped = true; stop(now, F().salvo.burstStop); }
+          break;
+        // 탄을 쓸 때의 한 방(한 판의 뼈대 §7): 무기가 끼어든다는 신호 하나 + 무기마다 제 모습, 쓴 칸 수만큼 크게. 다 쓴 한 방만 느려지고 흔들린다.
+        // 저격의 한 방(how 'snipe')은 저격의 연출이 주인공이라 무기의 모습만 얹는다(느려짐·흔들림·당김·멈춤 없음).
+        case 'salvo': {
+          const Sv = F().salvo, u = Math.min(1, (e.n - 1) / Sv.span), mix = a => a[0] + (a[1] - a[0]) * u, snipe = e.how === 'snipe';
+          st.salvo = { how: e.how, stopped: false, droneN: 0 };
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', mix(Sv.flash));
+          sfx.play('gearWake', { detune: mix(Sv.detune) });
+          if (e.kinds.includes('missile')) { sfx.play('missile'); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', mix(Sv.missile)); }
+          if (e.kinds.includes('burst')) { sfx.play('burst'); if (on('sparks')) fx.fan?.(e.x, e.z, e.angle, Sv.fan[0] * Math.PI / 180, Sv.fan[1] + (Sv.fan[2] - Sv.fan[1]) * u); }
+          if (e.kinds.includes('beam')) { sfx.play('beam'); if (!snipe) camera.punch?.(Sv.beamPunch[0], Sv.beamPunch[1]); }
+          if (e.full && !snipe) { slow(now, Sv.slow, Sv.slowSec); shake(Sv.shake, Sv.shakeSec); }
+          break;
+        }
+        // 자폭병 튕겨 보내기(§5): 날아가는 길에 줄, 떨어진 자리에서 큰 폭발과 숫자. 한 번에 multi 넘게 잡으면 잠깐 느려진다
+        case 'bomberBounce': { const B = F().bomber; if (on('sparks')) { fx.burst(e.x, e.z, 'cyan', B.flash); fx.tracer(e.x, e.z, e.tx, e.tz, 'cyan', B.tracer); } sfx.play('whoosh', { detune: B.detune }); break; }
+        case 'bomberReturn': {
+          const B = F().bomber;
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', B.burst * (e.perfect ? B.perfect : 1));
+          if (on('numbers') && e.dmg > 0) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', B.number);
+          fx.dust?.(e.x, e.z, 1.4); shake(B.shake, B.shakeSec); sfx.play('thump', { detune: B.detune });
+          if (e.kills >= B.multi) slow(now, B.slow, B.slowSec);
+          break;
+        }
         case 'gearToggle': sfx.play('tick'); break;
         case 'weaponWake': sfx.play('gearWake'); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.7); break;   // 받아쳐서 무기가 깨어남
         case 'weaponSkill': {
@@ -299,22 +329,41 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           st.hit.n++;
           if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.4);
           break;
+        case 'shellReturn': {   // 받아친 포탄이 포격병에게 되돌아간다: 줄 한 번, 포격병 자리에서 터짐과 숫자
+          const S = F().stage.shellReturn;
+          if (on('sparks')) { fx.tracer(e.x, e.z, e.tx, e.tz, 'cyan', S.tracer); fx.burst(e.tx, e.tz, 'cyan', S.burst); }
+          if (on('numbers') && e.dmg > 0) fx.number(e.tx, e.tz, Math.round(e.dmg), 'cyan', S.number);
+          shake(S.shake, S.shakeSec); sfx.play('thump', { detune: S.detune });
+          break;
+        }
         case 'mobBlock': if (now - st.blockAt >= F().stage.blockGap) { st.blockAt = now; if (on('sparks')) fx.spark(e.x, e.z, 'purple', 0.5); sfx.play('shieldBlock'); } break;
         case 'mobSpawn': if (now - st.spawnAt >= F().stage.spawnGap) { st.spawnAt = now; sfx.play('mobSpawn'); } break;
         case 'mobWindup': sfx.play('charge', { color: e.color }); break;
         case 'mobDash': sfx.play('whoosh', { detune: -500 }); break;
         case 'mobChargeHit': { const S = F().stage; shake(S.dashShake, S.dashShakeSec); fx.dust?.(e.x, e.z, 1); break; }
         case 'mobDeath': { const S = F().stage; if (on('sparks')) fx.burst(e.x, e.z, 'purple', S.deathBurst); shake(S.deathShake, S.deathShakeSec); fx.dust?.(e.x, e.z, 0.8); sfx.play('shatter', { detune: 400 }); break; }
-        case 'roomStart': { const S = F().stage; hud.banner(now, e.boss ? LOOK.names.ranged : `방 ${e.room} / ${e.of}`, S.roomSec); if (e.room > 1) hud.fadeIn?.(now, S.fade); break; }
+        case 'roomStart': {   // 정예 방은 정예의 이름이 배너다(같은 틱의 eliteSpawn — 방 번호로 덮지 않는다). 깜빡이던 칸도 멈춘다
+          const S = F().stage;
+          if (e.kind !== 'elite') hud.banner(now, e.boss ? LOOK.names[e.kind] ?? LOOK.names.ranged : `방 ${e.room} / ${e.of}`, S.roomSec);
+          if (e.room > 1) hud.fadeIn?.(now, S.fade);
+          hud.blinkGroup?.(null);
+          break;
+        }
         case 'bossEnter': { const S = F().stage; camera.hold?.(S.bossHold, S.bossSec); actors.bossPulse?.(now); sfx.play('roar'); break; }
         case 'roomClear': { const S = F().stage; hud.banner(now, '방 정리!', S.clearSec); if (on('edge')) fx.edge(LOOK.colors.heal, S.clearEdge); sfx.play('heal'); break; }
         case 'rewardPick': {
-          const S = F().stage, color = e.kind === 'weapon' ? 'cyan' : e.kind === 'charge' ? 'item' : LOOK.colors.heal;
+          const S = F().stage, color = e.kind === 'card' ? 'cyan' : e.kind === 'charge' ? 'item' : LOOK.colors.heal;
           if (on('sparks')) fx.burst(e.x, e.z, color, S.pickBurst);
-          if (on('numbers')) fx.number(e.x, e.z, LOOK.names.reward[e.what] ?? e.what, color, S.pickNumber);
+          if (on('numbers')) fx.number(e.x, e.z, LOOK.names.card[e.what] ?? LOOK.names.reward[e.what] ?? e.what, color, S.pickNumber);
+          hud.blinkGroup?.(null);   // 바꿔 끼우기가 끝났다
           sfx.play('pickup');
           break;
         }
+        // 줍는 순간(한 판의 뼈대 §6): 카드가 HUD의 제 칸으로 날아가 꽂히고, 키가 있으면 키와 이름이 뜬다 — 어디에 들어갔고 어느 키인지 설명 없이
+        case 'cardGain': { const Kt = LOOK.kit, name = LOOK.names.card[e.id] ?? e.id; hud.cardGain?.(now, e); hud.banner(now, e.key ? `${e.key} — ${name}` : name, Kt.keySec); sfx.play('pickup', { detune: 300 }); break; }
+        case 'replaceStart': hud.blinkGroup?.(e.group); sfx.play('door', { detune: 400 }); break;   // 그 갈래의 칸이 깜빡인다(무엇을 버릴지 고르는 동안)
+        case 'replaceCancel': hud.blinkGroup?.(null); break;
+        case 'eliteSpawn': hud.banner(now, `정예 ${LOOK.names.mob[e.kind] ?? e.kind}`, LOOK.kit.eliteSec); sfx.play('roar', { detune: 300 }); break;
         case 'doorOpen': sfx.play('door'); break;
         // ── 실험 기믹(?try=)
         case 'ropeStart': { const T = LOOK.tries; actors.dashTrail?.(now); shake(T.ropeShake, T.ropeShakeSec); sfx.play('whoosh', { detune: 500 }); break; }
@@ -343,7 +392,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           shake(Sv.shake, Sv.shakeSec); camera.punch?.(Sv.punch[0], Sv.punch[1]);
           sfx.play('snipe');
           const inside = rayInBoard(RULES.board, e.x, e.z, e.angle, RULES.tries.snipe.len);
-          if (on('sparks')) for (let k = 1; k <= Sv.dust; k++) fx.dust?.(e.x + ca * inside * k / (Sv.dust + 1), e.z + sa * inside * k / (Sv.dust + 1), 1.3);
+          if (on('sparks')) for (let k = 1; k <= Sv.dust; k++) fx.dust?.(e.x + ca * inside * k / (Sv.dust + 1), e.z + sa * inside * k / (Sv.dust + 1), Sv.dustScale);
           for (const m of e.marks) { if (on('sparks')) fx.burst(m.x, m.z, 'cyan', Sv.hitBurst); if (on('numbers')) fx.number(m.x, m.z, Math.round(m.dmg), 'cyan', Sv.number); }
           break;
         }
@@ -390,7 +439,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
     if (!w.result) {
       for (const m of w.enemies ?? []) if (!m.dead && w.time >= m.bornAt) track(m.id, m.hp, m.x, m.z);
       if (w.boss && !w.boss.away && !w.boss.dead) track('boss', w.boss.hp, w.boss.x, w.boss.z);
-      if (gun.size > 96) gun.clear();
+      if (gun.size > Gn.keep) gun.clear();
     }
   }
 

@@ -16,7 +16,7 @@ export function refreshFoes(w) {
   list.length = 0;
   let best = null, bd = Infinity;
   for (const e of w.enemies) {
-    if (e.dead || w.time < e.bornAt) continue;
+    if (e.dead || e.flying || w.time < e.bornAt) continue;   // 튕겨 날아가는 자폭병은 겨눌 수도 맞힐 수도 없다
     list.push(e);
     const d = (e.x - p.x) * (e.x - p.x) + (e.z - p.z) * (e.z - p.z);
     if (d < bd) { bd = d; best = e; }
@@ -41,11 +41,11 @@ export function hitFoe(w, x0, z0, x1, z1, pad = 0) {
 export function hurtFoe(w, f, amount, src, { raw = false, pierce = false, fromX = null, fromZ = null } = {}) {
   if (f === w.boss) {
     const bub = w.tries && w.tries.bubble && w.tries.bubble.on ? w.tries.bubble : null;   // 보호막(실험): 던진 탄만 통하고, 던진 탄 hits발이면 깨진다
-    if (bub && src !== 'throw') { emit(w, 'mobBlock', { id: 0, x: f.x, z: f.z }); return 0; }
+    if (bub && src !== 'throw' && src !== 'salvo') { emit(w, 'mobBlock', { id: 0, x: f.x, z: f.z }); return 0; }   // 한 방(salvo)도 던진 탄으로 친다
     if (bub && --bub.hp <= 0) { bub.on = false; bub.nextAt = w.time + w.rules.tries.bubble.every; emit(w, 'bubbleBreak', { x: f.x, z: f.z }); }
     return damageBoss(w, amount, src, raw);
   }
-  if (f.dead || w.time < f.bornAt || w.player.dyingAt != null) return 0;   // 구제 창(체력 0) 동안엔 방을 깰 수 없다(보스와 같다)
+  if (f.dead || f.flying || w.time < f.bornAt || w.player.dyingAt != null) return 0;   // 구제 창(체력 0) 동안엔 방을 깰 수 없다(보스와 같다)
   if (!pierce && fromX != null && (shielded(w, f, fromX, fromZ) || warded(w, f))) { emit(w, 'mobBlock', { id: f.id, x: f.x, z: f.z }); return 0; }
   const dealt = Math.min(f.hp, amount);
   f.hp -= dealt;
@@ -71,12 +71,13 @@ export function warded(w, f) {
 }
 
 // 몬스터 하나를 판에 놓는다(delay초 뒤 등장 — 그동안은 자리 표시만, 겨누지도 맞지도 않는다)
-export function spawnMob(w, kind, x, z, delay = w.rules.mobs.appear) {
-  const M = w.rules.mobs[kind];
+export function spawnMob(w, kind, x, z, delay = w.rules.mobs.appear, { elite = false } = {}) {
+  const M = w.rules.mobs[kind], E = w.rules.mobs.elite;
   // 첫 공격은 등장 뒤 제각각(같은 종류가 한 박자에 쏘면 패링 한 번에 다 받힌다)
-  const hp = M.hp * (w.tries && w.tries.on.always ? w.rules.tries.always.mobHp : 1);   // 늘 나가는 무기(실험): 무기가 늘 깎는 만큼 더 버틴다
-  const m = { id: w.mobSeq = (w.mobSeq ?? 0) + 1, kind, x, z, px: x, pz: z, r: M.r, hp, maxHp: hp, atkN: 0, face: Math.atan2(w.player.z - z, w.player.x - x), dead: false, bornAt: w.time + delay, state: 'idle', stateAt: w.time + delay, nextAt: w.time + delay + (kind === 'bomber' || kind === 'totem' ? 0 : w.rules.mobs.first * w.rng.next()) };
+  const hp = M.hp * (w.tries && w.tries.on.always ? w.rules.tries.always.mobHp : 1) * (elite ? E.hp : 1);   // 늘 나가는 무기(실험): 무기가 늘 깎는 만큼 더 버틴다 · 정예는 hp배
+  const m = { id: w.mobSeq = (w.mobSeq ?? 0) + 1, kind, x, z, px: x, pz: z, r: M.r * (elite ? E.r : 1), elite: !!elite, hp, maxHp: hp, atkN: 0, face: Math.atan2(w.player.z - z, w.player.x - x), dead: false, bornAt: w.time + delay, state: 'idle', stateAt: w.time + delay, nextAt: w.time + delay + (kind === 'bomber' || kind === 'totem' ? 0 : w.rules.mobs.first * w.rng.next()) };
   w.enemies.push(m);
-  emit(w, 'mobSpawn', { id: m.id, kind, x, z, delay });
+  emit(w, 'mobSpawn', { id: m.id, kind, x, z, delay, elite: !!elite });
+  if (elite) emit(w, 'eliteSpawn', { id: m.id, kind, x, z });
   return m;
 }

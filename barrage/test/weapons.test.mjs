@@ -159,3 +159,87 @@ test('게이지가 모자라거나 그 무기를 안 꼈으면 denied', () => {
   assert.equal(of(ev, 'weaponSkill').length, 0);
   assert.deepEqual(of(ev, 'denied').map(e => e.why), ['gauge', 'gear']);
 });
+
+// ── 한 판의 뼈대 §7: 무기의 특징(늘 나가는 사격) — always가 켜진 판에서만
+import { spawnMob } from '../src/sim/foes.js';
+import { gearShare, fallMul } from '../src/sim/weapons.js';
+const WR = RULES.weapons, AL = RULES.tries.always;
+// 일반 방처럼(보스는 없다) 늘 나가는 무기 판. 표적 = 움직이지 않는 보호탑(체력 아주 많이)
+function fight(gear, tries = 'always') {
+  const w = createWorld({ ai: false, store: true, gear, tries });
+  w.boss.away = true; w.shots.nextAt = 1e9;
+  return w;
+}
+const dummy = (w, dx, dz) => { const m = spawnMob(w, 'totem', w.player.x + dx, w.player.z + dz, 0); m.hp = m.maxHp = 1e6; return m; };
+const lost = m => m.maxHp - m.hp;
+
+test('fallMul은 near까지 mul[0], far부터 mul[1], 그 사이는 곧게 잇는다', () => {
+  const F = WR.burst.fall;
+  assert.equal(fallMul(F, 0), F.mul[0]); assert.equal(fallMul(F, F.near), F.mul[0]);
+  assert.equal(fallMul(F, F.far), F.mul[1]); assert.equal(fallMul(F, 99), F.mul[1]);
+  assert.ok(Math.abs(fallMul(F, (F.near + F.far) / 2) - (F.mul[0] + F.mul[1]) / 2) < 1e-9);
+  assert.ok(F.mul[0] > 1 && F.mul[1] < 1, '붙으면 세고 멀면 약하다');
+});
+
+test('산탄은 붙으면 세고 멀면 약하다', () => {
+  const per = d => {
+    const w = fight('burst'), m = dummy(w, d, 0);
+    const ev = runFor(w, AL.burstEvery + 1);
+    const hits = of(ev, 'weaponHit').filter(e => e.kind === 'burst').length;
+    assert.ok(hits > 0, `${d} U에서 한 발도 안 맞음`);
+    return lost(m) / hits;
+  };
+  const near = per(2), far = per(9);
+  assert.ok(Math.abs(near - WR.burst.dmg * AL.mul * WR.burst.fall.mul[0]) < 1e-6, `붙은 한 발 ${near}`);
+  assert.ok(Math.abs(far - WR.burst.dmg * AL.mul * WR.burst.fall.mul[1]) < 1e-6, `먼 한 발 ${far}`);
+});
+
+test('빔은 줄 위의 적을 모두 지난다 — 줄에서 벗어난 적은 맞지 않는다', () => {
+  const w = fight('beam'), a = dummy(w, 4, 0), b = dummy(w, 8, 0), off = dummy(w, 6, 2.5);
+  runFor(w, WR.beam.every + WR.beam.dur + 0.2);
+  assert.ok(lost(a) > 0, '겨눈 적이 안 맞음');
+  assert.ok(Math.abs(lost(a) - lost(b)) < 1e-6, `줄 위의 둘째 적 ${lost(b)} ≠ ${lost(a)}`);
+  assert.equal(lost(off), 0, '줄 밖의 적이 맞음');
+  assert.ok(Math.abs(lost(a) - WR.beam.dps * WR.beam.dur * AL.mul) < WR.beam.dps * AL.mul * RULES.dt * 1.5, `빔 한 번의 피해 ${lost(a)}`);
+});
+
+test('드론은 내가 겨누지 않은 적을 쏜다 — 적이 하나면 그 적', () => {
+  const w = fight('drone'), near = dummy(w, 3, 0), far = dummy(w, 0, 6);
+  const ev = runFor(w, 1.5);
+  assert.equal(w.aim, near);
+  const shots = of(ev, 'weaponFire').filter(e => e.kind === 'drone');
+  assert.ok(shots.length > 3);
+  for (const s of shots) {
+    const want = Math.atan2(far.z - s.z, far.x - s.x), d = Math.atan2(Math.sin(s.angle - want), Math.cos(s.angle - want));
+    assert.ok(Math.abs(d) < 1e-6, `드론이 먼 적을 겨누지 않음 ${d}`);
+  }
+  assert.ok(lost(far) > 0); assert.equal(lost(near), 0);
+  const w2 = fight('drone'), only = dummy(w2, 3, 0);
+  runFor(w2, 1.5);
+  assert.ok(lost(only) > 0, '적이 하나일 때 그 적을 쏘지 않음');
+});
+
+test('무기 둘이면 각 무기 피해가 two / 2(= 0.65)배 — 무기 넷이면 two / 4', () => {
+  const per = gear => {
+    const w = fight(gear), m = dummy(w, 5, 0);
+    const ev = runFor(w, 2.6);   // 빔의 첫 발(3초) 전까지 — 미사일만 맞는다
+    const hits = of(ev, 'weaponHit').filter(e => e.kind === 'missile').length;
+    assert.ok(hits > 0);
+    return lost(m) / hits;
+  };
+  const one = per('missile'), two = per('missile,beam');
+  assert.ok(Math.abs(one - WR.missile.dmg * AL.mul) < 1e-6, `무기 하나 ${one}`);
+  assert.ok(Math.abs(two / one - WR.two / 2) < 1e-6, `무기 둘 ${two / one}`);
+  assert.ok(Math.abs(WR.two / 2 - 0.65) < 1e-9);
+  assert.equal(gearShare(fight('missile')), 1); assert.equal(gearShare(fight('none')), 1);
+  assert.ok(Math.abs(gearShare(fight('all')) - WR.two / 4) < 1e-9);
+});
+
+test('always가 꺼진 판은 그대로: 빔은 겨눈 적만 깎고, 무기가 여럿이어도 피해를 나누지 않는다', () => {
+  const w = fight('beam,missile', null), a = dummy(w, 4, 0), b = dummy(w, 8, 0);
+  w.weapons.chargeUntil = 1e9; w.weapons.next.missile = 1e9;
+  runFor(w, WR.beam.every + WR.beam.dur + 0.2);
+  assert.ok(lost(a) > 0); assert.equal(lost(b), 0, '예전 판의 빔이 뒤의 적까지 깎음');
+  assert.equal(gearShare(w), 1);
+  assert.ok(Math.abs(lost(a) - WR.beam.dps * WR.beam.dur) < WR.beam.dps * RULES.dt * 1.5);
+});

@@ -12,10 +12,13 @@ import { createBulletsView } from './bulletsView.js';
 import { createWeaponsView } from './weaponsView.js';
 import { createMobsView } from './mobsView.js';
 import { createTriesView } from './triesView.js';
-import { restartRoom } from '../sim/stage.js';
+import { viewTime } from './warp.js';
+import { restartRoom, stageDef } from '../sim/stage.js';
 import { createHud, resultAlpha } from './hud.js';
 import { createIntro } from './intro.js';
 import { worldOptions } from './query.js';
+import { gradeOf } from './grade.js';
+import { recordable, readBest, writeBest } from './records.js';
 import { createCamera } from './camera.js';
 import { createTimeFx } from './timeFx.js';
 import { createFx } from './fx.js';
@@ -34,7 +37,7 @@ const world = createWorld(worldOptions(q));   // 모아 던지기가 기본(?sto
 document.getElementById('wait')?.remove();
 const canvas = document.getElementById('view'), hudCanvas = document.getElementById('hud');
 const view = createScene(canvas, LOOK, { preserveDrawingBuffer: recording });
-const actors = createActors(view, LOOK, { ring: q.get('ring') !== '0', boss: world.boss.kind === 'dragon' ? 'dragon' : 'ranged', storeCap: world.opts.store ? RULES.store.cap : 0 });
+const actors = createActors(view, LOOK, { ring: q.get('ring') !== '0', boss: (world.stage ? stageDef(RULES, world.stage.id).boss : world.boss.kind) === 'dragon' ? 'dragon' : 'ranged', storeCap: world.opts.store ? RULES.store.cap : 0 });
 const bullets = createBulletsView(view, LOOK, RULES.bullets.cap);
 const weaponsView = createWeaponsView(view, LOOK, RULES);
 const mobsView = createMobsView(view, LOOK);   // 일반 몬스터·보상·문(스테이지)
@@ -83,9 +86,9 @@ function inputFn(w) {
 function frame(now, dtReal) {
   ui.now = now; ui.dt = dtReal; clockNow = now;
   // 정지·느려짐은 sim에 주는 시간에 곱한다(sim은 배율을 모른다). 끝난 판도 죽음 느려짐이 끝날 때까지 연출은 돈다.
-  const aiming = !!world.tries?.snipe?.on;   // 저격 자세(실험): 판의 시간이 slow배로 흐르고 화면 색이 가라앉는다
+  const aiming = !!world.tries?.snipe?.on && !world.result;   // 저격 자세: 판의 시간이 slow배로 흐르고 화면 색이 가라앉는다(판이 끝나면 풀린다)
   const scale = timeFx.scaleAt(now) * (aiming ? RULES.tries.snipe.slow : 1);
-  if (!world.result && aiming !== ui.aiming) { ui.aiming = aiming; canvas.style.filter = aiming ? LOOK.tries.snipe.dim : ''; }
+  if (aiming !== ui.aiming) { ui.aiming = aiming; if (world.result !== 'lose') canvas.style.filter = aiming ? LOOK.tries.snipe.dim : ''; }
   const inIntro = intro.active(now);
   if (inIntro && !introShown) {   // 시작: 카메라를 당기고 보스 이름·포효·몸 부풂
     introShown = true; introOpen = true;
@@ -101,11 +104,20 @@ function frame(now, dtReal) {
   // 판이 끝난 순간: 이겼으면 남은 적 탄이 반짝이며 사라진다. 결과 화면은 큰 순간이 지난 뒤 서서히, 졌으면 화면 색이 빠진다.
   if (world.result && ui.resultAt == null) {
     ui.resultAt = now;
+    if (world.result === 'win' && world.stage) {   // 스테이지를 끝냈다: 등급을 매기고, 제대로 한 판이면 최고 기록을 남긴다(저장이 막혀도 그대로 간다)
+      const sec = world.stage.playSec, grade = gradeOf(RULES.grade[world.stage.id], { sec, hits: world.stats.hits, retries: world.stage.retries });
+      let storage = null;
+      try { storage = window.localStorage; } catch { storage = null; }
+      const counts = recordable(q) && !botKind;
+      ui.grade = { grade, counts, seed: world.seed, prev: readBest(storage, world.stage.id), rec: counts ? writeBest(storage, world.stage.id, { sec, grade }) : null };
+    }
     if (world.result === 'win') {
       world.beams.length = 0; world.lanes.length = 0; world.floorAreas.length = 0; world.waves.length = 0; world.melee.areas.length = 0;   // 남은 빔·차선·장판도 걷는다(판은 더 돌지 않는다)
       const b = world.bullets; let n = 0; for (let i = 0; i < b.cap && n < 90; i++) if (b.alive[i] && b.kind[i] !== 4) { fx.spark(b.x[i], b.z[i], 'purple', 0.8); n++; } if (n) sfx.play('clear'); }
   }
   ui.resultAlpha = world.result ? resultAlpha(world.result, now - ui.resultAt, LOOK.feel.result) : 0;
+  ui.resultT = world.result ? Math.max(0, now - ui.resultAt - LOOK.feel.result.winDelay) : 0;   // 결과 화면이 뜬 뒤 흐른 시간(등급·기록이 차례로 찍힌다)
+  view.simTime = viewTime(world.time, world.result, now, ui.resultAt);   // 그리기용 시각(판이 끝난 뒤에도 흐른다 — 끝낸 저격의 연출이 얼지 않게)
   if (world.result === 'lose' && !recording) canvas.style.filter = `grayscale(${(LOOK.feel.result.gray * Math.min(1, (now - ui.resultAt) / LOOK.feel.result.loseDelay)).toFixed(2)})`;
   if (ui.resultAlpha > 0 && !ui.released) { ui.released = true; camera.release?.(); }
   view.setMood(world.boss.phase === 2 ? 1 : 0, dtReal);

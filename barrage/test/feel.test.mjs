@@ -347,3 +347,147 @@ test('모아 던지기 연출 수치는 모두 유한한 수, 소리 음량이 �
   for (const n of ['store', 'storeFull', 'throw', 'throwHit', 'throwBoom', 'heal']) assert.ok(Number.isFinite(LOOK.sound.db[n]), `소리 ${n}`);
   assert.ok(/^#[0-9a-f]{6}$/i.test(LOOK.colors.heal));
 });
+
+test('되받아친 포탄: 흰 원에서 포격병까지 청록 줄이 긋고 포격병 자리에서 터지며 피해 숫자가 뜬다', () => {
+  const r = rig();
+  r.feel.handle([ev('shellReturn', { id: 3, x: 1, z: 2, tx: 7, tz: -1, dmg: 130 })], 1);
+  const tr = r.has('fx.tracer');
+  assert.equal(tr.length, 1);
+  assert.deepEqual(tr[0].slice(1, 6), [1, 2, 7, -1, 'cyan']);
+  assert.ok(r.has('fx.burst').some(c => c[1] === 7 && c[2] === -1 && c[3] === 'cyan'));
+  assert.ok(r.has('fx.number').some(c => c[1] === 7 && c[3] === 130));
+});
+
+// ── 한 판의 뼈대 §6: 줍는 순간의 연출 — 카드가 어디에 들어갔고 어느 키인지 설명 없이 알게
+test('카드를 주우면 그 칸으로 선이 그어지고(hud.cardGain) 소리가 난다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('cardGain', { id: 'burst', group: 'weapon', slot: 1, key: null, x: 2, z: 3 })], 1);
+  const g = has('hud.cardGain');
+  assert.equal(g.length, 1);
+  assert.deepEqual([g[0][2].group, g[0][2].slot, g[0][2].x, g[0][2].z], ['weapon', 1, 2, 3]);
+  assert.ok(has('sfx.play').length >= 1);
+});
+
+test('키가 있는 카드는 키와 이름이 배너로 뜬다, 키가 없는 카드는 이름만', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('cardGain', { id: 'sky', group: 'move', slot: 0, key: 'K', x: 0, z: 0 })], 1);
+  assert.equal(has('hud.banner')[0][2], `K — ${LOOK.names.card.sky}`);
+  const r2 = rig();
+  r2.feel.handle([ev('cardGain', { id: 'dash', group: 'move', slot: 1, key: null, x: 0, z: 0 })], 1);
+  assert.equal(r2.has('hud.banner')[0][2], LOOK.names.card.dash);
+  for (const id of ['missile', 'burst', 'beam', 'drone', 'lance', 'mine', 'orbit', 'sky', 'swap', 'dash', 'cap', 'charge', 'graze']) {
+    assert.ok(LOOK.names.card[id], `${id}의 이름이 없다`);
+    assert.ok(LOOK.names.cardLine[id], `${id}의 한 줄 설명이 없다`);
+  }
+});
+
+test('바꿔 끼우기가 시작되면 그 갈래 칸이 깜빡이고, 무르거나 고르면 멈춘다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('replaceStart', { id: 'beam', group: 'weapon', x: 0, z: 0 })], 1);
+  assert.deepEqual(has('hud.blinkGroup').map(c => c[1]), ['weapon']);
+  feel.handle([ev('replaceCancel', { x: 0, z: 0 })], 2);
+  assert.deepEqual(has('hud.blinkGroup').map(c => c[1]), ['weapon', null]);
+  feel.handle([ev('replaceStart', { id: 'beam', group: 'weapon', x: 0, z: 0 })], 3);
+  feel.handle([ev('rewardPick', { kind: 'card', what: 'beam', x: 0, z: 0, dropped: 'missile' })], 4);
+  assert.deepEqual(has('hud.blinkGroup').map(c => c[1]), ['weapon', null, 'weapon', null]);
+});
+
+test('정예가 나오면 이름이 배너로 뜬다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('eliteSpawn', { id: 3, kind: 'charger', x: 0, z: 0 })], 1);
+  assert.ok(has('hud.banner')[0][2].includes(LOOK.names.mob.charger));
+});
+
+// ── 한 판의 뼈대 §7 "한 방의 연출" · §5 자폭병 연출
+const salvo = (n, how = 'throw', kinds = ['missile'], full = false) => ev('salvo', { kinds, n, x: 0, z: 0, angle: 0, how, full });
+const sparkSum = (has, name) => has(name).reduce((s, c) => s + (typeof c.at(-1) === 'number' ? c.at(-1) : 1), 0);
+
+test('한 방에는 무기가 끼어든다는 신호(섬광과 소리)가 난다 — 무기마다 제 모습', () => {
+  const { feel, has } = rig();
+  feel.handle([salvo(1, 'throw', ['missile', 'burst', 'beam'])], 1);
+  assert.ok(has('fx.burst').length >= 1, '신호 섬광이 없다');
+  assert.ok(has('sfx.play').length >= 1, '소리가 없다');
+  assert.equal(has('fx.fan').length, 1, '산탄의 넓은 부채');
+  assert.equal(has('camera.punch').length, 1, '빔의 화면 밀림');
+});
+
+test('한 칸보다 네 칸의 연출이 크다', () => {
+  const a = rig(), b = rig();
+  a.feel.handle([salvo(1)], 1); b.feel.handle([salvo(4)], 1);
+  const small = a.has('fx.burst')[0].at(-1), big = b.has('fx.burst')[0].at(-1);
+  assert.ok(big > small, `섬광 세기 ${small} → ${big}`);
+  assert.ok(Math.abs(small - LOOK.feel.salvo.flash[0]) < 1e-9 && Math.abs(big - LOOK.feel.salvo.flash[1]) < 1e-9);
+});
+
+test('다 쓴 한 방은 느려지고 흔들린다, 한 칸은 아니다', () => {
+  const a = rig(), b = rig();
+  a.feel.handle([salvo(1, 'throw', ['missile'], false)], 1);
+  assert.equal(a.has('timeFx.slow').length, 0); assert.equal(a.has('camera.shake').length, 0);
+  b.feel.handle([salvo(4, 'throw', ['missile'], true)], 1);
+  assert.equal(b.has('timeFx.slow').length, 1); assert.equal(b.has('camera.shake').length, 1);
+});
+
+test('저격의 한 방은 느려짐·흔들림·밀림을 더하지 않는다(저격의 연출이 주인공) — 무기의 모습만 얹는다', () => {
+  const { feel, has } = rig();
+  feel.handle([salvo(4, 'snipe', ['burst', 'beam'], true)], 1);
+  assert.equal(has('timeFx.slow').length, 0); assert.equal(has('camera.shake').length, 0); assert.equal(has('camera.punch').length, 0);
+  assert.equal(has('fx.fan').length, 1);
+  feel.handle([ev('weaponHit', { kind: 'burst', x: 1, z: 0, salvo: true }, 1)], 1.01);
+  assert.equal(has('timeFx.hitstop').length, 0, '저격의 한 방이 화면을 멈춤');
+});
+
+test('산탄의 한 방이 맞으면 아주 잠깐 멈춘다(한 방에 한 번) — 늘 나가는 산탄은 멈추지 않는다', () => {
+  const { feel, has } = rig();
+  feel.handle([salvo(2, 'throw', ['burst'])], 1);
+  feel.handle([ev('weaponHit', { kind: 'burst', x: 1, z: 0, salvo: true }, 1), ev('weaponHit', { kind: 'burst', x: 1, z: 0, salvo: true }, 1)], 1.02);
+  feel.handle([ev('weaponHit', { kind: 'burst', x: 1, z: 0, salvo: true }, 1.03)], 1.05);
+  assert.equal(has('timeFx.hitstop').length, 1);
+  const r2 = rig();
+  r2.feel.handle([ev('weaponHit', { kind: 'burst', x: 1, z: 0 }, 1)], 1);
+  assert.equal(r2.has('timeFx.hitstop').length, 0);
+});
+
+test('한 방의 발사 사건마다 소리를 내지 않는다(미사일 열두 발 = 소리 한 번)', () => {
+  const { feel, has } = rig();
+  const shots = Array.from({ length: 12 }, (_, k) => ev('weaponFire', { kind: 'missile', x: 0, z: 0, angle: k / 10, salvo: true }, 1));
+  feel.handle([...shots, salvo(3)], 1);
+  assert.ok(has('sfx.play').filter(c => c[1] === 'missile').length <= 1, `미사일 소리 ${has('sfx.play').filter(c => c[1] === 'missile').length}번`);
+});
+
+test('자폭병을 받아치면 날아가는 길에 줄이 나고, 떨어진 자리에서 크게 터진다. 셋 이상 잡은 폭발만 느려진다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bomberBounce', { id: 1, x: 0, z: 0, tx: 4, tz: 1, perfect: false })], 1);
+  const tr = has('fx.tracer');
+  assert.equal(tr.length, 1);
+  assert.deepEqual(tr[0].slice(1, 5), [0, 0, 4, 1]);
+  feel.handle([ev('bomberReturn', { id: 1, x: 4, z: 1, kills: 2, dmg: 440, perfect: false })], 1.3);
+  assert.ok(has('fx.burst').some(c => c[1] === 4 && c[2] === 1), '떨어진 자리의 폭발이 없다');
+  assert.ok(has('fx.number').some(c => c[3] === 440));
+  assert.equal(has('timeFx.slow').length, 0, '둘 잡았는데 느려짐');
+  feel.handle([ev('bomberReturn', { id: 2, x: 4, z: 1, kills: 3, dmg: 660, perfect: true })], 2);
+  assert.equal(has('timeFx.slow').length, 1);
+  assert.equal(LOOK.feel.bomber.multi, 3);
+});
+
+// ── 전체 검토에서 나온 것(화면)
+test('정예 방에 들어설 때 정예의 이름이 방 번호 배너에 지워지지 않는다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('eliteSpawn', { id: 3, kind: 'charger', x: 0, z: 0 }), ev('roomStart', { room: 3, of: 5, boss: false, kind: 'elite', feature: null })], 1);
+  const last = has('hud.banner').at(-1);
+  assert.ok(last[2].includes(LOOK.names.mob.charger), `마지막 배너 "${last[2]}"`);
+});
+
+test('방을 다시 시작하면 깜빡이던 칸이 멈춘다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('replaceStart', { id: 'beam', group: 'weapon', x: 0, z: 0 })], 1);
+  feel.handle([ev('roomStart', { room: 2, of: 5, boss: false, kind: 'fight', feature: null })], 2);
+  assert.equal(has('hud.blinkGroup').at(-1)[1], null);
+});
+
+test('한 방의 크기는 칸 수에 따라 — 네 칸을 넘으면(탄 칸 +1) 가장 큰 값에서 멈춘다', () => {
+  const a = rig(), b = rig();
+  a.feel.handle([ev('salvo', { kinds: ['missile'], n: 4, x: 0, z: 0, angle: 0, how: 'throw', full: false })], 1);
+  b.feel.handle([ev('salvo', { kinds: ['missile'], n: 5, x: 0, z: 0, angle: 0, how: 'throw', full: true })], 1);
+  assert.equal(a.has('fx.burst')[0].at(-1), b.has('fx.burst')[0].at(-1));
+  assert.ok(Number.isFinite(LOOK.feel.salvo.span));
+});

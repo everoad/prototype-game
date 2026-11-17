@@ -7,16 +7,19 @@ import { emit } from './events.js';
 import { spawnBullet } from './bullets.js';
 import { executeActive } from './execute.js';
 import { autoActive } from './rewards.js';
+import { weaponSalvo } from './weapons.js';
 
 export const storeOn = w => !!w.opts.store;
-export const storeRoom = w => storeOn(w) && w.player.store.length < w.rules.store.cap;
+// 던지기·저격·지뢰의 바탕 피해 배율: 늘 나가는 무기 판에서는 낮춘다 — 낮춘 몫은 무기의 한 방이 채운다(무기 없이 던지기만으로 충분하지 않게)
+export const throwMul = w => (w.tries && w.tries.on.always ? w.rules.tries.always.throwMul : 1);
+export const storeRoom = w => storeOn(w) && w.player.store.length < w.player.storeCap;
 
 // 받은 것 하나를 모은다. stagger = 던질 때 줄 무력화(받을 때 값). 모았으면 true.
 export function storeAdd(w, { perfect, gold, stagger, x, z, kind }) {
   if (!storeRoom(w)) return false;
   const p = w.player;
   p.store.push({ perfect: !!perfect, gold: !!gold, stagger });
-  emit(w, 'storeAdd', { x, z, px: p.x, pz: p.z, n: p.store.length, full: p.store.length >= w.rules.store.cap, perfect: !!perfect, gold: !!gold, kind });
+  emit(w, 'storeAdd', { x, z, px: p.x, pz: p.z, n: p.store.length, full: p.store.length >= p.storeCap, perfect: !!perfect, gold: !!gold, kind });
   return true;
 }
 
@@ -43,6 +46,7 @@ export function throwStore(w, input) {
   }
   p.store.length = 0;
   w.stats.throws++; w.stats.healed += p.hp - before;
-  if (w.weapons) w.weapons.throwFans = n;   // 산탄은 던질 때(weapons.js)
+  if (w.tries && w.tries.on.always) { if (w.aim && !w.aim.dead) weaponSalvo(w, n, Math.atan2(w.aim.z - p.z, w.aim.x - p.x), 'throw'); }   // 낀 무기가 한 방을 같이 낸다(겨눌 적이 있을 때)
+  else if (w.weapons) w.weapons.throwFans = n;   // 예전 판: 산탄은 던질 때(weapons.js)
   emit(w, 'throw', { x: p.x, z: p.z, n, heal: p.hp - before, mul });
 }

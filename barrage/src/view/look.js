@@ -41,33 +41,46 @@ export const LOOK = {
     storeOrbR: 0.12, storeOrbY: 0.95, storeSpin: 2.6, storeArrive: 0.16, storeArcWidth: 0.08, storeArcGapDeg: 14, thrownScale: 1.3,   // 모아 던지기(§4.11): 모인 구슬(크기·높이·도는 빠르기·빨려 드는 시간), 고리 칸(굵기·틈), 던진 탄 크기
     shieldAlpha: 0.22, shieldEdge: 0.6, itemR: 0.42, itemBlink: 3, itemGlow: 0.35,   // 방패 원판(탄 높이)·테 밝기, 아이템 크기, 사라지기 전 깜빡이는 초, 바닥 빛 밝기
   },
-  names: { ranged: '수호자', dragon: '용', reward: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', shield: '방패 +1', bomb: '폭탄 +1', heal: '체력 회복' } },   // 시작 장면에 뜨는 보스 이름 · 보상 이름
+  names: { ranged: '수호자', dragon: '용', reward: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', shield: '방패 +1', bomb: '폭탄 +1', heal: '체력 회복' },
+    // 카드(한 판의 뼈대 설계 §6·§7): 이름 · 한 줄 설명 · 갈래 이름 · 정예 배너에 쓰는 몬스터 이름
+    card: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', lance: '꿰뚫는 던지기', mine: '지뢰', orbit: '오라', sky: '갈고리', swap: '자리 바꾸기', dash: '돌진 베기', cap: '탄 칸 +1', charge: '회피 충전 +1', graze: '스침 모으기' },
+    cardLine: { missile: '알아서 쫓아간다', burst: '붙을수록 세다', beam: '한 줄을 꿰뚫는다', drone: '내가 안 보는 적을 쏜다',
+      lance: '던진 탄이 곧게 날며 길 위의 적을 모두 뚫는다', mine: '탄 하나를 발밑에 놓는다 — 적이 닿으면 둘레가 크게 다친다', orbit: '탄을 들고 있는 동안 가까운 적이 깎인다',
+      sky: '가는 쪽 말뚝으로 날아간다(나는 동안 안 맞는다)', swap: '겨눈 몬스터와 자리를 바꾼다', dash: '회피로 적의 몸을 지나가면 피해',
+      cap: '모을 수 있는 탄이 한 칸 늘어난다', charge: '회피 충전이 하나 늘어난다', graze: '탄을 스칠 때마다 조금씩 모여 몇 번에 한 칸' },
+    group: { weapon: '무기', orb: '탄 기술', move: '이동기', body: '몸' },
+    mob: { shooter: '사수', charger: '돌격병', mortar: '포격병', waller: '장벽병', spinner: '회전포', bomber: '자폭병' } },   // 시작 장면에 뜨는 보스 이름 · 보상 이름
+  // 낀 것 HUD(오른쪽 아래의 칸들): slotW·slotH·gap = 칸 크기와 사이(px), bottom = 화면 아래에서 칸 아랫변까지, bodyW = 몸 카드 칸 너비,
+  // fly = 주운 카드의 선이 칸까지 그어지는 초, flash = 칸이 빛나는 초, blink = 바꿔 끼울 때 깜빡이는 빠르기, near = 카드의 한 줄 설명이 뜨는 거리(U), keySec = 키·이름 배너 초, eliteSec = 정예 배너 초.
+  kit: { slotW: 92, slotH: 26, gap: 6, groupGap: 14, bottom: 44, bodyW: 104, fly: 0.35, flash: 0.6, blink: 7, near: 2.6, keySec: 1.6, eliteSec: 1.6, lineW: 3 },
   // 실험 기믹(?try=): 말뚝(높이·굵기·꼭대기), 줄 굵기, 기둥 높이, 불 밝기(낮음~높음)·사그라드는 시간, 이름(겹 화면)
   tries: {
     // 저격 한 방(사용자 "진심 펀치처럼 공기를 가르며 주변으로 확 퍼지는 연출"): stop = 떼는 순간의 멈춤, warp = 줄 곁의 것이 밀렸다 돌아오는 그림(warp.js),
     // gust = 줄 양옆으로 튀어 나가는 바람 줄(n개, wave U/s로 줄을 따라 차례로), dust = 줄을 따라 이는 먼지 수, punch = 화면 당김.
-    snipe: { stop: 0.07, punch: [0.05, 0.22], dust: 7, hitBurst: 3.4,
+    snipe: { stop: 0.07, punch: [0.05, 0.22], dust: 7, dustScale: 1.3, hitBurst: 3.4, aimPulse: [0.85, 0.15, 18], flashShrink: [0.3, 0.7],
       warp: { sec: 0.34, side: 0.9, fwd: 0.8, reach: 3.2, width: 0.7, back: 0.5 },
-      gust: { n: 48, sec: 0.42, dist: 2.8, len: 1.5, w: 0.08, alpha: 0.85, wave: 70, y: 0.55, start: 0.25, sweep: 0.7 },
-      cross: { arm: 0.6, gap: 0.25, w: 0.1, dot: 0.12, y: 0.75, spin: 0.6 }, aimW: 0.14, aimAlpha: 0.6, glowW: 0.8, glowAlpha: 0.12, flashW: 1.1, flashSec: 0.22, y: 0.7, shake: 16, shakeSec: 0.28, burst: 2.4, number: 34, dim: 'saturate(0.55) brightness(0.8)' },
+      gust: { n: 48, sec: 0.42, dist: 2.8, len: 1.5, w: 0.08, alpha: 0.85, wave: 70, y: 0.55, start: 0.25, sweep: 0.7, vary: [0.6, 0.8] },
+      cross: { arm: 0.6, gap: 0.25, w: 0.1, dot: 0.12, y: 0.75, spin: 0.6, alpha: 0.95 }, aimW: 0.14, aimAlpha: 0.6, glowW: 0.8, glowAlpha: 0.12, flashW: 1.1, flashSec: 0.22, y: 0.7, shake: 16, shakeSec: 0.28, burst: 2.4, number: 34, dim: 'saturate(0.55) brightness(0.8)' },
     bubbleR: 2.3, bubbleAlpha: [0.16, 0.34], mineR: 0.32, crystalH: 1.3, crystalR: 0.45, boomBurst: 2.2, boomShake: 9, boomShakeSec: 0.18, anchorH: 1.2, anchorR: 0.12, anchorTop: 0.34, ropeW: 0.06, pillarH: 1.9, fireAlpha: [0.28, 0.5], fireFade: 0.7, blockGap: 0.08, dashBurst: 1.4, dashNumber: 22, ropeShake: 3, ropeShakeSec: 0.08,
-    names: { rope: '갈고리 이동 — I·F: 가는 쪽 말뚝으로(맞을 수 있다)', sky: '날아가는 갈고리 — I·F: 가는 쪽 말뚝으로(공중이라 안 맞는다)', pillars: '엄폐 기둥 — 보라·빨강 탄과 평타를 막는다(흰·금은 지나간다), 많이 막으면 무너진다', fire: '불 장판 — 빨간 원이 떨어진 자리가 탄다(적도 탄다)', dash: '돌진 베기 — 회피로 적을 지나가면 피해', lance: '꿰뚫는 던지기 — 던진 탄이 곧게 뚫고 간다', mine: '지뢰 — I·F: 모은 탄 하나를 발밑에(적이 밟으면 터진다)', orbit: '오라 — 모은 탄이 있으면 가까운 적이 깎인다', crystal: '수정 — 곁에서 패링하면 둘레의 보라 탄이 흰 탄으로', swap: '자리 바꾸기 — I·F: 겨눈 몬스터와', focus: '집중 사격 — 잠깐 서 있으면 평타 2배', graze: '스침 모으기 — 네 번 스치면 한 칸', bubble: '보호막 — 보스가 막을 두르면 던진 탄만 통한다(세 발이면 깨진다)', tide: '밀물 — 빨간 반쪽에서 건너가라', always: '늘 나가는 무기 — 패링하면 과열(더 자주 쏜다)', hunt: '흰 탄 찾아가기 — 나를 겨눈 탄은 보라, 그 옆이 흰색', vary: '공격 다양화 — 사수: 세 발·넓은 부채·연사, 돌격병: 연속 돌진, 포격병: 줄 포격', snipe: '저격 — I·F 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다. WASD로 그쪽의 가까운 적을 고르고 떼면 쏜다(회피 = 취소)' },
+    names: { rope: '갈고리 이동 — K: 가는 쪽 말뚝으로(맞을 수 있다)', sky: '날아가는 갈고리 — K: 가는 쪽 말뚝으로(공중이라 안 맞는다)', pillars: '엄폐 기둥 — 보라·빨강 탄과 평타를 막는다(흰·금은 지나간다), 많이 막으면 무너진다', fire: '불 장판 — 빨간 원이 떨어진 자리가 탄다(적도 탄다)', dash: '돌진 베기 — 회피로 적을 지나가면 피해', lance: '꿰뚫는 던지기 — 던진 탄이 곧게 뚫고 간다', mine: '지뢰 — O: 모은 탄 하나를 발밑에(적이 밟으면 터진다)', orbit: '오라 — 모은 탄이 있으면 가까운 적이 깎인다', crystal: '수정 — 곁에서 패링하면 둘레의 보라 탄이 흰 탄으로', swap: '자리 바꾸기 — K(갈고리와 같이 켜면 L): 겨눈 몬스터와', focus: '집중 사격 — 잠깐 서 있으면 평타 2배', graze: '스침 모으기 — 네 번 스치면 한 칸', bubble: '보호막 — 보스가 막을 두르면 던진 탄만 통한다(세 발이면 깨진다)', tide: '밀물 — 빨간 반쪽에서 건너가라', always: '늘 나가는 무기 — 패링하면 과열(더 자주 쏜다)', hunt: '흰 탄 찾아가기 — 나를 겨눈 탄은 보라, 그 옆이 흰색', vary: '공격 다양화 — 사수: 세 발·넓은 부채·연사, 돌격병: 연속 돌진, 포격병: 줄 포격', snipe: '저격 — I 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다. WASD로 그쪽의 가까운 적을 고르고 떼면 쏜다(회피 = 취소)' },
   },
   // 평타·무기 연출(사용자 "기본 공격이나 무기도 좀 더 화려했으면"): 선과 불티로만 — 부드러운 빛·연기는 쓰지 않는다(사용자가 고른 느낌). 청록만, 적 탄 아래 층.
   // head = 평타 머리(밝고 짧게 — 꼬리는 sizes.shotLen·shotAlpha), muzzle = 쏠 때 앞으로 튀는 불티, heat = 과열(패링 뒤 가동 시간) 동안의 굵기 배율,
   // missile = 머리 + 지나온 길을 따라 그리는 꼬리(trail: step마다 자리를 n개 기억해 잇는다 — 휘어 날면 꼬리도 휜다, 뒤로 갈수록 w[0] → w[1]로 가늘고 dim까지 어둡게), beam = 속 밝기와 양옆 가는 줄·닿는 곳 불티, drone = 몸, fan = 산탄이 나갈 때 부채꼴 불티,
+  // pellet = 작은 탄(드론·산탄)의 굵기 배율과 명중 불꽃, at·vary = 불티가 나오는 자리(U)와 빠르기 흩기 [바탕, 폭], flicker = 빔 옆줄 깜빡임 [빠르기, 어긋남, 끊기는 문턱], keep = 기억해 둘 적 수의 상한.
   // flinch = 맞은 몬스터의 움찔(밀림·부풂), number = 평타·무기 누적 피해 숫자(every초마다, big 이상 한 방은 제 숫자가 있어 뺀다), lag = 몬스터 체력 막대 잔상이 줄어드는 빠르기.
   guns: {
     head: { len: 0.34, w: 0.11, alpha: 0.95 },
-    muzzle: { n: 3, speed: 16, life: 0.07, size: 0.05, coneDeg: 26 },
+    muzzle: { n: 3, speed: 16, life: 0.07, size: 0.05, coneDeg: 26, at: 0.6, vary: [0.7, 0.6] },
     heat: { shotScale: 1.4, headScale: 1.3, missileScale: 1.3 },
-    missile: { headLen: 0.62, headW: 0.16, headAlpha: 0.95, hitBurst: 0.9, launch: 0.5, trail: { n: 18, step: 0.16, w: [0.12, 0.02], dim: 0.2, alpha: 0.85 } },
-    beam: { coreAlpha: 0.9, rail: 0.27, railW: 0.045, railAlpha: 0.8, sparkEvery: 0.05, sparkSize: 0.7 },
-    drone: { r: 0.23, alpha: 0.95, spark: 0.35 },
-    fan: { n: 8, speed: 20, life: 0.09, size: 0.06 },
+    missile: { headLen: 0.62, headW: 0.16, headAlpha: 0.95, hitBurst: 0.9, launch: 0.5, trail: { n: 18, step: 0.16, w: [0.12, 0.02], dim: 0.2, alpha: 0.85, cap: 640, overlap: 1.06 } },
+    beam: { coreAlpha: 0.9, rail: 0.27, railW: 0.045, railAlpha: 0.8, flicker: [90, 2.1, -0.6], sparkEvery: 0.05, sparkSize: 0.7 },
+    drone: { r: 0.23, alpha: 0.95, spark: 0.35, spin: 3 },
+    pellet: { w: 1.3, hit: 0.3 },
+    fan: { n: 8, speed: 20, life: 0.09, size: 0.06, at: 0.7, vary: [0.8, 0.4] },
     flinch: { sec: 0.1, push: 0.15, pop: 0.12 },
-    number: { every: 0.45, min: 12, big: 60, size: 15 },
-    lag: { hold: 0.25, rate: 0.9 },
+    number: { every: 0.45, min: 12, big: 60, size: 15, keep: 96 },
+    lag: { hold: 0.25, rate: 0.9, keep: 96 },
   },
   // 일반 몬스터·보상·문(스테이지 설계 §6): 단순한 도형. 크기 [x 앞뒤, y 높이, z 옆] U
   mobs: {
@@ -77,9 +90,11 @@ export const LOOK = {
     shield: { box: [0.8, 1.3, 0.9], plate: [0.14, 1.5, 1.7], plateAt: 0.62 },
     bomber: { r: 0.5, fuse: [0.07, 0.35] },
     totem: { r: 0.55, h: 2.3, cap: 0.5, auraAlpha: 0.1 },
+    waller: { box: [0.55, 1.15, 1.9], fin: [0.3, 0.35, 1.3] },
+    spinner: { r: 0.72, h: 0.55, barrel: [1.0, 0.18, 0.18], cap: 0.3 },
     markerR: 0.7, markerAlpha: 0.4, pop: 0.18, hitFlash: 0.08, dieSec: 0.22,
     barW: 38, barH: 4, barY: 1.9,
-    rewardR: 0.45, rewardY: 1.0, rewardSpin: 1.6, rewardBob: 0.12, rewardGlow: 0.3, rewardFloorR: 1.0,
+    rewardR: 0.45, rewardHold: 0.45, rewardY: 1.0, rewardSpin: 1.6, rewardBob: 0.12, rewardGlow: 0.3, rewardFloorR: 1.0,
     doorH: 2.4, doorPost: 0.22, doorGlow: 0.5, doorLight: 3,
   },
   // 그리는 순서(아래 → 위, §7): 적 탄은 깊이와 상관없이 몸 위에
@@ -113,6 +128,13 @@ export const LOOK = {
   // 손맛(§6) — proto-game 값에서 시작. 정지·느려짐은 게임 시간, 흔들림·확대·섬광은 실제 시간.
   feel: {
     on: { stop: true, slow: true, shake: true, punch: true, edge: true, sparks: true, numbers: true, afterimage: true },
+    // 한 방의 연출(한 판의 뼈대 §7): flash = 탄을 쓰는 순간 무기가 끼어든다는 신호 섬광의 세기 [한 칸, 네 칸], fan = 산탄 부채 불티의 폭(도)·세기 [한 칸, 네 칸],
+    //   missile = 미사일이 떠나는 불티 [한 칸, 네 칸], beamPunch = 빔의 화면 당김 [양, 초], burstStop = 산탄 한 방이 맞는 순간의 멈춤(초), droneEvery = 난사 소리를 몇 발에 한 번,
+    //   span = 한 칸에서 이만큼 더 쓰면 가장 큰 연출(네 칸). 다 쓴 한 방(full)만: shake·shakeSec 흔들림, slow·slowSec 느려짐. 저격의 한 방은 무기의 모습만 얹는다(저격의 연출이 주인공).
+    salvo: { span: 3, flash: [0.9, 2.4], fan: [70, 1, 2], missile: [0.8, 2], beamPunch: [0.035, 0.16], burstStop: 0.035, droneEvery: 3, shake: 7, shakeSec: 0.18, slow: 0.45, slowSec: 0.22, detune: [0, 500] },
+    // 자폭병 튕겨 보내기(§5): tracer = 날아가는 길의 줄 굵기, burst = 떨어진 자리의 폭발(보통 폭발보다 크다, 완벽이면 × perfect), number = 숫자 크기,
+    //   multi = 한 번에 이만큼 넘게 잡으면 slow배로 slowSec초 느려진다(쓸어 담은 순간).
+    bomber: { tracer: 2.4, flash: 1.2, burst: 2.8, perfect: 1.3, number: 30, shake: 9, shakeSec: 0.18, detune: 500, multi: 3, slow: 0.35, slowSec: 0.3 },
     budget: { window: 1.0, max: 0.15 },                 // 화면 전체 정지: 1초에 합쳐 0.15초까지(override 제외)
     parryPress: { bright: 0.12, fade: 0.25 },           // 누른 순간 고리: 앞 0.12초 가장 밝게(완벽 창)
     parryBullet: { shakePx: 8, shakeSec: 0.12, chainCent: 200, chainMax: 1200 },   // 탄 패링: 전체 정지 없음
@@ -128,7 +150,8 @@ export const LOOK = {
     // 보스 죽음(승리): 정지·느려짐 + 카메라 당김 유지·금빛 가장자리, chunks초마다 파편이 터지고 finalAfter초 뒤 마지막으로 크게
     death: { stop: 0.3, slow: 0.35, slowSec: 1.0, shakePx: 16, shakeSec: 0.5, hold: 0.12, holdSec: 2.2, edgeSec: 1.2, chunks: [0.25, 0.5, 0.8], chunkBurst: 2, chunkShake: 6, finalAfter: 0.25, finalBurst: 4.5, finalShake: 20 },
     playerDeath: { stop: 0.12, slow: 0.3, slowSec: 0.8, shakePx: 14, shakeSec: 0.4, burst: 3, edgeSec: 1.0 },   // 패배: 느려짐·청록 파편·붉은 가장자리
-    result: { winDelay: 1.6, loseDelay: 1.0, fade: 0.3, gray: 0.85 },   // 결과 화면이 뜨기까지·서서히 뜨는 시간, 패배 때 화면 색 빠짐
+    // 결과 화면이 뜨기까지·서서히 뜨는 시간, 패배 때 화면 색 빠짐. 스테이지를 끝낸 화면: stamp = 등급·낀 카드·기록 줄이 찍히는 때(결과가 뜬 뒤 초), gradePx = 등급 글자 크기, pop = 등급이 찍히며 줄어드는 초
+    result: { winDelay: 1.6, loseDelay: 1.0, fade: 0.3, gray: 0.85, stamp: [0.35, 0.8, 1.2], gradePx: 84, pop: 0.18 },
     lowHp: { at: 0.25, beat: 0.85, edgeLo: 0.1, edgeHi: 0.34 },   // 체력 위태: 최대 체력 몫, 심장 간격, 붉은 가장자리 밝기(낮음~높음)
     overdrive: { blink: 0.5, shotScale: 1.7, glow: 0.7 },
     // 탄 발사 박자: 보라·빨강 탄이 나올 때 한 묶음에 한 번(gap초 안은 건너뜀) 낮은 소리 + 발사 자리 불꽃 + 보스 몸이 살짝 튐(kick)
@@ -137,7 +160,7 @@ export const LOOK = {
     aura: { every: 0.14, glow: 0.6 },   // 무기 가동(패링 뒤): 몸에서 청록 알갱이가 오르는 간격, 몸 빛
     intro: { sec: 1.1, hold: 0.22 },    // 시작 장면: 길이, 카메라 당김   // 반격 기회(과열): 끝나기 blink초 전부터 깜빡, 탄 굵기, 몸 빛
     // 스테이지: 몬스터 죽음(파편·작은 흔들림), 방 정리·방 번호 큰 글자, 보상 줍기, 보스 등장(당김), 방 넘어갈 때 어두워졌다 밝아짐
-    stage: { deathBurst: 1.1, deathShake: 5, deathShakeSec: 0.12, blockGap: 0.12, spawnGap: 0.2, clearSec: 1.3, clearEdge: 0.5, roomSec: 1.3, pickBurst: 1.6, pickNumber: 26, bossHold: 0.2, bossSec: 1.1, fade: 0.35, dashShake: 4, dashShakeSec: 0.1 },
+    stage: { shellReturn: { tracer: 2.2, burst: 1.8, number: 26, shake: 9, shakeSec: 0.16, detune: 300 }, deathBurst: 1.1, deathShake: 5, deathShakeSec: 0.12, blockGap: 0.12, spawnGap: 0.2, clearSec: 1.3, clearEdge: 0.5, roomSec: 1.3, pickBurst: 1.6, pickNumber: 26, bossHold: 0.2, bossSec: 1.1, fade: 0.35, dashShake: 4, dashShakeSec: 0.1 },
     rush: { kickPx: 16, kickSec: 0.18, arriveShake: 10, arriveSec: 0.18 },
     slam: { shakePx: 10, shakeSec: 0.2 },
     // 원거리 재설계: 박치기 받아냄(근접 패링 위에 크게 튕김) · 난간 쿵 · 파도 시작 · 레이저 발사 떨림

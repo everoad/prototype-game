@@ -27,22 +27,28 @@ test('실험 수치는 유한한 수, 이름은 아는 것만 남는다', () => 
   assert.equal(createWorld().tries, null);
 });
 
-test('I·F 키는 실험 행동(act) 누름이다', () => {
+test('O·K·L은 누른 순간 한 번(탄 기술 · 이동기 1 · 이동기 2), F는 아무 일도 하지 않는다', () => {
   const m = createInputMap(0);
-  m.keyDown('KeyF', 0);
-  assert.equal(m.take().act, true);
-  assert.equal(m.take().act, false);
+  m.keyDown('KeyO', 0); m.keyDown('KeyK', 1); m.keyDown('KeyL', 2);
+  const a = m.take();
+  assert.deepEqual([a.orb, a.move1, a.move2], [true, true, true]);
+  const b = m.take();
+  assert.deepEqual([b.orb, b.move1, b.move2], [false, false, false]);
+  m.keyDown('KeyF', 3);
+  const c = m.take();
+  assert.equal(c.hold, false);
+  assert.equal('act' in c, false, '행동 키(act)는 없어졌다');
 });
 
 test('실험을 켜도 같은 seed면 같은 판', () => {
-  const run1 = () => { const w = createWorld({ seed: 4, store: true, tries: 'all' }); for (let k = 0; k < ticks(8); k++) { const a = k / 170; step(w, { mx: Math.cos(a), mz: Math.sin(a), parry: k % 43 === 0, dodge: k % 277 === 0, act: k % 190 === 0, throw: k % 500 === 0 }); drainEvents(w); } return stateHash(w); };
+  const run1 = () => { const w = createWorld({ seed: 4, store: true, tries: 'all' }); for (let k = 0; k < ticks(8); k++) { const a = k / 170; step(w, { mx: Math.cos(a), mz: Math.sin(a), parry: k % 43 === 0, dodge: k % 277 === 0, move1: k % 190 === 0, move2: k % 230 === 0, orb: k % 310 === 0, throw: k % 500 === 0 }); drainEvents(w); } return stateHash(w); };
   assert.equal(run1(), run1());
 });
 
 // ── 갈고리
 test('갈고리: 가는 쪽 말뚝으로 빠르게 끌려가 말뚝 앞에서 멈춘다. 다시 쓰기까지 cooldown', () => {
   const w = boss('rope'), p = w.player;
-  step(w, { ...idle, mx: 1, act: true });
+  step(w, { ...idle, mx: 1, move1: true });
   const ev = drainEvents(w), a = w.tries.rope.to;
   assert.equal(of(ev, 'ropeStart').length, 1);
   assert.ok(a && a.x > p.x, '가는 쪽(오른쪽) 말뚝이 아님');
@@ -53,16 +59,16 @@ test('갈고리: 가는 쪽 말뚝으로 빠르게 끌려가 말뚝 앞에서 �
   const ev2 = play(w, t * 0.5 + 0.1);
   assert.equal(of(ev2, 'ropeEnd').length, 1);
   assert.ok(Math.abs(Math.hypot(a.x - p.x, a.z - p.z) - T.rope.stopAt) < 0.4, `멈춘 거리 ${Math.hypot(a.x - p.x, a.z - p.z)}`);
-  step(w, { ...idle, mx: -1, act: true });
+  step(w, { ...idle, mx: -1, move1: true });
   assert.equal(of(drainEvents(w), 'ropeStart').length, 0, '쉬는 시간 안에 또 걸림');
   play(w, T.rope.cooldown);
-  step(w, { ...idle, mx: -1, act: true });
+  step(w, { ...idle, mx: -1, move1: true });
   assert.equal(of(drainEvents(w), 'ropeStart').length, 1);
 });
 
 test('갈고리: 끌려가는 동안 무적이 아니고, 구르면 줄을 놓는다', () => {
   const w = boss('rope'), p = w.player;
-  step(w, { ...idle, mx: 1, act: true });
+  step(w, { ...idle, mx: 1, move1: true });
   assert.ok(w.tries.rope.to, '줄이 안 걸림');
   spawnBullet(w, K.NORMAL, p.x + 1.5, p.z, Math.PI, 2, 1);
   const to = w.tries.rope.to, b = w.bullets;
@@ -70,7 +76,7 @@ test('갈고리: 끌려가는 동안 무적이 아니고, 구르면 줄을 놓�
   play(w, 0.3);
   assert.ok(p.hp < P.hp, '끌려가며 탄을 지나쳤는데 안 맞음');
   const w2 = boss('rope');
-  step(w2, { ...idle, mx: 1, act: true });
+  step(w2, { ...idle, mx: 1, move1: true });
   const ev = play(w2, 0.1, (x, k) => ({ ...idle, dodge: k === 2, mz: 1 }));
   assert.equal(w2.tries.rope.to, null);
   assert.equal(of(ev, 'ropeEnd')[0].cut, true);
@@ -78,7 +84,7 @@ test('갈고리: 끌려가는 동안 무적이 아니고, 구르면 줄을 놓�
 
 test('날아가는 갈고리(sky): 끌려가는 동안은 맞지 않고, 내리면 다시 맞는다', () => {
   const w = boss('sky'), p = w.player;
-  step(w, { ...idle, mx: 1, act: true });
+  step(w, { ...idle, mx: 1, move1: true });
   const to = w.tries.rope.to, b = w.bullets;
   assert.ok(to, '줄이 안 걸림');
   spawnBullet(w, K.NORMAL, p.x, p.z, 0, 0, 1);
@@ -194,11 +200,11 @@ test('꿰뚫는 던지기: 던진 탄이 곧게 날며 줄 선 적을 모두 뚫
 // ── 3차: 지뢰 · 오라 · 수정 · 자리 바꾸기 · 집중 사격 · 스침 모으기
 test('지뢰: 모은 탄 하나를 발밑에 놓고(회복 없음), 적의 몸이 닿으면 둘레의 적이 다친다', () => {
   const w = room('mine'), p = w.player;
-  step(w, { ...idle, act: true });
+  step(w, { ...idle, orb: true });
   assert.equal(of(drainEvents(w), 'denied').length, 1, '모은 탄 없이 놓임');
   give(w, 2);
   const hp = (p.hp = 50);
-  step(w, { ...idle, act: true });
+  step(w, { ...idle, orb: true });
   assert.equal(p.store.length, 1); assert.equal(w.tries.mines.length, 1); assert.equal(p.hp, hp);
   const mine = w.tries.mines[0];
   play(w, 1, { ...idle, mx: -1 });
@@ -252,17 +258,17 @@ test('자리 바꾸기: 겨눈 몬스터와 자리를 바꾸고 잠깐 무적, c
   const m = spawnMob(w, 'shooter', p.x + 7, p.z + 2, 0);
   step(w, idle);
   const [px, pz, mx, mz] = [p.x, p.z, m.x, m.z];
-  step(w, { ...idle, act: true });
+  step(w, { ...idle, move1: true });
   assert.equal(of(drainEvents(w), 'swap').length, 1);
   assert.ok(Math.hypot(p.x - mx, p.z - mz) < 1e-6 && Math.hypot(m.x - px, m.z - pz) < 1e-6);
   assert.ok(p.invulnUntil > w.time);
-  step(w, { ...idle, act: true });
+  step(w, { ...idle, move1: true });
   assert.equal(of(drainEvents(w), 'swap').length, 0);
   play(w, T.swap.cooldown);
-  step(w, { ...idle, act: true });
+  step(w, { ...idle, move1: true });
   assert.equal(of(drainEvents(w), 'swap').length, 1);
   const w2 = boss('swap'), bx = w2.boss.x;
-  step(w2, idle); step(w2, { ...idle, act: true });
+  step(w2, idle); step(w2, { ...idle, move1: true });
   assert.equal(w2.boss.x, bx);
 });
 
@@ -370,23 +376,25 @@ test('늘 나가는 무기: 패링하면 과열 — 가동 시간(charge.sec) �
   assert.ok(after <= nBase + M.n, `과열이 끝난 뒤 ${after}발`);
 });
 
-test('늘 나가는 무기: 산탄은 burstEvery초마다 부채 — 던질 때 따로 나가지 않는다', () => {
-  const A = T.always, Bu = RULES.weapons.burst;
+test('늘 나가는 무기: 산탄은 burstEvery초마다 부채 — 던지면 큰 부채(한 방)가 따로 나가고 늘 나가는 박자는 그대로다', () => {
+  const A = T.always, Bu = RULES.weapons.burst, Sv = RULES.weapons.salvo.burst;
   const w = boss('always', { gear: 'burst' });
   const n0 = fires(play(w, A.burstEvery * 2 + 0.1), 'burst');
   assert.ok(n0 >= Bu.n * 2 && n0 <= Bu.n * 3, `부채 ${n0 / Bu.n}번`);
   give(w, 3);
   step(w, { ...idle, throw: true });
-  const n1 = fires(play(w, A.burstEvery * 0.9), 'burst');
-  assert.ok(n1 <= Bu.n, `던진 뒤 부채 ${n1 / Bu.n}번`);
+  const ev = [...drainEvents(w), ...play(w, A.burstEvery * 0.9)], shots = of(ev, 'weaponFire').filter(e => e.kind === 'burst');
+  assert.equal(shots.filter(e => e.salvo).length, 3 * Sv.n, '던진 칸 수만큼의 큰 부채');
+  assert.ok(shots.filter(e => !e.salvo).length <= Bu.n, `던진 뒤 늘 나가는 부채 ${shots.filter(e => !e.salvo).length / Bu.n}번`);
 });
 
 test('늘 나가는 무기: 보스 체력이 bossHp배 — 스테이지 보스 방도', () => {
   const A = T.always, hp = RULES.boss.hp * RULES.store.bossHp;
   const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} ≠ ${b}`);
   near(boss('always').boss.maxHp, hp * A.bossHp);
-  const w = createWorld({ stage: 1, room: 4, tries: 'always' });   // 스테이지 1의 방 4 = 보스 방
-  near(w.boss.maxHp, hp * RULES.stage.bossHp * A.bossHp);
+  const w = createWorld({ stage: 1, room: 5, tries: 'always' });   // 스테이지 1의 방 5 = 보스 방(방 넷 뒤)
+  assert.equal(w.stage.phase, 'boss');
+  near(w.boss.maxHp, hp * RULES.stage.bossHp * (RULES.stage.list[1].bossHp ?? 1) * A.bossHp);
   near(w.boss.hp, w.boss.maxHp);
 });
 
@@ -672,6 +680,7 @@ test('공격 다양화: 포격병은 두 번에 한 번 줄 포격 — 포격병
     assert.ok(Math.abs(shells[k].born - shells[k - 1].born - Vm.lineGap) < RULES.dt + 1e-9);
   }
   assert.ok(shells.some(s => Math.abs(s.x) < 1e-6), '내 자리에 떨어지는 원이 없음');
+  assert.deepEqual(shells.map(s => s.color), [...Array(Vm.lineN - 1).fill('red'), 'white'], '줄 포격도 마지막(가장 먼) 원만 흰색');
   // 다음 차례는 지금처럼 n발
   play(w, Mo.warn + 0.3);
   const m2 = w.enemies[0]; m2.nextAt = w.time;
@@ -761,4 +770,98 @@ test('기본 판: ?try=none은 아무것도 켜지 않고(예전 판), -이름�
   assert.equal(opt('lab=parry'), null);
   assert.equal(opt('lab=parry&try=rope'), 'rope');
   assert.equal(createWorld().tries, null, 'sim의 기본값은 그대로');
+});
+
+// ── 독립 검토(2026-11-17 밤)에서 나온 것
+test('저격은 갈고리·지뢰를 켠 판에도 있다 — 키가 따로다(I 저격 · K 갈고리 · O 지뢰)', () => {
+  const w = boss('always,vary,snipe,rope');
+  assert.ok(w.tries.snipe, '갈고리와 같이 켜도 저격이 있다');
+  const ev = play(w, 0.05, (x, k) => ({ ...idle, mx: 1, mz: 0, move1: k === 0 }));
+  assert.equal(of(ev, 'ropeStart').length, 1);
+  const w2 = room('snipe,mine');
+  spawnMob(w2, 'shield', w2.player.x + 2, w2.player.z, 0);
+  give(w2, 3);
+  const ev2 = play(w2, 0.05, (x, k) => ({ ...idle, orb: k === 0 }));
+  assert.equal(w2.tries.mines.length, 1, '지뢰가 놓이지 않음');
+  assert.equal(w2.player.store.length, 2);
+  assert.equal(of(ev2, 'snipeStart').length, 0, 'O로 저격이 들림');
+  const ev3 = play(w2, 0.05, hold);
+  assert.equal(of(ev3, 'snipeStart').length, 1, 'I를 누르고 있어도 저격이 안 들림');
+});
+
+test('갈고리와 자리 바꾸기를 같이 켜면 갈고리는 K(move1), 자리 바꾸기는 L(move2)', () => {
+  const w = room('sky,swap'), p = w.player;
+  const m = spawnMob(w, 'shooter', p.x + 7, p.z + 2, 0);
+  step(w, idle); drainEvents(w);
+  step(w, { ...idle, move2: true });
+  const ev = drainEvents(w);
+  assert.equal(of(ev, 'swap').length, 1, 'L로 자리가 안 바뀜');
+  assert.equal(of(ev, 'ropeStart').length, 0);
+  play(w, 0.5);
+  step(w, { ...idle, mx: 1, move1: true });
+  const ev2 = drainEvents(w);
+  assert.equal(of(ev2, 'ropeStart').length, 1, 'K로 줄이 안 걸림');
+  assert.equal(of(ev2, 'swap').length, 0);
+  assert.ok(m);
+});
+
+test('자리 바꾸기만 켠 판에서는 K(move1)가 자리 바꾸기다', () => {
+  const w = room('swap'), p = w.player;
+  spawnMob(w, 'shooter', p.x + 7, p.z + 2, 0);
+  step(w, idle); drainEvents(w);
+  step(w, { ...idle, move2: true });
+  assert.equal(of(drainEvents(w), 'swap').length, 0, 'L은 빈 칸');
+  step(w, { ...idle, move1: true });
+  assert.equal(of(drainEvents(w), 'swap').length, 1);
+});
+
+test('조준 중에는 O·K·L이 먹지 않는다', () => {
+  const w = room('snipe,mine,sky'), p = w.player;
+  spawnMob(w, 'shield', p.x + 4, p.z, 0);
+  give(w, 3);
+  play(w, 0.03, hold);
+  assert.equal(w.tries.snipe.on, true);
+  const ev = play(w, 0.03, { ...hold, orb: true, move1: true, mx: 1 });
+  assert.equal(w.tries.mines.length, 0, '조준 중에 지뢰가 놓임');
+  assert.equal(of(ev, 'ropeStart').length, 0, '조준 중에 줄이 걸림');
+});
+
+test('검토: 겨눌 적이 없으면 저격 자세를 못 든다 — 모은 탄은 그대로', () => {
+  const w = room('snipe');
+  give(w, 3);
+  const ev = play(w, 0.2, hold);
+  assert.equal(w.tries.snipe.on, false);
+  assert.equal(w.player.store.length, 3);
+  assert.equal(of(ev, 'denied').filter(e => e.what === 'snipe' && e.why === 'target').length, 1);
+  assert.equal(of(play(w, 0.1), 'snipeFire').length, 0);
+});
+
+test('검토: 조준하는 사이 적이 다 사라지면 쏘지 않고 그만둔다 — 모은 탄은 그대로', () => {
+  const w = room('snipe'), m = spawnMob(w, 'shield', w.player.x + 4, w.player.z, 0);
+  give(w, 3);
+  play(w, 0.05, hold);
+  assert.equal(w.tries.snipe.on, true);
+  m.dead = true; m.diedAt = w.time;
+  const ev = [...play(w, 0.05, hold), ...play(w, 0.05)];
+  assert.equal(of(ev, 'snipeFire').length, 0);
+  assert.equal(of(ev, 'snipeCancel').length, 1);
+  assert.equal(w.player.store.length, 3);
+  assert.equal(w.tries.snipe.on, false);
+});
+
+test('검토: 모아 던지기가 꺼진 판(?store=0)에서는 저격이 없다 — I는 무기 스킬만', () => {
+  const w = createWorld({ ai: false, store: false, tries: 'always,vary,snipe' });
+  assert.equal(w.tries.snipe, null);
+  assert.equal(of(play(w, 0.1, hold), 'denied').filter(e => e.what === 'snipe').length, 0);
+});
+
+test('검토: 연사는 가까이서도 흰 탄이 먼저 떠난다 — 멈췄다 출발하는 흰 탄을 보라가 앞지르지 않는다', () => {
+  const w = liveRoom('vary'), b = w.bullets, Vs = V.shooter;
+  const m = ready(w, 'shooter', 2.5, 0, 2, 3);
+  const at = [];
+  for (let k = 0; k < ticks(Mb.shooter.warn + 1.2); k++) { step(w, idle); for (const e of of(drainEvents(w), 'fire')) if (e.src === RULES.src.shooter) at.push({ t: w.time, kind: e.kind, leaves: Math.max(w.time, b.holdUntil[e.id]) }); }
+  assert.equal(at.length, Vs.streamN);
+  assert.equal(at[0].kind, K.WHITE);
+  assert.ok(at[0].leaves > at[0].t + 0.05, '이 거리에서는 흰 탄이 멈췄다 출발해야 시험이 뜻이 있다');
+  assert.ok(at[1].t >= at[0].leaves + Vs.streamGap - RULES.dt - 1e-9, `보라가 ${at[1].t}에 떠남, 흰 탄은 ${at[0].leaves}에 떠남`);
 });

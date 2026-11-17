@@ -148,12 +148,12 @@ export function createBulletsView(view, LOOK, cap) {
     drawFloor(w, now);
     for (const m of Object.values(meshes)) m.count = 0;
     const b = w.bullets, vis = S.bulletVisual, minR = S.bulletMinPx * view.unitsPerPx(), bh = S.bh;
-    const sn = w.tries?.snipe, Wp = LOOK.tries.snipe.warp, warped = !!sn && w.time - sn.firedAt < Wp.sec;   // 저격이 가른 공기(그림만 밀린다)
+    const sn = w.tries?.snipe, Wp = LOOK.tries.snipe.warp, vt = view.simTime ?? w.time, warped = !!sn && vt - sn.firedAt < Wp.sec;   // 저격이 가른 공기(그림만 밀린다)
     for (let i = 0; i < b.cap; i++) {
       if (!b.alive[i]) continue;
       if (w.result === 'win' && b.kind[i] !== K.REFLECT) continue;   // 이긴 순간 남은 적 탄은 반짝이며 사라진다(main)
       let x = b.px[i] + (b.x[i] - b.px[i]) * alpha, z = b.pz[i] + (b.z[i] - b.pz[i]) * alpha;
-      if (warped) { warpAt(Wp, sn, x, z, w.time, warpOut); x += warpOut[0]; z += warpOut[1]; }
+      if (warped) { warpAt(Wp, sn, x, z, vt, warpOut); x += warpOut[0]; z += warpOut[1]; }
       const r = Math.max(b.r[i] * vis, minR), k = b.kind[i];
       const yaw = Math.atan2(b.vz[i], b.vx[i]);
       if (k !== K.REFLECT) put(meshes.shadow, x, 0.01, z, r * 0.9, 1, r * 0.9);

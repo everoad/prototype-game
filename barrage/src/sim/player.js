@@ -9,11 +9,11 @@ export function createPlayer(rules) {
   const [x, z] = rules.start.player;
   return {
     x, z, px: x, pz: z, hp: rules.player.hp, face: 0, invulnUntil: -1, autoUntil: -1, overdriveUntil: 0,
-    dodge: { startedAt: -1, until: -1, dirX: 0, dirZ: 0, fromX: x, fromZ: z, f: 0, charges: rules.dodge.charges, rechargeAt: [], near: false, nearRed: false },
+    dodge: { startedAt: -1, until: -1, dirX: 0, dirZ: 0, fromX: x, fromZ: z, f: 0, charges: rules.dodge.charges, max: rules.dodge.charges, rechargeAt: [], near: false, nearRed: false },
     buffer: { parryUntil: -1, dodgeUntil: -1 },
     parry: { startedAt: -1, active: false, caught: 0, failUntil: -1 },
     stock: freshStock(rules), shieldUntil: -1, bombUntil: -1, lastHurt: null, dyingAt: null,   // 방패·폭탄 사용권, 구제 창(§4.9)
-    store: [], throwSum: 0,   // 모아 던지기(§4.11): 모은 것 { perfect, gold, stagger }
+    store: [], storeCap: rules.store.cap, throwSum: 0,   // 모아 던지기(§4.11): 모은 것 { perfect, gold, stagger } · 칸 수(몸 카드가 늘린다)
   };
 }
 

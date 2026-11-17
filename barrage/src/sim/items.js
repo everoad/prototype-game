@@ -54,7 +54,7 @@ function fireBomb(w) {
   p.invulnUntil = Math.max(p.invulnUntil, w.time + R.bomb.invuln);
   p.bombUntil = w.time + R.bomb.invuln;
   let dmg = 0;
-  if (isAway(w)) { for (const f of [...w.foeList]) dmg += hurtFoe(w, f, R.mobs.bombShare * f.maxHp, 'bomb', { pierce: true }); }   // 일반 방: 모든 몬스터에게 최대 체력의 몫
+  if (isAway(w)) { for (const f of [...w.foeList]) dmg += hurtFoe(w, f, (f.elite ? R.mobs.elite.bombShare : R.mobs.bombShare) * f.maxHp, 'bomb', { pierce: true }); }   // 일반 방: 모든 몬스터에게 최대 체력의 몫(정예는 제 몫)
   else dmg = damageBoss(w, R.bomb.share * b.maxHp, 'bomb', true);   // 정확히 share(그로기 배율 없음)
   emit(w, 'bomb', { x: p.x, z: p.z, bx: isAway(w) ? p.x : b.x, bz: isAway(w) ? p.z : b.z, dmg });
 }

@@ -8,7 +8,7 @@ import { killBullet } from './bullets.js';
 import { addStagger } from './boss.js';
 import { isAway, hitFoe, hurtFoe } from './foes.js';
 import { openCounterChance, healOn } from './rewards.js';
-import { storeRoom, storeAdd } from './store.js';
+import { storeRoom, storeAdd, throwMul } from './store.js';
 
 export const parryActive = w => { const q = w.player.parry; return q.active && w.time < q.startedAt + w.rules.parry.window; };
 export const parryAge = w => w.time - w.player.parry.startedAt;
@@ -88,7 +88,7 @@ export function hitBossReflects(w) {
       if (p.dyingAt != null) continue;   // 구제 창(보스가 피해를 받지 않는 동안)엔 닿아도 기다린다 — 피해 0으로 버려지지 않게
       const LL = w.tries ? w.tries.lanceLast : null, fid = f === boss ? -1 : f.id;   // 꿰뚫는 던지기(실험): 사라지지 않고 같은 적은 한 번만
       if (LL) { if (LL[i] === fid) continue; LL[i] = fid; } else killBullet(w, i);
-      const dealt = hurtFoe(w, f, (perfect ? S.dmg[1] : S.dmg[0]) * mul * (LL ? R.tries.lance.mul : 1), 'throw', { pierce: true });
+      const dealt = hurtFoe(w, f, (perfect ? S.dmg[1] : S.dmg[0]) * mul * (LL ? R.tries.lance.mul : 1) * throwMul(w), 'throw', { pierce: true });
       p.throwSum = (p.throwSum ?? 0) + dealt;
       emit(w, 'throwHit', { x, z, perfect, gold, dmg: dealt, last, total: p.throwSum });
       if (last) { let flying = false; for (let j = 0; j < b.cap && !flying; j++) flying = !!b.alive[j] && !!b.thrown[j]; if (!flying) p.throwSum = 0; }   // 겹쳐 던진 것까지 다 닿으면 합계를 비운다

@@ -20,7 +20,7 @@ export const RULES = {
   },
   start: { player: [-6, 0], boss: [6, 0] },      // 판 양 끝(§5.2 여는 순서)
   // 맞은 출처 번호(hurt src, stats.hitsByPattern 키): 패턴 1~7은 그 번호
-  src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14, tail: 15, wing: 16, shooter: 17, charger: 18, mortar: 19, shieldMob: 20, fire: 21, bomber: 22, tide: 23 },
+  src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14, tail: 15, wing: 16, shooter: 17, charger: 18, mortar: 19, shieldMob: 20, fire: 21, bomber: 22, tide: 23, waller: 24, spinner: 25 },
   // 두 겹 탄막의 아래(§5.4): 바탕 고리(+ 2단계 느린 나선), 2단계 쌍둥이 구슬. 흰·금 없음.
   layers: {
     bg1: { every: 2.2, n: 10, speed: 6 },
@@ -58,19 +58,35 @@ export const RULES = {
   bomb: { invuln: 1.5, share: 0.04, rescue: 0.15 },   // rescue = 맞은 뒤 이 안에 폭탄이면 그 한 대를 되돌림
   // 보조 무기(§4.10) — 공격 무기만(칼날·파동은 너무 세서 뺐다, 사용자). 탄 수는 늘리고 한 발 피해를 줄여 초당 피해는 첫 시험과 같게.
   // first = 켠 뒤 첫 발까지(없으면 every).
+  // 무기의 특징(한 판의 뼈대 설계 §7 — always가 켜진 판에서만): 산탄 fall = 날아간 거리 near까지 mul[0]배, far부터 mul[1]배(그 사이는 곧게) — 붙을수록 세다.
+  //   빔 = 몸에서 겨눈 적 쪽으로 len만큼 뻗은 줄(굵기 width) 위의 적을 모두 지난다. 드론 = 내가 겨누지 않은 적 가운데 가장 가까운 적을 쏜다. 미사일 = 그대로(기준).
+  //   two = 무기를 둘 넘게 들면 각 무기 피해 = two / 낀 수(둘이면 0.65 — 둘째 무기는 힘이 아니라 덮는 상황을 늘린다).
   weapons: {
     missile: { every: 1.5, first: 0, n: 3, spreadDeg: 60, speed: 11, turn: 5, life: 3, dmg: 16 / 3 },   // 2발×8 → 3발×5.3
-    burst: { n: 10, spreadDeg: 44, speed: 24, range: 16, dmg: 3 },                                    // 6발×5 → 10발×3
-    beam: { every: 3, dur: 0.35, dps: 80 },
+    burst: { n: 10, spreadDeg: 44, speed: 24, range: 16, dmg: 3, fall: { near: 2.5, far: 6, mul: [2.5, 0.3] } },   // 6발×5 → 10발×3
+    beam: { every: 3, dur: 0.35, dps: 80, len: 16, width: 0.6 },
+    two: 1.3,
     drone: { every: 0.2, first: 0, offset: 1.3, spin: 1.5, speed: 22, range: 16, dmg: 0.2 * 2 / 0.35 },   // 0.35초 2 → 0.2초 1.14
     // 패링과 엮기(사용자 "1번"): 공격 무기는 패링 뒤 sec초(완벽 perfectSec초) 동안만 가동. 패링이 스킬 게이지를 채운다(+1, 완벽 +2).
     charge: { sec: 3, perfectSec: 4.5 },
     skill: { max: 6, cost: 3, missile: { n: 12, spreadDeg: 160 }, beam: { dur: 1.5, dps: 160 }, drone: { dur: 4, every: 0.05 } },
+    // 탄을 쓸 때의 한 방(한 판의 뼈대 설계 §7, always 판에서만): 던지기·저격·지뢰로 모은 탄을 쓰면 낀 무기가 모두 낸다. 값은 칸마다 — 쓴 칸 수를 곱한다.
+    //   미사일 = 유도 미사일 n발(한 칸 50), 산탄 = 큰 부채 n발(붙으면 한 칸 100 — fall로 멀면 거의 0), 빔 = dur초 굵은 빔(줄 위의 적마다 한 칸 80), 드론 = dur초 동안 every초마다 한 발(한 칸 50).
+    //   던진 탄처럼 방패·보호를 지난다. 피해 기록은 salvo(던진 탄의 바탕과 갈라 잰다). 무기가 여럿이면 two 몫을 나눠 갖는다.
+    salvo: { missile: { n: 4, spreadDeg: 140, dmg: 12.5 }, burst: { n: 16, spreadDeg: 70, dmg: 6.25, fall: { near: 2.5, far: 6, mul: [1, 0.05] } }, beam: { dur: 0.25, dps: 320, width: 1.4 }, drone: { dur: 0.8, every: 0.04, dmg: 2.5 } },
   },
+  // 등급(한 판의 뼈대 설계 §5 — 결과 화면): 스테이지마다 [등급, { sec 걸린 시간, hits 맞은 횟수, retries 다시 한 횟수 }] — 위에서부터 세 조건(≤)을 모두 채우는 첫 등급, 없으면 C.
+  // 문턱은 봇(user) 기준 판 10판의 가운데 값이 B가 되게 잡는다. S는 다시 하기가 없어야 한다(어렵게 시작).
+  grade: {
+    1: [['S', { sec: 200, hits: 12, retries: 0 }], ['A', { sec: 225, hits: 26, retries: 1 }], ['B', { sec: 255, hits: 48, retries: 2 }]],
+    2: [['S', { sec: 220, hits: 14, retries: 0 }], ['A', { sec: 250, hits: 30, retries: 1 }], ['B', { sec: 290, hits: 50, retries: 3 }]],
+  },
+  // 카드와 칸(한 판의 뼈대 설계 §6): slots = 갈래별 칸 수(몸은 제한 없음), supplyBelow = 체력이 이 몫 아래면 보급이 회복으로 뜬다, capPlus·chargePlus = 몸 카드가 늘리는 탄 칸·회피 충전.
+  cards: { slots: { weapon: 2, orb: 1, move: 2 }, supplyBelow: 0.8, capPlus: 1, chargePlus: 1 },
   // 일반 몬스터(스테이지 설계 §4·§9) — 하나에 규칙 하나. 거리는 U, 시간은 초, 각도는 도.
   // appear = 등장 예고(자리 표시만, 겨누지도 맞지도 않음), bombShare = 폭탄이 몬스터에게 주는 피해(최대 체력 몫).
   // 사수: keep 거리를 지키며 every초마다 준비 warn초 뒤 세 발(가운데 흰, 양옆 보라). 돌격병: band 거리에서 줄을 깔고(warn, lockBefore 전 고정) dash로 len만큼,
-  //   패링당하면 최대 체력의 parryShare를 잃는다. 포격병: every초마다 빨간 원 n개(둘째부터 gap초 뒤, 플레이어가 가는 쪽 lead초 앞). 방패병: 앞 ±arcDeg의 방패, 초당 turn도만 돈다, reach 안이면 흰 휘두르기.
+  //   패링당하면 최대 체력의 parryShare를 잃는다. 포격병: every초마다 원 n개(둘째부터 gap초 뒤, 플레이어가 가는 쪽 lead초 앞) — 마지막 원만 흰색이고 그 안에서 받아치면 포탄이 되돌아가 포격병이 최대 체력의 parryShare를 잃는다(사용자 2026-11-17 "패링은 안 되는데 튼튼하고 … 늘어진다"). 방패병: 앞 ±arcDeg의 방패, 초당 turn도만 돈다, reach 안이면 흰 휘두르기.
   // 실험 기믹(?try= — tries.js): 갈고리 이동 · 엄폐 기둥 · 불 장판 · 돌진 베기 · 꿰뚫는 던지기. 기본 판에는 쓰이지 않는다.
   tries: {
     rope: { anchors: [[-7.5, -4.5], [7.5, -4.5], [-7.5, 4.5], [7.5, 4.5], [0, -5.5], [0, 5.5]], range: 13, minDist: 2.5, speed: 26, stopAt: 1.0, cooldown: 1.2, cone: 0.3 },
@@ -87,44 +103,62 @@ export const RULES = {
     bubble: { first: 12, every: 16, sec: 9, hits: 3 },
     tide: { first: 8, every: 11, warn: 1.6, dmg: 22, linger: 0.15 },
     vary: { shooter: { wideN: 5, wideDeg: 64, streamN: 3, streamGap: 0.14 }, charger: { warn2: 0.35 }, mortar: { lineN: 4, lineStep: 2.2, lineGap: 0.15 } },
-    snipe: { min: 1, mul: 1.5, hold: 0.6, slow: 0.3, width: 0.8, len: 30, ahead: 3 },
-    always: { over: 2, burstEvery: 1.2, start: 'missile', shot: 2, mul: 2, crowd: 2, bossHp: 2, mobHp: 1.2 },
+    snipe: { min: 1, mul: 1.5, hold: 0.6, slow: 0.3, width: 0.8, len: 30, ahead: 3, pickDeg: 45 },
+    always: { over: 2, burstEvery: 1.2, start: 'missile', shot: 1.3, mul: 2, crowd: 2, bossHp: 1.4, mobHp: 1.2, throwMul: 0.7 },
   },
   // 스테이지(스테이지 설계 §3·§5·§9): 방 = 묶음 목록, 묶음 = [종류, 수] 목록. 둘째 묶음은 남은 몬스터가 nextWaveAt 이하일 때
+  // pickHold = 고르는 자리 위에 이만큼 서 있어야 주워진다(지나가기만 해서는 안 주워진다 — 판 가운데의 보급이 저절로 주워지던 것을 막는다).
   stage: {
-    nextWaveAt: 1, pickR: 1.0, heal: 30, chargeMax: 3, bossHp: 1, bossGrace: 1, rewardDelay: 0.7, minSpawn: 5, spawnGap: 2,
+    nextWaveAt: 1, pickR: 1.0, pickHold: 0.35, heal: 30, chargeMax: 3, bossHp: 1, bossGrace: 1, rewardDelay: 0.7, minSpawn: 5, spawnGap: 2,
     door: { halfZ: 1.5, reach: 0.2 },
     rewardAt: [[0, -3.2], [0, 0], [0, 3.2]],
     spots: [[1, -5], [1, 0], [1, 5], [4, -3], [4, 3], [6, -5.5], [6, 0], [6, 5.5], [8.5, -2.5], [8.5, 2.5], [-2, -5.5], [-2, 5.5], [-8.5, -5.5], [-8.5, 5.5]],
     // 방패병은 방에서 뺐다(사용자 2026-11-17 "패링할 거리도 없는데 튼튼하기만 해서 늘어진다") — 규칙·그리기·시험은 남아 있고 어느 방에도 나오지 않는다.
     // 돌격병은 한 묶음에 1(기본 판은 몬스터 수가 2배라 화면에 둘) — 사용자 2026-11-17 "돌격하는 애 수를 줄여야겠어, 너무 많은 것 같아"(전에는 2 → 화면에 넷).
+    // 방 = 묶음 목록(전투) | { waves, feature }(전투 + 방의 특징) | { survive, every, cap, pool }(버티기) | { elite, with, every, cap }(정예 + 졸개).
+    // bossHp = 그 스테이지 보스의 체력 배율(보스 방 1분쯤·첫 시도 통과 4~6/10에 맞춘다).
+    // 한 판의 뼈대 설계 §5: 방 넷 + 보스. 방 3이 특수 방, 방 4에 방의 특징(실험 틀의 기둥·밀물 — 그 방에서만 켜진다).
+    // 정예 방: elite 종류 하나가 크게 나오고(mobs.elite 배율), 졸개 with는 처음 한 번 + every초마다 살아 있는 졸개가 cap 미만이면 한 번 더. 정예가 죽으면 끝.
+    // 보호탑도 방에서 뺐다(사용자 2026-11-17 — 방패병과 같은 까닭: 받아칠 거리가 없고 튼튼하기만 하다). 규칙·그리기·시험은 남아 있다.
     list: {
       1: {
         rooms: [
           [[['shooter', 4]], [['shooter', 3]]],
-          [[['charger', 1], ['shooter', 3]], [['charger', 1], ['shooter', 3]]],
-          [[['mortar', 2], ['shooter', 2]], [['mortar', 1], ['charger', 1], ['shooter', 1]]],
+          [[['charger', 1], ['shooter', 3]], [['waller', 1], ['charger', 1], ['shooter', 1]]],
+          { survive: 40, every: 4.5, cap: 7, pool: [[['shooter', 2]], [['charger', 1], ['shooter', 1]], [['mortar', 1], ['shooter', 1]]] },
+          { feature: 'pillars', waves: [[['mortar', 2], ['shooter', 2]], [['spinner', 1], ['mortar', 1], ['charger', 1]]] },
         ],
-        boss: 'ranged',
+        boss: 'ranged', bossHp: 1,
       },
       2: {
         rooms: [
-          [[['bomber', 3], ['shooter', 2]], [['bomber', 3], ['charger', 1]]],
-          [[['totem', 1], ['shooter', 3], ['charger', 1]], [['totem', 1], ['mortar', 1], ['bomber', 2]]],
-          { survive: 40, every: 4.5, cap: 7, pool: [[['shooter', 2]], [['bomber', 2]], [['charger', 1], ['shooter', 1]], [['mortar', 1], ['bomber', 1]]] },
+          [[['bomber', 3], ['shooter', 3]], [['bomber', 3], ['shooter', 2], ['charger', 1]]],
+          [[['bomber', 2], ['shooter', 3], ['charger', 1]], [['mortar', 1], ['bomber', 2], ['waller', 1]]],
+          { elite: 'charger', with: [['bomber', 1]], every: 7, cap: 2 },
+          { feature: 'tide', waves: [[['waller', 1], ['bomber', 2], ['shooter', 2]], [['spinner', 1], ['bomber', 2], ['waller', 1]]] },
         ],
-        boss: null,
+        boss: 'dragon', bossHp: 0.9,
       },
     },
   },
   mobs: {
     appear: 0.8, bombShare: 0.5, first: 1.2, linger: 0.1,
-    shooter: { hp: 340, r: 0.55, speed: 2.5, keep: [5, 8], every: 2.2, jitter: [0.85, 1.15], strafe: 0.4, warn: 0.35, spreadDeg: 28, bulletSpeed: 11 },
+    // 정예(한 판의 뼈대 §5): 있는 종류 하나를 키운 것 — 몸 r배, 체력 hp배, 쉬는 시간 rest배, 받아쳤을 때 잃는 몫 parryShare(보통의 것 대신 — 두 번에 죽지 않게).
+    //   체력의 몫으로 깎는 것은 정예에게 제 값을 따로 둔다: bombShare = 폭탄(여느 몬스터는 mobs.bombShare — 그대로면 폭탄 두 번에 죽는다), returnShare = 튕겨 보낸 자폭병의 폭발(220은 체력 30배에 티가 안 난다).
+    elite: { r: 1.5, hp: 30, rest: 0.75, parryShare: 0.025, bombShare: 0.05, returnShare: 0.04 },
+    shooter: { n: 3, hp: 340, r: 0.55, speed: 2.5, keep: [5, 8], every: 2.2, jitter: [0.85, 1.15], strafe: 0.4, warn: 0.35, spreadDeg: 28, bulletSpeed: 11 },
     charger: { hp: 480, r: 0.65, speed: 3, band: [4, 7], warn: 0.6, lockBefore: 0.2, width: 1.4, dash: 22, len: 9, dmg: 18, rest: 1.6, parryShare: 0.5, stagger: [12, 20], backoff: 0.6, slack: 0.5, bounce: 1.5 },
-    mortar: { hp: 320, r: 0.7, every: 3, jitter: [0.9, 1.1], aim: 0.3, n: 2, gap: 0.3, R: 1.3, warn: 0.8, dmg: 20, lead: 0.5 },
-    // 실험 스테이지(?stage=2)의 몬스터: 자폭병(붙으면 심지 뒤 터짐 — 몬스터도 다친다, 죽여도 chain초 뒤 터짐) · 보호탑(둘레 aura 안 몬스터는 평타·무기에 안 다침)
-    bomber: { hp: 140, r: 0.5, speed: 4.6, trigger: 1.7, fuse: 0.6, R: 2.2, dmg: 22, mobDmg: 220, chain: 0.35 },
+    mortar: { hp: 260, r: 0.7, every: 3, jitter: [0.9, 1.1], aim: 0.3, n: 2, gap: 0.3, R: 1.3, warn: 0.8, dmg: 20, lead: 0.5, parryShare: 0.5, stagger: [12, 20] },
+    // 자폭병(붙으면 심지 뒤 터짐 — 몬스터도 다친다, 죽여도 chain초 뒤 터짐) · 보호탑(둘레 aura 안 몬스터는 평타·무기에 안 다침 — 방에서는 뺐다)
+    // 자폭병의 심지 원은 흰색이다(사용자 2026-11-17 — 받아칠 거리): 터지는 순간 원 안에서 받아치면 터지지 않고 fly.speed로 가장 가까운 다른 적 쪽으로(없으면 내 반대쪽) 최대 fly.dist 날아가 터진다.
+    //   그 폭발은 나를 다치게 하지 않고 몬스터만 mobDmg(완벽이면 × fly.perfectMul, 받아친 피해). stagger = 받아쳤을 때 모이는 탄의 무력화 값. 죽어서 터지는 연쇄는 빨강 그대로.
+    bomber: { hp: 140, r: 0.5, speed: 4.6, trigger: 1.7, fuse: 0.6, R: 2.2, dmg: 22, mobDmg: 220, chain: 0.35, stagger: [12, 20], fly: { speed: 18, dist: 7, perfectMul: 1.5 } },
     totem: { hp: 520, r: 0.8, aura: 4.5 },
+    // 움직임을 요구하는 몬스터(사용자 "가만히 서서 패링만 기다린다"). 둘 다 받아칠 흰 탄을 준다.
+    // 장벽병: keep 거리를 지키며 every초마다 겨눈 쪽 arcDeg 부채에 촘촘한 탄 n발 — 겨눈 줄에서 gapAt도(왼·오른쪽 무작위) 비켜난 곳에 gap발 빈틈, 빈틈 양 끝이 흰 탄(흰 탄은 더 빨라 먼저 와서 빈틈 자리를 알린다).
+    // 회전포: 제자리. 예고 warn초 뒤 on초 동안 팔 arms개가 초당 turnDeg도 돌며 shotEvery초마다 쏜다(burst발 쏘고 skip발 쉼, 묶음 안에서 whiteEvery발마다 흰 탄 — 줄기가 촘촘해 서 있으면 쓸린다). 처음 팔은 나보다 startDeg도 앞에서 돌기 시작한다. 그 뒤 rest초 쉰다.
+    waller: { hp: 300, r: 0.65, speed: 2, keep: [6, 9], strafe: 0.3, every: 3.0, jitter: [0.9, 1.1], warn: 0.5, n: 23, arcDeg: 110, gap: 3, gapAt: [12, 28], bulletSpeed: 8 },
+    spinner: { hp: 320, r: 0.75, warn: 0.6, on: 3.2, rest: 2.4, arms: 2, turnDeg: 55, shotEvery: 0.11, burst: 9, skip: 2, whiteEvery: 4, bulletSpeed: 9, startDeg: 40 },
     shield: { hp: 420, r: 0.7, speed: 2, turn: 70, arcDeg: 60, reach: 2.2, stopAt: 0.8, swingR: 2.4, swingHalfDeg: 55, warn: 0.5, dmg: 15, stagger: [12, 20], rest: 1.2 },
   },
   // 모아 던지기(§4.11, 변형 ?store=1): 받은 것을 cap개까지 모았다가 U로 한 번에. dmg·heal = [보통, 완벽], n개면 피해·무력화 × (1 + bonus × (n − 1)).
@@ -157,7 +191,7 @@ export const RULES = {
   // zone = 용 판 자리 정하기: from U 안에서 받은 공격이 끝날 때 chance꼴로 옆·뒤 R U 자리를 sec초 지킨다(pull = 그 자리로 끄는 세기, keep = 용과 지키는 거리, 설계 용 §9)
   // user = 사용자 판(60초·맞음 6·패링 16·완벽 14)에 맞춘 봇: 늦게 보고(react) 드물게 고쳐 움직인다(think), 패링 기회의 chance만 받는다.
   // 맞춘 결과(기본 판, 무기 다 켬, 10판, 죽지 않게): 63초 · 맞음 5.8 · 패링 15.8 · 완벽 13.9
-  bot: { user: { react: 0.38, think: 0.2, chance: 0.9 }, hunt: { within: 0.4, ahead: 1.2, pull: 6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
+  bot: { user: { react: 0.38, think: 0.2, chance: 0.9 }, hunt: { within: 0.4, ahead: 1.2, pull: 6 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
   // 보스 두뇌(§5.1~5.3): 준비 → 패턴 → 숨, 거리 묶음, 돌진 시계, 깨어남, 2단계 새 패턴 하나씩.
   brain: {
     // 박자(§5.5): 준비 0.25초, 숨 0.15~0.35초, 다음 준비는 앞 패턴 마지막 0.3초와 겹친다
