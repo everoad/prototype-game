@@ -2,6 +2,7 @@
 // 녹화는 이 캔버스를 WebGL 화면 위에 합쳐 찍는다. 가장자리 연출(Task 14)도 이 캔버스에 그린다(ctx).
 import { BASE_TRIES, tryKey } from '../sim/tries.js';
 import { CARDS, GROUPS, kitCards, kitAll } from '../sim/cards.js';
+import { guide } from './guide.js';
 import { BUILD } from './version.js';
 
 // 결과 화면 밝기: 승리·패배 순간에서 since초 — 늦게(큰 순간을 먼저 보여 주고) 서서히 뜬다
@@ -311,18 +312,86 @@ export function createHud(canvas, LOOK) {
       ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
       ctx.fillStyle = C.textDim; ctx.fillText(w.stage && w.result === 'lose' ? 'R 이 방 다시 · F4 처음부터' : 'F4 다시', W / 2, H / 2 + 14);
       if (w.stage) ctx.fillText(`방 ${w.stage.room + 1} / ${w.stage.of} · 다시 한 횟수 ${w.stage.retries}` + w.stage.times.map(t => ` · 방 ${t.room} ${t.sec.toFixed(0)}초`).join(''), W / 2, H / 2 + 40);
-    } else {
-      ctx.font = font(32, true); ctx.fillText('멈춤', W / 2, H / 2 - 100);
-      ctx.font = font(15);
-      const rows = ['WASD·방향키 — 이동(누르는 그 틱에 최고 속도)', 'J·Shift·마우스 왼쪽 — 패링(흰·금 탄, 흰·금 근접)', 'Space·마우스 오른쪽 — 회피(충전제, 시작부터 무적)', '쏘기는 자동(겨눈 적 쪽, 붙을수록 많이 맞음)', w.opts.store ? 'U 던지기(피해 + 회복) · I 저격(누르고 있기 — WASD로 적 고르기, 떼면 쏜다) · O 탄 기술' : 'U·I·O — 무기 스킬(패링 게이지 3칸)', 'K · L — 이동기(얻은 차례대로)', 'Q 방패 · E 폭탄(얻은 만큼)', 'V 시점 45°/60° · G 패링 고리 · F1 판정 보기 · F4 다시 · Esc 이어서'];
-      rows.forEach((t, k) => ctx.fillText(t, W / 2, H / 2 - 56 + k * 24));
-      if (w.kit) {   // 낀 카드와 한 줄 설명
-        const cards = kitAll(w), y0 = H / 2 - 56 + rows.length * 24 + 14;
-        ctx.font = font(13); ctx.fillStyle = C.cyan;
-        cards.forEach((id, k) => ctx.fillText(`${LOOK.names.group[CARDS[id].group]} · ${LOOK.names.card[id]} — ${LOOK.names.cardLine[id]}`, W / 2, y0 + k * 20));
+    } else pauseGuide(w);
+    ctx.globalAlpha = 1;
+  }
+
+  // 멈춤 화면의 안내(view/guide.js가 고른 것을 그린다): 목표 · 하는 법 · 조작 표(왼손 | 오른손) · 그 밖 · 색의 뜻 · 지금 낀 카드
+  function keycap(x, y, label) {   // 키 하나(둥근 네모 + 글자). 그린 너비를 돌려준다
+    const Gd = LOOK.guide;
+    ctx.font = font(12, true);
+    const wd = Math.max(Gd.capH, ctx.measureText(label).width + Gd.capPad * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.strokeStyle = C.text; ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x + 0.5, y - Gd.capH / 2 + 0.5, wd, Gd.capH, 4); else ctx.rect(x + 0.5, y - Gd.capH / 2 + 0.5, wd, Gd.capH);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C.text; ctx.textAlign = 'center'; ctx.fillText(label, x + wd / 2 + 0.5, y + 4);
+    ctx.textAlign = 'left';
+    return wd;
+  }
+  function pauseGuide(w) {
+    const Gd = LOOK.guide, g = guide(w, LOOK);
+    const pw = Gd.panelW, x0 = (W - pw) / 2, inner = pw - Gd.pad * 2, colW = (inner - Gd.colGap) / 2;
+    const rows = Math.max(g.left.length, g.right.length);
+    const total = 46 + 24 + 30 + g.how.length * Gd.lineH + 14 + 24 + rows * Gd.rowH + 12 + 24 + Gd.rowH + 12 + 24 + 26 + (g.cards.length ? 30 + g.cards.length * Gd.cardH : 0) + 34;
+    // 작은 창에서는 판 전체를 줄여 그린다(잘리지 않게)
+    const fit = Math.min(1, (H - 16) / total, (W - 16) / pw);
+    ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(fit, fit); ctx.translate(-W / 2, -H / 2);
+    let y = (H - total) / 2;
+    ctx.fillStyle = 'rgba(16,14,24,0.94)'; ctx.fillRect(x0, y, pw, total);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y + 0.5, pw - 1, total - 1);
+    const lx = x0 + Gd.pad, rx = lx + colW + Gd.colGap;
+    const head = (t, x, yy, wd) => { ctx.font = font(12, true); ctx.fillStyle = C.cyan; ctx.textAlign = 'left'; ctx.fillText(t, x, yy); ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(x, yy + 6, wd, 1); };
+    const capsW = r => { ctx.font = font(12, true); return r.keys.reduce((a, k) => a + Math.max(Gd.capH, ctx.measureText(k).width + Gd.capPad * 2) + Gd.capGap, 0); };
+    const keyCol = list => Math.max(...list.map(capsW)) + Gd.keyGap;   // 그 묶음에서 가장 넓은 키 묶음에 맞춘 키 칸
+    const row = (r, x, yy, wd, kw) => {   // 키들 | 하는 일(+ 다른 키)
+      let kx = x;
+      for (const k of r.keys) kx += keycap(kx, yy, k) + Gd.capGap;
+      const tx = x + kw;
+      ctx.font = font(14); ctx.fillStyle = C.text; ctx.textAlign = 'left';
+      const room = wd - (tx - x), tw = Math.min(room, ctx.measureText(r.text).width);
+      ctx.fillText(r.text, tx, yy + 5, room);
+      if (r.alt && room - tw > 60) { ctx.font = font(11); ctx.fillStyle = C.textDim; ctx.fillText(r.alt, tx + tw + 8, yy + 5, room - tw - 8); }
+    };
+    // 제목 · 목표
+    y += 36; ctx.textAlign = 'center'; ctx.font = font(26, true); ctx.fillStyle = C.text; ctx.fillText(`멈춤 — ${g.title}`, W / 2, y);
+    y += 26; ctx.font = font(14); ctx.fillStyle = C.textDim; ctx.fillText(g.goal, W / 2, y, inner);
+    // 하는 법
+    y += 30; head(g.heads.how, lx, y, inner);
+    y += 6;
+    for (const t of g.how) { y += Gd.lineH; ctx.font = font(15); ctx.fillStyle = C.text; ctx.textAlign = 'left'; ctx.fillText(`· ${t}`, lx + 4, y, inner - 8); }
+    // 조작 표: 왼손 | 오른손
+    y += 14 + 24; head(g.heads.left, lx, y - 6, colW); head(g.heads.right, rx, y - 6, colW);
+    for (let k = 0; k < rows; k++) {
+      const yy = y + 6 + Gd.rowH * (k + 0.5);
+      if (k % 2 === 1) { ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fillRect(lx - 6, yy - Gd.rowH / 2, inner + 12, Gd.rowH); }
+      if (g.left[k]) row(g.left[k], lx, yy, colW, keyCol(g.left));
+      if (g.right[k]) row(g.right[k], rx, yy, colW, keyCol(g.right));
+    }
+    y += 6 + rows * Gd.rowH;
+    // 그 밖(한 줄에 나란히)
+    y += 12 + 18; head(g.heads.misc, lx, y - 6, inner);
+    { const yy = y + 6 + Gd.rowH / 2, wd = inner / g.misc.length; g.misc.forEach((r, k) => { let kx = lx + wd * k; for (const key of r.keys) kx += keycap(kx, yy, key) + Gd.capGap; ctx.font = font(13); ctx.fillStyle = C.text; ctx.textAlign = 'left'; ctx.fillText(r.text, kx + 4, yy + 5, wd - (kx - lx - wd * k) - 8); }); }
+    y += 6 + Gd.rowH;
+    // 색의 뜻(한 줄에 나란히 — 색 점 + 글)
+    y += 12 + 18; head(g.heads.colors, lx, y - 6, inner);
+    { const yy = y + 22, wd = inner / g.colors.length; g.colors.forEach((c, k) => { const cx = lx + wd * k + Gd.dot; ctx.beginPath(); ctx.arc(cx, yy - 4, Gd.dot, 0, Math.PI * 2); ctx.fillStyle = LOOK.colors[c.color]; ctx.fill(); ctx.font = font(13); ctx.fillStyle = C.text; ctx.textAlign = 'left'; ctx.fillText(c.text, cx + Gd.dot + 7, yy, wd - Gd.dot * 2 - 12); }); }
+    y += 26;
+    // 지금 낀 카드
+    if (g.cards.length) {
+      y += 12 + 18; head(g.heads.cards, lx, y - 6, inner);
+      y += 8;
+      for (const c of g.cards) {
+        y += Gd.cardH;
+        ctx.font = font(13, true); ctx.fillStyle = C.cyan; ctx.textAlign = 'left';
+        const label = `${c.key ? `[${c.key}] ` : ''}${c.name}`;
+        ctx.fillText(label, lx + 4, y);
+        const lw = ctx.measureText(label).width;
+        ctx.font = font(13); ctx.fillStyle = C.textDim; ctx.fillText(`${c.group} · ${c.line}`, lx + 4 + lw + 10, y, inner - lw - 18);
       }
     }
-    ctx.globalAlpha = 1;
+    y += 26; ctx.textAlign = 'center'; ctx.font = font(13); ctx.fillStyle = C.textDim; ctx.fillText(g.resume, W / 2, y);
+    ctx.restore();
   }
 
   // 처형 b의 위아래 검은 띠(0.15초에 들어오고 빠진다). 맨 위에 그려 겹 화면도 가린다.

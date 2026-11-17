@@ -50,6 +50,44 @@ export const LOOK = {
       cap: '모을 수 있는 탄이 한 칸 늘어난다', charge: '회피 충전이 하나 늘어난다', graze: '탄을 스칠 때마다 조금씩 모여 몇 번에 한 칸' },
     group: { weapon: '무기', orb: '탄 기술', move: '이동기', body: '몸' },
     mob: { shooter: '사수', charger: '돌격병', mortar: '포격병', waller: '장벽병', spinner: '회전포', bomber: '자폭병' } },   // 시작 장면에 뜨는 보스 이름 · 보상 이름
+  // 멈춤 화면의 안내(사용자 "알아보기 쉽게 표로 — 다른 사람한테 공유해서 할 만한가 확인해 보게"): 처음 보는 사람이 읽고 바로 할 수 있게.
+  // 글은 여기, 판에 맞는 줄 고르기는 view/guide.js, 그리기는 hud.js. 크기: panelW 판의 너비, pad 안쪽 여백, rowH 표의 줄 높이, capH·capPad·capGap 키 모양,
+  // keyGap 키와 글 사이, colGap 왼손·오른손 사이, lineH 하는 법 줄 높이, cardH 카드 줄 높이, dot 색 점의 반지름.
+  guide: {
+    panelW: 800, pad: 26, rowH: 30, capH: 22, capPad: 7, capGap: 4, keyGap: 10, colGap: 30, lineH: 23, cardH: 20, dot: 6,
+    title: '조작 안내', resume: 'Esc를 다시 누르면 이어서 합니다',
+    heads: { how: '하는 법', left: '왼손', right: '오른손', misc: '그 밖', colors: '색의 뜻', cards: '지금 낀 카드' },
+    goal: { stage: '방 넷을 지나 보스를 잡는다. 방을 깰 때마다 카드 하나를 골라 강해진다.', boss: '보스의 체력을 다 깎으면 이긴다.' },
+    how: [
+      '쏘기는 자동이다. 할 일은 피하기와 받아치기.',
+      '흰·금색 탄과 공격은 닿는 순간 J — 받아친 탄이 몸 둘레에 모인다.',
+      '모은 탄은 U로 던진다: 큰 피해 + 체력 회복. 든 무기도 같이 크게 쏜다.',
+      '빨강은 받아칠 수 없다 — Space로 구르거나 걸어서 피한다.',
+    ],
+    howOld: [
+      '쏘기는 자동이다. 할 일은 피하기와 받아치기.',
+      '흰·금색 탄과 공격은 닿는 순간 J — 받아친 탄이 보스에게 되돌아간다.',
+      '받아칠수록 게이지가 찬다. 세 칸이면 U·I·O로 무기 스킬을 쓴다.',
+      '빨강은 받아칠 수 없다 — Space로 구르거나 걸어서 피한다.',
+    ],
+    colors: [['white', '흰·금 = 받아친다(J)'], ['red', '빨강 = 피한다(Space)'], ['normal', '보라 = 걸어서 비킨다'], ['cyan', '청록 = 내 것']],
+    rows: {
+      move: { keys: ['W', 'A', 'S', 'D'], text: '이동', alt: '방향키' },
+      dodge: { keys: ['Space'], text: '회피(구르기) — 빨강도 지나간다', alt: '오른쪽 클릭' },
+      shield: { keys: ['Q'], text: '방패 — 잠깐 보라 탄을 막는다' },
+      bomb: { keys: ['E'], text: '폭탄 — 판의 탄을 지운다' },
+      parry: { keys: ['J'], text: '패링 — 흰·금을 받아친다', alt: 'Shift · 왼쪽 클릭' },
+      throw: { keys: ['U'], text: '던지기 — 모은 탄을 한 번에' },
+      snipe: { keys: ['I'], text: '저격 — 누르고 있다가 떼면 쏜다' },
+      orb: { keys: ['O'], text: '탄 기술 — 카드로 얻는다(지뢰)' },
+      moves: { keys: ['K', 'L'], text: '이동기 — 카드로 얻는다' },
+      skills: { keys: ['U', 'I', 'O'], text: '무기 스킬 — 패링 게이지 3칸' },
+      pause: { keys: ['Esc'], text: '멈춤 · 이 안내' },
+      restart: { keys: ['F4'], text: '처음부터' },
+      retry: { keys: ['R'], text: '죽은 뒤 그 방부터' },
+      view: { keys: ['V'], text: '시점 바꾸기' },
+    },
+  },
   // 낀 것 HUD(오른쪽 아래의 칸들): slotW·slotH·gap = 칸 크기와 사이(px), bottom = 화면 아래에서 칸 아랫변까지, bodyW = 몸 카드 칸 너비,
   // fly = 주운 카드의 선이 칸까지 그어지는 초, flash = 칸이 빛나는 초, blink = 바꿔 끼울 때 깜빡이는 빠르기, near = 카드의 한 줄 설명이 뜨는 거리(U), keySec = 키·이름 배너 초, eliteSec = 정예 배너 초.
   kit: { slotW: 92, slotH: 26, gap: 6, groupGap: 14, bottom: 44, bodyW: 104, fly: 0.35, flash: 0.6, blink: 7, near: 2.6, keySec: 1.6, eliteSec: 1.6, lineW: 3 },
