@@ -435,7 +435,7 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       if (aimHold) { mx = 0; mz = 0; }   // 조준점은 겨눈 적에 붙어 있다 — 고르지 않고 쏜다
     }
     // 검사의 스킬(확인·영상용 — 사람의 판단을 흉내 내지 못한다): 빨간 몸 공격이 임박하면 마무리로 빠지고, 닿으면 회전 베기로 몰아치다 마지막 칸은 마무리로 빠지고,
-    // 칸이 enter만큼 모였고(방에서는 하나라도) 보스가 쏘는 중이 아니면 일섬으로 들어간다. 체력이 낮으면 헛쳐서라도 회복한다.
+    // 칸이 enter만큼 모였고(방에서는 하나라도) 보스가 쏘는 중이 아니면 일섬으로 들어간다. 체력이 낮으면 칸이 덜 모였어도 들어가 베어서 회복한다(닿는 적이 없는 스킬은 나가지 않는다).
     let spinKey = false;
     if (sword && parries && p.store.length > 0 && p.dyingAt == null && !bladeMoving(w)) {
       const BS = B0.sword, Sw = R.sword, b = w.boss, a = w.aim && !w.aim.dead ? w.aim : null;
@@ -446,8 +446,8 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       const close = surf <= Sw.spin.R - BS.margin;
       if (redSoon && surf <= Sw.finish.R) { keys.orb = true; dodge = false; }
       else if (close && p.store.length === 1 && !bossGroggy(w) && !away) keys.orb = true;   // 붙어서 마지막 칸: 마무리로 치고 빠진다(칸 없이 곁에 남지 않는다)
-      else if (close || p.hp <= R.player.hp * BS.lowHp) spinKey = true;
-      else if (slashLanding(w) && !shooting && (away ? p.store.length >= BS.enterRoom && calm : p.store.length >= BS.enter || bossGroggy(w))) toss = true;
+      else if (close) spinKey = true;
+      else if (slashLanding(w) && !shooting && (p.hp <= R.player.hp * BS.lowHp || (away ? p.store.length >= BS.enterRoom && calm : p.store.length >= BS.enter || bossGroggy(w)))) toss = true;
     }
     return { mx, mz, parry, dodge, skill, throw: toss, spin: spinKey, hold: aimHold, ...keys };
   };

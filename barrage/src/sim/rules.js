@@ -189,9 +189,9 @@ export const RULES = {
     // n = 묶음 하나의 자루 수(바탕 묶음은 늘 있다), max = 가장 많을 때, keep = 스킬 묶음이 남는 초,
     // beat = 검 하나가 찌르는 간격(초 — 닿는 적이 있는 동안 돌아오지 않고 계속), rest = 기둥·방패에 막혀 돌아온 검이 쉬는 초, hopR = 다음 적으로 건너가는 거리(끈도 이 거리다), fly = 등 뒤에서 첫 적까지 걸리는 초,
     // stab = 찌를 때의 피해, roundDeg = 건너갈 적이 없을 때 같은 적을 돌아가는 각(도), join = 스킬에 가진 검이 모두 나서나(0이면 새 다섯만),
-    // slash·spin·finish = 그 스킬의 검 타격: 벤 뒤 first초부터 span초 안에 고르게, 검 한 번의 피해 dmg(마무리는 × 쓴 칸 수). finish.first는 튕김(finish.back)이 끝나는 때다.
+    // slash·spin·finish = 그 스킬의 검 타격: 벤 뒤 first초부터 span초 안에 고르게, 검 한 번의 피해 dmg(마무리는 × 쓴 칸 수). finish.first는 튕김(finish.back 0.2초)이 끝나고 조금 뒤다 — 착지와 첫 검 사이가 화면이 느려지는 틈이다(view/gap.js).
     swords: { n: 5, max: 15, keep: 4, beat: 0.5, rest: 1.5, hopR: 5, fly: 0.14, stab: 2.6, roundDeg: 120, join: 1,
-      slash: { first: 0.04, span: 0.12, dmg: 5.6 }, spin: { first: 0.03, span: 0.20, dmg: 6.4 }, finish: { first: 0.20, span: 0.34, dmg: 6 } },
+      slash: { first: 0.04, span: 0.12, dmg: 5.6 }, spin: { first: 0.03, span: 0.20, dmg: 6.4 }, finish: { first: 0.25, span: 0.34, dmg: 6 } },
   },
   // on = 콤보를 다 받아내면 자동 반격을 하는가 — 사용자 2026-11-17 "빼자"(보스가 한동안 멈추는 것이 과하다) → 끔. 장치는 남겨 둔다.
   fullCounter: { on: false, dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },

@@ -67,3 +67,17 @@ test('타격의 차례: 가까운 검이 먼저, 새 다섯은 마지막(가운�
   const fin = [S('new2', { fresh: true, k: 2 }), S('mine', { dMe: 1, dFoe: 6 }), S('out', { far: true, dFoe: 1, dMe: 9 }), S('mine2', { dMe: 3, dFoe: 2 })];
   assert.deepEqual(strikeOrder(fin, 'finish').map(s => s.name), ['out', 'mine', 'mine2', 'new2']);
 });
+
+test('검이 적을 스칠 때마다, 스킬 타격으로 가로지를 때마다 가는 쪽으로 불티가 튄다(화면의 검이 지나가는 그 자리에서)', () => {
+  const calls = [], fx = { spray: (x, z, angle, color, o) => calls.push({ x, z, angle, color, n: o.n }) };
+  const shots = new Set(), view = { THREE, layers: { shots: { add: m => shots.add(m), remove: m => shots.delete(m) } } };
+  const sv = createSwordsView(view, LOOK, fx), w = createWorld({ char: 'sword', lab: 'swords', clip: 'spin' });
+  let stabs = 0, hits = 0;
+  for (let k = 0; k < ticks(0.9); k++) { step(w, labHand(w)); const ev = drainEvents(w); stabs += ev.filter(e => e.type === 'swordStab').length; sv.onEvents(ev, 0, w); sv.update(w, 1); }
+  assert.ok(stabs > 0);
+  assert.equal(calls.length, stabs, '찌를 때마다 한 번');
+  assert.ok(calls.every(c => c.color === 'cyan' && Number.isFinite(c.angle) && Math.hypot(c.x - w.boss.x, c.z - w.boss.z) < 4), '보스 곁에서');
+  for (let k = 0; k < ticks(0.6); k++) { step(w, labHand(w)); const ev = drainEvents(w); hits += ev.filter(e => e.type === 'swordHit').length; sv.onEvents(ev, 0, w); sv.update(w, 1); }
+  assert.equal(hits, 10);
+  assert.ok(calls.length >= stabs + 8, `스킬 타격의 불티 ${calls.length - stabs}번(검 열 자루)`);
+});

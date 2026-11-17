@@ -2,7 +2,7 @@
 // 겹치면 정지가 이긴다. 정지 예산: 지난 budget.window초 안에 시작한 정지의 합이 budget.max를 넘지 않게 자른다(§6).
 // override(처형·보스 죽음·완전 패링 반격)는 예산 밖이고 세지도 않는다.
 export function createTimeFx(LOOK) {
-  let stopUntil = -1, slowUntil = -1, slowScale = 1, lastSlowAt = -1e9;
+  let stopUntil = -1, slowUntil = -1, slowScale = 1, lastSlowAt = -1e9, gapUntil = -1, gapScale = 1;
   const spent = [];   // [시작 시각, 길이] — 예산에 센 정지
 
   function budgetLeft(now) {
@@ -32,12 +32,16 @@ export function createTimeFx(LOOK) {
       slowScale = scale;
       return true;
     },
+    // 틈(검사 — view/gap.js): 닫을 때까지 scale배로 흐른다(가장 길게는 max초). 정지·느려짐과 겹치면 더 느린 쪽이 이긴다
+    gap(now, scale, max) { gapUntil = now + max; gapScale = scale; },
+    endGap(now) { gapUntil = Math.min(gapUntil, now); },
+    gapOpen(now) { return now < gapUntil; },
     scaleAt(now) {
       if (now < stopUntil) return 0;
-      if (now < slowUntil) return slowScale;
-      return 1;
+      const s = now < slowUntil ? slowScale : 1;
+      return now < gapUntil ? Math.min(s, gapScale) : s;
     },
-    reset() { stopUntil = -1; slowUntil = -1; slowScale = 1; spent.length = 0; },   // 방 다시 하기(스테이지)
+    reset() { stopUntil = -1; slowUntil = -1; slowScale = 1; gapUntil = -1; spent.length = 0; },   // 방 다시 하기(스테이지)
     get stopped() { return stopUntil; },
   };
 }

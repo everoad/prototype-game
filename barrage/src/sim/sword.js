@@ -83,14 +83,30 @@ function cut(w, f, skill, dmg, stagger, orbs = 1) {
   return dealt;
 }
 
-// I 회전 베기: 그 틱에 둘레를 벤다. 닿는 적이 없어도 나간다(칸을 쓰고 회복만)
+// 회전 베기가 닿는 적(몸 표면까지 spin.R 안) · 마무리가 닿는 적(겨눈 쪽 부채 — 겨눈 적은 거리만 본다). 화면(스킬 이름의 밝기)과 봇도 쓴다.
+const spinFoes = w => (isSword(w) ? w.foeList.filter(f => !f.dead && Math.hypot(f.x - w.player.x, f.z - w.player.z) - foeR(w, f) <= w.rules.sword.spin.R) : []);
+function finishFoes(w) {
+  if (!isSword(w)) return [];
+  const p = w.player, Fi = w.rules.sword.finish, t = w.aim && !w.aim.dead ? w.aim : null;
+  const angle = t ? Math.atan2(t.z - p.z, t.x - p.x) : p.face, half = Fi.halfDeg * Math.PI / 180;
+  return w.foeList.filter(f => {
+    if (f.dead) return false;
+    const dx = f.x - p.x, dz = f.z - p.z;
+    if (Math.hypot(dx, dz) - foeR(w, f) > Fi.R) return false;
+    const off = Math.atan2(dz, dx) - angle;
+    return f === t || Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) <= half;
+  });
+}
+export const spinReach = w => spinFoes(w).length > 0;
+export const finishReach = w => finishFoes(w).length > 0;
+
+// I 회전 베기: 그 틱에 둘레를 벤다. 닿는 적이 없으면 나가지 않는다(false — 칸은 그대로. 2026-11-18 사용자: "사거리 내에 적이 없으면 스킬 게이지만 날아간다")
 function spin(w) {
+  const foes = spinFoes(w);
+  if (!foes.length) return false;
   const p = w.player, Sp = w.rules.sword.spin, o = spend(w);
   let hits = 0;
-  for (const f of [...w.foeList]) {
-    if (f.dead || Math.hypot(f.x - p.x, f.z - p.z) - foeR(w, f) > Sp.R) continue;
-    cut(w, f, 'spin', o.dmg * Sp.dmg, o.stagger * Sp.stag); hits++;
-  }
+  for (const f of foes) { cut(w, f, 'spin', o.dmg * Sp.dmg, o.stagger * Sp.stag); hits++; }
   p.blade.lockUntil = w.time + Sp.lock;
   w.stats.blade.spin++;
   emit(w, 'bladeSpin', { x: p.x, z: p.z, R: Sp.R, n: 1, perfect: o.perfect, hits, heal: o.heal });
@@ -159,21 +175,16 @@ export function cancelBlade(w) {
 }
 
 // O 마무리: 남은 칸을 다 써서 겨눈 쪽 부채를 한 번에 베고(칸마다의 값을 더한다), 곧바로 물러난다 — 이동 키를 누르고 있으면 그쪽, 아니면 겨눈 적의 반대쪽(회피와 같다).
-// 닿는 적이 없어도 나간다(칸을 다 쓰고 튕긴다 — 빠져나오는 버튼이다). 튕기는 동안 적의 몸은 지나가지 못한다.
+// 닿는 적이 없으면 나가지 않는다(false — 칸은 그대로. 빠져나오는 것은 붙어 있을 때의 일이다 — 멀리서는 회피로). 튕기는 동안 적의 몸은 지나가지 못한다.
 function finish(w, input) {
+  const foes = finishFoes(w);
+  if (!foes.length) return false;
   const p = w.player, Fi = w.rules.sword.finish, t = w.aim && !w.aim.dead ? w.aim : null;
-  const angle = t ? Math.atan2(t.z - p.z, t.x - p.x) : p.face, half = Fi.halfDeg * Math.PI / 180;
+  const angle = t ? Math.atan2(t.z - p.z, t.x - p.x) : p.face;
   let dmg = 0, stagger = 0, n = 0, perfect = true, heal = 0;
   while (p.store.length) { const o = spend(w); dmg += o.dmg; stagger += o.stagger; perfect = perfect && o.perfect; heal += o.heal; n++; }
   let hits = 0, dealt = 0;
-  for (const f of [...w.foeList]) {
-    if (f.dead) continue;
-    const dx = f.x - p.x, dz = f.z - p.z;
-    if (Math.hypot(dx, dz) - foeR(w, f) > Fi.R) continue;
-    const off = Math.atan2(dz, dx) - angle;
-    if (f !== t && Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) > half) continue;
-    dealt += cut(w, f, 'finish', dmg * Fi.dmg, stagger * Fi.stag, n); hits++;
-  }
+  for (const f of foes) { dealt += cut(w, f, 'finish', dmg * Fi.dmg, stagger * Fi.stag, n); hits++; }
   let dirX = input.mx || 0, dirZ = input.mz || 0;
   if (dirX === 0 && dirZ === 0) { dirX = -Math.cos(angle); dirZ = -Math.sin(angle); }
   const len = Math.hypot(dirX, dirZ) || 1;

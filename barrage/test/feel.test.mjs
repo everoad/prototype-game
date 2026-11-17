@@ -526,7 +526,9 @@ test('칼바람: 낼 때마다 좌우가 다른 높이의 소리, 맞힌 자리�
   const waves = has('sfx.play').filter(c => c[1] === 'wave');
   assert.equal(waves.length, 2);
   assert.notEqual(waves[0][2].detune, waves[1][2].detune);
-  assert.equal(has('fx.spark').filter(c => c[1] === 3 && c[3] === 'cyan').length, 1, '맞힌 자리에만');
+  const sprays = has('fx.spray').filter(c => c[1] === 3 && c[4] === 'cyan');
+  assert.equal(sprays.length, 1, '맞힌 자리에만');
+  assert.equal(sprays[0][3], 0, '칼바람이 가던 쪽으로 튄다');
   assert.equal(has('camera.shake').length, 0);
 });
 
@@ -575,4 +577,58 @@ test('이기어검: 마지막 검이 헛돌아도 그때까지의 합계 숫자�
   feel.handle([ev('swordMiss', { sid: 2, skill: 'spin', k: 9, total: 10, last: true, sum: 0, x: null, z: null })], 2);
   feel.handle([ev('swordMiss', { sid: 3, skill: 'spin', k: 4, total: 10, last: false, sum: 12, x: 1, z: 2 })], 3);
   assert.equal(has('fx.number').length, 1);
+});
+
+// ── 검사: 벤 느낌과 스킬 강조(2026-11-18 — 사용자: "베거나 찌르는 느낌이 없다 · 스킬을 썼다는 강조를")
+test('일섬: 떠날 때 잔상과 가장자리 빛, 처음 베는 순간 잠깐 느려지고 화면이 당겨진다 — 지나가며 벤 적마다 되풀이하지 않는다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bladeSlash', { x0: 0, z0: 0, x1: 6, z1: 0, perfect: false, heal: 2 })], 1);
+  assert.equal(has('actors.dashTrail').length, 1);
+  assert.equal(has('fx.edge').filter(c => c[1] === 'cyan').length, 1);
+  assert.equal(has('timeFx.slow').length, 0, '아직 베지 않았다');
+  feel.handle([ev('bladeHit', { skill: 'slash', id: 1, x: 2, z: 0, dmg: 100 })], 1.05);
+  feel.handle([ev('bladeHit', { skill: 'slash', id: 0, x: 4, z: 0, dmg: 280 })], 1.08);
+  assert.equal(has('timeFx.slow').length, 1);
+  assert.equal(has('camera.punch').length, 1);
+  const sprays = has('fx.spray');
+  assert.equal(sprays.length, 2, '벤 자리마다');
+  assert.ok(sprays.every(c => c[3] === 0 && c[4] === 'cyan'), '내가 지나간 쪽으로 튄다');
+});
+
+test('회전 베기: 맞힌 것이 있을 때만 느려지고 당겨진다 — 불티는 나에게서 바깥으로 튄다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bladeSpin', { x: 0, z: 0, R: 2.8, n: 1, perfect: false, hits: 0, heal: 2 })], 1);
+  assert.equal(has('timeFx.slow').length, 0); assert.equal(has('camera.punch').length, 0);
+  feel.handle([ev('bladeHit', { skill: 'spin', id: 0, x: 0, z: 2, dmg: 260 }), ev('bladeSpin', { x: 0, z: 0, R: 2.8, n: 1, perfect: false, hits: 1, heal: 2 })], 2);
+  assert.equal(has('timeFx.slow').length, 1); assert.equal(has('camera.punch').length, 1);
+  assert.ok(Math.abs(has('fx.spray')[0][3] - Math.PI / 2) < 1e-9, '같은 묶음에서 뒤에 오는 회전 베기의 자리를 미리 읽는다');
+});
+
+test('마무리: 튕겨 나오는 잔상과 가장자리 빛은 늘, 느려지는 것은 칸 둘 이상을 털었을 때만', () => {
+  const one = rig();
+  one.feel.handle([ev('bladeFinish', { x: 0, z: 0, angle: 0, n: 1, perfect: false, dmg: 170, hits: 1, dirX: -1, dirZ: 0, heal: 2 })], 1);
+  assert.equal(one.has('actors.dashTrail').length, 1); assert.equal(one.has('fx.edge').length, 1);
+  assert.equal(one.has('timeFx.slow').length, 0);
+  const three = rig();
+  three.feel.handle([ev('bladeFinish', { x: 0, z: 0, angle: 0, n: 3, perfect: false, dmg: 510, hits: 1, dirX: -1, dirZ: 0, heal: 6 })], 1);
+  assert.equal(three.has('timeFx.slow').length, 1);
+});
+
+test('연달아 쓴 스킬은 느려짐을 겹쳐 쌓지 않는다(일섬 · 회전 베기는 앞의 느려짐과 가까우면 건너뛴다)', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bladeSlash', { x0: 0, z0: 0, x1: 6, z1: 0, perfect: false, heal: 2 }), ev('bladeHit', { skill: 'slash', id: 0, x: 3, z: 0, dmg: 280 })], 1);
+  feel.handle([ev('bladeHit', { skill: 'spin', id: 0, x: 4, z: 0, dmg: 260 }), ev('bladeSpin', { x: 6, z: 0, R: 2.8, n: 1, perfect: false, hits: 1, heal: 2 })], 1.15);
+  const slows = has('timeFx.slow');
+  assert.equal(slows.length, 2);
+  assert.ok(slows.every(c => c[3] && c[3].skipIfWithin > 0), '겹치지 않게 사이를 둔다');
+});
+
+test('이기어검: 보스를 찌를 때 몸이 움찔한다(소리와 같은 상한으로) — 불티는 화면의 검이 스치는 자리에서 따로 낸다', () => {
+  const { feel, has } = rig();
+  for (let i = 0; i < 30; i++) feel.handle([ev('swordStab', { id: 0, x: 0, z: 0, fromX: -3, fromZ: 0, dmg: 2.6 })], 1 + i / 30);
+  const n = has('actors.bossJolt').length;
+  assert.ok(n >= 5 && n <= LOOK.sword.swords.sound.perSec + 1, `${n}번`);
+  assert.equal(has('fx.spark').length, 0);
+  feel.handle([ev('swordStab', { id: 3, x: 0, z: 0, fromX: -3, fromZ: 0, dmg: 2.6 })], 5);
+  assert.equal(has('actors.bossJolt').length, n, '몬스터를 찌를 때는 보스가 움찔하지 않는다');
 });

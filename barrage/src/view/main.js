@@ -24,6 +24,8 @@ import { gradeOf } from './grade.js';
 import { recordable, readBest, writeBest } from './records.js';
 import { createCamera } from './camera.js';
 import { createTimeFx } from './timeFx.js';
+import { gapWanted, isDecision, threatAt, flurryWanted, flurryOver, volleyGap } from './gap.js';
+import { isDodging } from '../sim/player.js';
 import { createFx } from './fx.js';
 import { createFeel } from './feel.js';
 import { record, recordingSfx, renderWav } from './recorder.js';
@@ -46,12 +48,12 @@ const bullets = createBulletsView(view, LOOK, RULES.bullets.cap);
 const weaponsView = createWeaponsView(view, LOOK, RULES);
 const mobsView = createMobsView(view, LOOK);   // 일반 몬스터·보상·문(스테이지)
 const triesView = createTriesView(view, LOOK);   // 실험 기믹(?try=)
-const swordsView = createSwordsView(view, LOOK);   // 검사의 무기(이기어검 — 떠 있는 검들)
 const swordView = createSwordView(view, LOOK);   // 검사의 칼자국·내릴 자리(?char=sword)
 const hud = createHud(hudCanvas, LOOK);
 const camera = createCamera(view, LOOK);
 const timeFx = createTimeFx(LOOK);
 const fx = createFx(view, LOOK);
+const swordsView = createSwordsView(view, LOOK, fx);   // 검사의 무기(이기어검 — 떠 있는 검들. 벤 자리의 불티는 fx로 낸다)
 // 소리: 실시간은 Web Audio(사용자 동작 뒤에야 나온다 — 첫 입력 때 resume), 녹화는 사건을 적었다가 끝에 wav로
 let clockNow = 0;
 let audio = null;
@@ -74,6 +76,7 @@ const ui = { paused: false, debug: false, fps: 60, lagMs: null, maxFrameMs: 0, n
 let pitchIdx = Math.max(0, LOOK.camera.pitches.indexOf(num('pitch', LOOK.camera.pitches[0])));
 const pitchFixed = q.has('pitch') && !LOOK.camera.pitches.includes(num('pitch', 45)) ? num('pitch', 45) : null;   // 목록 밖 각도는 확인용으로 고정
 camera.setPitch(pitchFixed ?? LOOK.camera.pitches[pitchIdx]);
+let gapKind = 'slash', lastFlurryAt = -1e9, volleyPending = false;   // 검사의 틈: 지금 열린 틈의 종류(일섬 뒤 · 난무 앞) · 난무 앞의 느려짐을 마지막으로 건 때
 let pendingPress = null;   // 입력→화면 지연 재기: 먹은 누름의 시각
 // 시작 장면: 1초쯤 보스 이름과 포효(판은 멈춤) — 아무 키나 누르면 건너뜀. 연습 장면·봇·녹화·?intro=0에는 없다
 const intro = createIntro(q.get('intro') === '1' ? LOOK.feel.intro.sec : world.opts.lab || world.stage || botKind || recording || q.get('intro') === '0' ? 0 : LOOK.feel.intro.sec);   // ?intro=1이면 봇·녹화에도
@@ -82,9 +85,9 @@ window.addEventListener('keydown', () => { if (introShown) intro.skip(); });
 window.addEventListener('mousedown', () => { if (introShown) intro.skip(); });
 
 function inputFn(w) {
-  if (bot) return bot(w);
-  const i = map.take();
-  if (i.parry || i.dodge) pendingPress = map.lastPressMs();
+  const i = bot ? bot(w) : map.take();
+  if (isDecision(i)) timeFx.endGap(clockNow);   // 검사의 틈: 다음 키(스킬 · 회피 · 패링)를 누르면 닫힌다
+  if (!bot && (i.parry || i.dodge)) pendingPress = map.lastPressMs();
   return i;
 }
 
@@ -104,6 +107,20 @@ function frame(now, dtReal) {
   if (!inIntro && introOpen) { introOpen = false; camera.release?.(); map.take(); }   // 끝: 카메라를 풀고, 장면 중에 누른 패링·회피는 버린다
   if (!ui.paused && !world.result && !inIntro) advance(world, dtReal * speed * scale, inputFn, 12);
   const events = drainEvents(world);
+  // 검사의 틈(view/gap.js): 일섬으로 건너편에 서면 다음 키를 누를 때까지 판이 느리게 흐른다 — 그동안 검은 옅어지고(view.quiet), 나를 덮는 예고의 색을 읽어 준다(hud)
+  const Gp = LOOK.sword.gap, slowOn = LOOK.feel.on.slow !== false;
+  if (slowOn && gapWanted(world, events, Gp)) { timeFx.gap(now, Gp.slow, Gp.max); gapKind = 'slash'; }
+  // 회전 베기: 난무가 펼쳐지기 전 — 검이 모여드는 동안 — 길게 느려졌다가, 첫 검이 베는 순간 제 빠르기로 돌아온다(연출. 이때는 검을 옅게 하지 않는다)
+  if (slowOn && flurryWanted(events, now, lastFlurryAt, Gp.spin)) { timeFx.gap(now, Gp.spin.slow, Gp.spin.max); gapKind = 'spin'; lastFlurryAt = now; }
+  else if (gapKind === 'spin' && flurryOver(events)) timeFx.endGap(now);
+  // 마무리: 착지해서 활이 선 순간부터 첫 검이 꽂히기 전까지 느려졌다가, 꽂히는 순간 연사가 제 빠르기로 터진다
+  const vg = volleyGap(volleyPending, events);
+  volleyPending = vg.pending;
+  if (slowOn && vg.open) { timeFx.gap(now, Gp.finish.slow, Gp.finish.max); gapKind = 'finish'; }
+  else if (gapKind === 'finish' && vg.close) timeFx.endGap(now);
+  if (world.result || world.execute || (gapKind === 'slash' && (world.player.blade?.move || isDodging(world)))) timeFx.endGap(now);   // 판이 끝났거나 몸이 이미 다음 동작(스킬의 움직임 · 구르기)에 들어갔으면 닫는다
+  ui.gap = timeFx.gapOpen(now) ? { kind: gapKind, threat: threatAt(world) } : null;
+  view.quiet = !!ui.gap && gapKind === 'slash';
   actors.onEvents(events, now);
   swordView.onEvents(events, now);
   swordsView.onEvents(events, now, world);

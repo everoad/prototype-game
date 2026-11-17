@@ -6,7 +6,7 @@ import { createWorld, step, drainEvents } from '../src/sim/world.js';
 import { RULES } from '../src/sim/rules.js';
 import { gameTries } from '../src/sim/tries.js';
 import { storeAdd } from '../src/sim/store.js';
-import { isSword, slashLanding, bladeMoving } from '../src/sim/sword.js';
+import { isSword, slashLanding, bladeMoving, spinReach, finishReach } from '../src/sim/sword.js';
 import { isInvuln, hurtPlayer, isDodging } from '../src/sim/player.js';
 import { restartRoom } from '../src/sim/stage.js';
 import { quietWorld, idle, run, ticks } from './helpers.mjs';
@@ -96,14 +96,20 @@ test('회전 베기: 한 칸을 쓰고, 닿는 적을 그 틱에 벤다 — 칸�
   assert.equal(w.stats.blade.spin, 1);
 });
 
-test('회전 베기: 닿지 않아도 나간다(칸을 쓰고 회복만) — 거리는 몸 표면까지 spin.R', () => {
+test('회전 베기: 닿는 적이 없으면 나가지 않는다(칸은 그대로, 거절 신호) — 거리는 몸 표면까지 spin.R', () => {
   const w = sw(RULES.boss.r + Sw.spin.R + 0.1); give(w, 1, false);
   w.player.hp = 50; const hp0 = w.boss.hp;
   const ev = tick(w, I);
-  assert.equal(w.player.store.length, 0);
+  assert.equal(w.player.store.length, 1, '칸이 날아가지 않는다');
   assert.equal(w.boss.hp, hp0);
-  assert.equal(w.player.hp, 50 + RULES.store.heal[0]);
-  assert.equal(of(ev, 'bladeSpin')[0].hits, 0);
+  assert.equal(w.player.hp, 50, '헛쳐서 회복하지도 않는다');
+  assert.equal(of(ev, 'bladeSpin').length, 0);
+  assert.deepEqual(of(ev, 'denied').map(e => [e.what, e.why]), [['spin', 'far']]);
+  assert.equal(w.stats.blade.spin, 0);
+  assert.equal(spinReach(w), false);
+  w.boss.x -= 0.2;
+  assert.equal(spinReach(w), true);
+  assert.equal(of(tick(w, I), 'bladeSpin')[0].hits, 1);
 });
 
 test('회전 베기 뒤 lock 동안은 다음 스킬이 기다렸다가 나간다(누름을 buffer만큼 기억) — 한 번 누름에 한 번만', () => {
@@ -344,16 +350,18 @@ test('부채 밖(등 뒤)의 적은 맞지 않는다', () => {
   assert.equal(of(ev, 'bladeFinish')[0].hits, 2);
 });
 
-test('닿는 적이 없어도 칸을 다 쓰고 튕긴다(피해 0)', () => {
+test('마무리: 닿는 적이 없으면 나가지 않는다(칸은 그대로, 튕기지도 않는다)', () => {
   const w = mid(RULES.boss.r + Fi.R + 0.3); give(w, 2);
-  w.player.hp = 50; const hp0 = w.boss.hp;
+  w.player.hp = 50; const hp0 = w.boss.hp, x0 = w.player.x;
   const ev = tick(w, O);
   run(w, Fi.back + 0.05);
-  assert.equal(w.player.store.length, 0);
+  assert.equal(w.player.store.length, 2, '칸이 날아가지 않는다');
   assert.equal(w.boss.hp, hp0);
-  assert.equal(of(ev, 'bladeFinish')[0].hits, 0);
-  assert.equal(w.player.hp, 50 + 2 * RULES.store.heal[1]);
-  assert.ok(w.player.x < -Fi.backDist + 0.01);
+  assert.equal(of(ev, 'bladeFinish').length, 0);
+  assert.deepEqual(of(ev, 'denied').map(e => [e.what, e.why]), [['finish', 'far']]);
+  assert.equal(w.player.hp, 50);
+  assert.equal(w.player.x, x0);
+  assert.equal(finishReach(w), false);
 });
 
 test('난간에 막히면 거기서 멈춘다', () => {

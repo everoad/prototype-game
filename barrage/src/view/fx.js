@@ -51,6 +51,12 @@ export function createFx(view, LOOK) {
       emit(mx, y, mz, 0, 0, 0, 0.04, 0.16, 'cyan');
       for (let k = 0; k < M.n; k++) { const a = angle + (r01() - 0.5) * M.coneDeg * Math.PI / 180, s = M.speed * (M.vary[0] + r01() * M.vary[1]); emit(mx, y, mz, Math.cos(a) * s, 0, Math.sin(a) * s, M.life, M.size, 'cyan'); }
     },
+    // 벤 자리: 칼이 지나간 쪽으로 튀는 불티(o = { n, speed, coneDeg, life, size, flash = 번쩍이는 점의 크기(없으면 안 낸다) } — 고르게 퍼지는 불꽃과 달리 베는 방향이 읽힌다)
+    spray(x, z, angle, color, o) {
+      const y = bh();
+      if (o.flash) emit(x, y, z, 0, 0, 0, 0.05, o.flash, color);   // 벤 순간의 짧은 번쩍임(한 점)
+      for (let k = 0; k < o.n; k++) { const a = angle + (r01() - 0.5) * o.coneDeg * Math.PI / 180, s = o.speed * (0.5 + r01() * 0.8); emit(x, y, z, Math.cos(a) * s, (r01() - 0.3) * o.speed * 0.25, Math.sin(a) * s, o.life * (0.6 + r01() * 0.6), o.size * (0.6 + r01() * 0.7), color); }
+    },
     // 산탄이 나갈 때: 부채꼴로 튀는 불티(spread = 부채 너비, 라디안)
     fan(x, z, angle, spread, mul = 1) {   // mul = 세기(한 방의 큰 부채 — 불티 수가 mul배)
       const Fn = LOOK.guns.fan, y = bh() * 1.2, n = Math.max(2, Math.round(Fn.n * mul));

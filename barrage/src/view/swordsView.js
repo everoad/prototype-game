@@ -18,7 +18,7 @@ export function strikeOrder(swords, skill) {
   return [...swords].sort((a, b) => rank(a) - rank(b) || (a.fresh ? Math.abs(b.k - 2) - Math.abs(a.k - 2) : skill === 'finish' && !a.far ? a.dMe - b.dMe : a.dFoe - b.dFoe));
 }
 
-export function createSwordsView(view, LOOK) {
+export function createSwordsView(view, LOOK, fx = null) {
   const THREE = view.THREE, C = LOOK.colors, L = view.layers, V = LOOK.sword.swords, D2R = Math.PI / 180;
   const flat = g => { g.rotateX(-Math.PI / 2); return g; };
   const shape = new THREE.Shape();
@@ -31,6 +31,7 @@ export function createSwordsView(view, LOOK) {
   let seed = 0x2f6e2b1;
   const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const pick = ([a, b]) => a + (b - a) * rnd();
+  const spray = (x, z, angle, o) => { if (fx && fx.spray && LOOK.feel.on.sparks !== false) fx.spray(x, z, angle, 'cyan', o); };   // 칼이 지나간 쪽으로 튀는 불티(view/fx.js)
   const coin = () => (rnd() < 0.5 ? -1 : 1);
 
   const swords = [];          // 보이는 검: { b, k, g, blade, core, x, z, dx, dz, ang, seq, jobs, mode, grow0, gone, boost, lx, lz, size, tw, near }
@@ -63,20 +64,20 @@ export function createSwordsView(view, LOOK) {
     return [P[0] + Math.cos(a) * r, P[1] + Math.sin(a) * r];
   }
 
-  function line(x0, z0, x1, z1, w, sec, alpha, core = false, top = false) {
+  function line(x0, z0, x1, z1, w, sec, alpha, core = false, top = false, pop = 1) {
     const it = lineFree.pop() ?? { m: new THREE.Mesh(lineGeo, mat(C.cyan)) };
     it.m.material.color.set(core ? V.core : C.cyan);
     it.m.material.depthTest = !top;   // top = 몸을 가로지르는 칼자국: 몸에 가리지 않게 위에 그린다(적 탄보다는 아래 — 겹 차례가 낮다)
     it.m.position.set(x0, top ? V.strike.markY : V.y, z0); it.m.rotation.y = -Math.atan2(z1 - z0, x1 - x0);
-    Object.assign(it, { t0: ts, sec, w, alpha, len: Math.hypot(x1 - x0, z1 - z0) });
+    Object.assign(it, { t0: ts, sec, w, alpha, pop, len: Math.hypot(x1 - x0, z1 - z0) });
     L.shots.add(it.m); lines.push(it);
   }
   // 칼자국: (x, z)를 가운데로 angle 쪽으로 누운 가는 줄 + 밝은 속
   function mark(x, z, angle, len, w, sec, top = false) {
     const dx = Math.cos(angle) * len / 2, dz = Math.sin(angle) * len / 2;
     const M = V.mark;
-    line(x - dx, z - dz, x + dx, z + dz, w, sec, M.alpha, false, top);
-    line(x - dx * M.coreLen, z - dz * M.coreLen, x + dx * M.coreLen, z + dz * M.coreLen, w * M.coreW, sec, 1, true, top);
+    line(x - dx, z - dz, x + dx, z + dz, w, sec, M.alpha, false, top, M.pop);   // 칼자국은 굵게 번쩍였다가 가늘어진다(벤 순간이 읽히게)
+    line(x - dx * M.coreLen, z - dz * M.coreLen, x + dx * M.coreLen, z + dz * M.coreLen, w * M.coreW, sec, 1, true, top, M.pop);
   }
 
   function make(b, k, x, z, grow0, angle = 0) {
@@ -144,7 +145,7 @@ export function createSwordsView(view, LOOK) {
       let x0 = 0, z0 = 0;
       const hit = () => { const [x, z, r] = fp(j.id), d = Math.hypot(x - x0, z - z0) || 1, ux = (x - x0) / d, uz = (z - z0) / d; return [x - ux * r * deep - uz * sp * r, z - uz * r * deep + ux * sp * r]; };
       s.seq.push(seg(tShot, tShot + B.shot, null, { ease: inQuad, init: q => { x0 = s.x; z0 = s.z; q.at = u => { const [hx, hz] = hit(); return [x0 + (hx - x0) * u, z0 + (hz - z0) * u]; }; },
-        end: () => mark(s.x, s.z, Math.atan2(s.z - z0, s.x - x0), pick(B.markLen) * (j.last ? B.lastMark[0] : 1), pick(T.markW) * (j.last ? B.lastMark[1] : 1), T.markSec) }));
+        end: () => { const a = Math.atan2(s.z - z0, s.x - x0); mark(s.x, s.z, a, pick(B.markLen) * (j.last ? B.lastMark[0] : 1), pick(T.markW) * (j.last ? B.lastMark[1] : 1), T.markSec); spray(s.x, s.z, a, j.last ? V.spray.last : V.spray.shot); } }));
       s.seq.push(seg(tShot + B.shot, tShot + B.shot + pick(B.stick), hit, { end: () => next(hit) }));
       return;
     }
@@ -169,14 +170,21 @@ export function createSwordsView(view, LOOK) {
     glide(s, ts, t0, E, () => [ca, sa], Math.min(lead, gap), Math.min(lead, gap + T.leadPad));
     s.seq.push(seg(t0, t0 + tIn + tOut, u => { const [x0, z0] = E(), [x1, z1] = X(); return [x0 + (x1 - x0) * u, z0 + (z1 - z0) * u]; }, {
       mid: tIn / (tIn + tOut), lift: j.skill === 'spin' ? T.hop : 0,   // 난무는 몸 위를 넘으며 벤다 — 일섬은 줄을 따라 꿰뚫는다
-      onMid: () => { const [x, z] = mid(); mark(x, z, a, stabOnly ? pick(V.bow.markLen) : 2 * fr + pick(T.markPad), pick(T.markW), T.markSec, !stabOnly); },
+      onMid: () => { const [x, z] = mid(); mark(x, z, a, stabOnly ? pick(V.bow.markLen) : 2 * fr + pick(T.markPad), pick(T.markW), T.markSec, !stabOnly); spray(x, z, a, V.spray.strike); },
       end: stabOnly ? null : () => next(null) }));
     if (stabOnly) s.seq.push(seg(t0 + tIn + tOut, t0 + tIn + tOut + pick(V.bow.stick), X, { end: () => next(X) }));
+  }
+
+  // 바탕 다섯 자루: 처음 한 번, 등 뒤 제자리에 만든다(사건이 그리기보다 먼저 올 수 있다 — 판의 첫 틱에 첫 검이 떠난다)
+  function base() {
+    if (swords.some(s => s.b === 0)) return;
+    for (let k = 0; k < V.n; k++) { const s = make(0, k, P[0], P[1], -1e9); [s.x, s.z, s.ang] = slot(s); s.dx = Math.cos(s.ang); s.dz = Math.sin(s.ang); s.lx = s.x; s.lz = s.z; s.born = false; }
   }
 
   function onEvents(events, now, world) {
     W = world;
     if (!world.player.swords && !swords.length) return;
+    if (world.player.swords && !swords.some(s => s.b === 0)) { P = [world.player.x, world.player.z]; base(); }
     const find = (b, k) => swords.find(s => s.b === b && s.k === k && !s.gone), S = V.sortie;
     for (const e of events) {
       if (e.type === 'swordSortie' || e.type === 'swordTurn') {   // 떠난다(또는 가던 적을 바꾼다): 지금 보던 쪽으로 살짝 내달렸다가 휘돌아 그 적을 스치러 들어간다
@@ -187,7 +195,8 @@ export function createSwordsView(view, LOOK) {
       } else if (e.type === 'swordStab') {   // 스치며 벤 순간: 칼자국 하나. 멈추지 않고 그대로 멀리 지나쳐 나갔다가, 다음에 들어올 쪽으로 크게 돌아 들어온다
         const s = find(e.batch, e.k); if (!s) continue;
         s.near = e.id; s.jobs.length = 0;
-        mark(s.x, s.z, Math.atan2(s.dz, s.dx), pick(S.markLen), pick(S.markW), S.markSec);
+        mark(s.x, s.z, Math.atan2(s.dz, s.dx), pick(S.markLen), pick(S.markW), S.markSec, true);   // 몸 위에 그린다(스친 자국이 몸에 가리지 않게)
+        spray(s.x, s.z, Math.atan2(s.dz, s.dx), V.spray.stab);
         if (!e.next) continue;
         const p = passAt(e.next.id, e.next.fromX, e.next.fromZ, coin() * pick(S.lat));
         s.seq.length = 0;
@@ -196,6 +205,9 @@ export function createSwordsView(view, LOOK) {
         const s = find(e.batch, e.k); if (!s) continue;
         s.seq.length = 0; s.jobs.length = 0;
         goHome(s, ts, e.blocked);
+      } else if (e.type === 'bladeSlash') {   // 일섬: 내가 지나갈 줄이 먼저 길게 번쩍인다(몸보다 앞서 — 벤 줄이 읽히게. 몸 위에 그린다)
+        const F = LOOK.sword.skill.slash.flash, a = Math.atan2(e.z1 - e.z0, e.x1 - e.x0);
+        mark((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2, a, Math.hypot(e.x1 - e.x0, e.z1 - e.z0) + 2 * F.ext, F.w, F.sec, true);
       } else if (e.type === 'swordsBatch') {
         until.set(e.batch, e.until);
         if (e.renewed) { for (const s of swords) if (s.b === e.batch) s.boost = ts; continue; }
@@ -260,7 +272,7 @@ export function createSwordsView(view, LOOK) {
     ts = world.time - (1 - alpha) * world.rules.dt;   // 판의 시각으로만 간다(결과 화면에서는 검도 선다 — 그리기용 시각을 따라가면 방을 다시 시작할 때 시각이 거꾸로 간다)
     if (ts < prev - 1e-6) rewind();
     const dt = Math.max(0, Math.min(0.1, ts - prev));
-    if (on && !swords.some(s => s.b === 0)) for (let k = 0; k < V.n; k++) { const s = make(0, k, P[0], P[1], -1e9); [s.x, s.z, s.ang] = slot(s); s.dx = Math.cos(s.ang); s.dz = Math.sin(s.ang); s.lx = s.x; s.lz = s.z; s.born = false; }
+    if (on) base();
     for (let i = swords.length - 1; i >= 0; i--) {
       const s = swords[i], row = rowOf(s), dim = V.dim[Math.min(row, V.dim.length - 1)], ox = s.x, oz = s.z;
       let face = null, size = 1, fade = 1, lift = 0;
@@ -300,13 +312,14 @@ export function createSwordsView(view, LOOK) {
       s.g.position.set(s.x, V.y + bob + lift, s.z); s.g.rotation.y = -s.ang;
       s.blade.scale.set(V.len * s.size * size * (V.grow.from[0] + (1 - V.grow.from[0]) * grow), 1, V.w * dim * size * (V.grow.from[1] + (1 - V.grow.from[1]) * grow) * Math.min(V.freshWide, fresh));
       s.core.scale.set(V.len * s.size * V.coreLen * size * grow, 1, V.coreW * size);
-      s.blade.material.opacity = V.alpha * dim * fade * blink * grow * Math.min(1, fresh);
-      s.core.material.opacity = Math.min(1, (p.store && p.store.length ? 1 : V.coreDim) * fade * blink * grow * fresh);
+      const hush = view.quiet ? V.quiet : 1;   // 틈이 열려 있는 동안(view/gap.js)에는 검이 옅어진다 — 보스의 예고를 읽을 수 있게
+      s.blade.material.opacity = V.alpha * dim * fade * blink * grow * Math.min(1, fresh) * hush;
+      s.core.material.opacity = Math.min(1, (p.store && p.store.length ? 1 : V.coreDim) * fade * blink * grow * fresh * hush);
     }
     for (let i = lines.length - 1; i >= 0; i--) {
       const it = lines[i], u = (ts - it.t0) / it.sec;
       if (u >= 1 || u < 0) { L.shots.remove(it.m); lineFree.push(it); lines.splice(i, 1); continue; }
-      it.m.scale.set(it.len, 1, it.w * (1 - 0.6 * u)); it.m.material.opacity = it.alpha * (1 - u);
+      it.m.scale.set(it.len, 1, it.w * (1 - V.trail.taper * u) * (1 + (it.pop - 1) * (1 - u) ** 3)); it.m.material.opacity = it.alpha * (1 - u) * (view.quiet ? V.quiet : 1);
     }
   }
 

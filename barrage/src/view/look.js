@@ -111,12 +111,25 @@ export const LOOK = {
     trail: { sec: 0.22, w: 0.16, thin: 0.6 }, sweep: { sec: 0.14, arcDeg: 150, w: 0.16, hold: 0.1, seg: 28 },
     finish: { n: 3, len: 3.6, w: 0.2, fanDeg: 50, sec: 0.28, backW: 0.1 },
     mark: { size: 0.3, alpha: 0.75, y: 0.03, pulse: [0.12, 7] },
-    cut: { arcR: 1.7, arcW: 0.16, arcDeg: 70, sweepDeg: 110, arcSec: 0.11, arcAlpha: 0.95, markLen: 1.9, markW: 0.15, markSec: 0.16, markTiltDeg: 42, spark: 0.7, cent: 220 },
+    cut: { pop: 2.4, spray: { n: 4, speed: 10, coneDeg: 44, life: 0.14, size: 0.055 }, arcR: 1.7, arcW: 0.16, arcDeg: 70, sweepDeg: 110, arcSec: 0.11, arcAlpha: 0.95, markLen: 1.9, markW: 0.15, markSec: 0.16, markTiltDeg: 42, spark: 0.7, cent: 220 },
     swing: { sec: 0.11, from: 80, to: -25, rest: 30 },
     wave: { arcDeg: 130, thick: 0.34, size: 1.25, grow: 0.35, alpha: 0.9, fade: 0.35, tiltDeg: 38, core: '#9ff4ff', coreScale: 0.6, ghosts: [[0.5, 0.45], [1.0, 0.2]] }, field: { alpha: 0.06, y: 0.012 }, chargeAlpha: 0.6,
     burst: { slash: 1.0, spin: 0.8, finish: 1.6 }, number: 26, numberBig: 40, healNumber: 22,
     stop: 0.025, finishStop: 0.07, finishShake: [9, 0.18], punch: [0.04, 0.18], jolt: 0.2, joltBig: 0.5,
     names: { slash: '일섬', spin: '회전 베기', finish: '마무리' },
+    // gap = 틈(view/gap.js — 2026-11-18 사용자: "돌진한 뒤에 보스 패턴을 보고 피할지 연계를 할지 결정을 하는 순간이 필요하다"): 일섬으로 건너편에 서면 다음 키를 누를 때까지 판이 slow배로 흐른다(가장 길게 max초).
+    // near = 몸 표면까지 이 거리 안에 살아 있는 적이 있을 때만 연다, labelY·labelPx = 내 머리 위 글자의 높이·크기, labels = 예고의 색에 따라 읽어 주는 말(없음 · 빨강 · 흰/금). 그동안 검의 밝기는 swords.quiet배.
+    // gap.spin = 난무 앞의 느려짐(회전 베기 — 사용자: "난무 펼쳐지기 전에 좀 길게 슬로우"): 검 타격이 열리면 slow배로 흐르다가 첫 검이 베는 순간 풀린다(가장 길게 max초, 잇달아 쓸 때는 every초에 한 번). 검은 옅어지지 않는다.
+    // gap.finish = 연사 앞의 느려짐(마무리 — 사용자: "O 스킬도 너무 순식간에 지나가서"): 착지해서 활이 선 순간부터 첫 검이 꽂히기 전까지 slow배(가장 길게 max초).
+    gap: { spin: { slow: 0.08, max: 0.5, every: 1.0 }, finish: { slow: 0.1, max: 0.6 }, slow: 0.2, max: 0.7, near: 4.5, labelY: 2.8, labelPx: 22, labels: { go: 'I · O 몰아친다', dodge: 'Space 피한다', parry: 'J 받아친다' } },
+    // skill = 스킬을 썼다는 강조(2026-11-18 — 사수의 한 방처럼): chain = 이 초 안에 앞의 느려짐이 있으면 겹쳐 쌓지 않는다,
+    // slash·spin·finish = 가장자리 빛(초) · 느려짐 [빠르기, 초] · 화면 당김 [세기, 초]. 일섬의 flash = 지나갈 줄이 먼저 번쩍이는 긴 선(양 끝으로 더 뻗는 길이 · 굵기 · 초), 마무리의 slowOrbs = 칸을 이만큼 털었을 때부터 느려진다,
+    // spray = 스킬 본체가 벤 자리에서 칼이 지나간 쪽으로 튀는 불티(수 · 빠르기 · 퍼지는 각(도) · 남는 초 · 크기).
+    skill: { chain: 0.45,
+      slash: { edge: 0.18, slow: [0.3, 0.22], punch: [0.05, 0.2], flash: { ext: 2.4, w: 0.11, sec: 0.22 } },
+      spin: { edge: 0.15, slow: [0.4, 0.24], punch: [0.045, 0.2] },
+      finish: { edge: 0.25, slow: [0.3, 0.32], slowOrbs: 2 },
+      spray: { slash: { n: 12, speed: 15, coneDeg: 46, life: 0.22, size: 0.07 }, spin: { n: 9, speed: 13, coneDeg: 60, life: 0.2, size: 0.065 }, finish: { n: 14, speed: 16, coneDeg: 70, life: 0.24, size: 0.075 } } },
     // swords = 이기어검의 모습(view/swordsView.js — 설계 2026-11-17-barrage-flying-swords-design.md §6. 판정 수치는 RULES.sword.swords):
     // n = 한 줄의 자루 수, y = 뜬 높이, len·w = 날의 길이·너비, core·coreLen·coreW·coreDim = 밝은 속의 색·길이 몫·굵기·칸이 없을 때의 밝기, alpha = 날의 불투명도, dim = 줄마다의 굵기·밝기 몫(바탕 · 둘째 · 셋째 묶음),
     // turn = 날 끝이 돌아가는 빠르기(rad/초), fastFace = 이보다 빠르게 날 때는 가는 쪽을 곧장 본다(U/초), fresh = 막 생긴 묶음이 제 타격을 마칠 때까지의 밝기 배율,
@@ -126,21 +139,22 @@ export const LOOK = {
     // sortie = 건너다니기(far = 스친 뒤 지나쳐 나가는 거리 — 궤적의 크기 · 그 몫 · 몸 가운데에서 비껴 스치는 몫 · 등 뒤에서 떠날 때 보던 쪽으로 내달리는 거리 · 돌아오는 초 · 막혀 튕기는 거리 · 스친 자국의 길이 · 굵기 · 초),
     // strike = 스킬 타격(벨 줄에 들어서는 거리 · 지나쳐 나가는 거리 · 가로지르는 빠르기(U/초) · 벨 줄을 타고 들어오는 거리 · 난무가 몸 위를 넘는 높이 · 검이 낼 수 있는 가장 큰 빠르기 · 칼자국이 몸보다 긴 만큼 · 굵기 · 초 · 칼자국의 높이 · 일섬의 줄 사이 · 난무의 각이 어긋나는 정도(도) · 벤 뒤 미끄러져 나가는 거리와 초),
     // bow = 마무리의 활(줄마다의 거리 · 자루마다 들쭉날쭉한 정도 · 반각(도) · 물러나는 데 드는 가장 짧은 초 · 쏘는 초 · 꽂혀 있는 초 · 꽂힌 자국의 길이 · 몸에 꽂히는 자리가 옆으로 퍼지는 몫 · 이보다 멀리 나가 있던 검은 돌아오지 않는다 · 꽂힌 채 기다리는 초),
-    // mark = 칼자국(불투명도 · 밝은 속의 길이 몫 · 굵기 몫), freshWide = 막 생긴 검이 넓어지는 한도. sortie의 firstIn·turnOut·homeOut·homeIn·softBend·dodge, strike의 laneJitter·laneGrow·spinLat·stabDeep·leadPad·passMark, bow의 deep·lastMark는 길과 칼자국의 모양을 잡는 몫이다(view/swordsView.js의 그 자리에 뜻을 적었다).
+    // mark = 칼자국(불투명도 · 밝은 속의 길이 몫 · 굵기 몫 · 처음에 굵게 번쩍이는 배율), jolt·noteJolt = 보스를 찌를 때·스킬 타격의 음마다 보스가 움찔하는 세기, spray = 검이 지나간 쪽으로 튀는 불티(찌를 때 · 스킬 타격 · 마무리의 연사 · 그 마지막 검 — 수 · 빠르기 · 퍼지는 각(도) · 남는 초 · 크기 · 벤 순간 번쩍이는 점의 크기), freshWide = 막 생긴 검이 넓어지는 한도. sortie의 firstIn·turnOut·homeOut·homeIn·softBend·dodge, strike의 laneJitter·laneGrow·spinLat·stabDeep·leadPad·passMark, bow의 deep·lastMark는 길과 칼자국의 모양을 잡는 몫이다(view/swordsView.js의 그 자리에 뜻을 적었다).
     // grow = 자라나는 초 · 자루 사이의 엇박 · 처음의 [길이, 너비] 몫, expire = 빨려 드는 초 · 식기 전에 깜빡이는 초와 빠르기(Hz) · 깜빡일 때 가장 어두운 밝기 · 빨려 드는 세기, renew = 새로 고쳐질 때 번쩍이는 초와 세기,
     // sound = 찌르기 소리·불티를 1초에 몇 번까지 · 스킬 타격의 음 수 · 한 음씩 올라가는 높이(센트), spark = 찌른 불티의 크기, noteSpark = 스킬 타격의 음마다 나는 불티의 크기,
     // hud = 스킬 이름 옆의 묶음 표시(사이 · 너비 · 높이 — px),
     // last = 마무리의 마지막 검(흔들림 [px, 초] · 당김 [세기, 초] · 멈춤 초 · 칸을 이만큼 턴 때부터 멈춘다 · 불꽃 크기 · 합계 숫자 크기 · 낮은 소리의 높이(센트)).
-    swords: { n: 5, y: 0.55, len: 1.5, w: 0.3, core: '#bff8ff', coreLen: 0.8, coreW: 0.06, coreDim: 0.55, alpha: 0.92, dim: [1, 0.8, 0.65], turn: 14, fastFace: 14, fresh: 1.25, freshWide: 1.4, mark: { alpha: 0.95, coreLen: 0.7, coreW: 0.4 },
+    swords: { n: 5, y: 0.55, len: 1.5, w: 0.3, core: '#bff8ff', coreLen: 0.8, coreW: 0.06, coreDim: 0.55, alpha: 0.92, dim: [1, 0.8, 0.65], turn: 14, fastFace: 14, fresh: 1.25, freshWide: 1.4, quiet: 0.3, mark: { alpha: 0.95, coreLen: 0.7, coreW: 0.4, pop: 2.6 }, jolt: 0.05, noteJolt: 0.12,
+      spray: { stab: { n: 4, speed: 12, coneDeg: 32, life: 0.14, size: 0.065, flash: 0.3 }, strike: { n: 5, speed: 13, coneDeg: 38, life: 0.16, size: 0.065, flash: 0.36 }, shot: { n: 6, speed: 13, coneDeg: 55, life: 0.18, size: 0.065, flash: 0.4 }, last: { n: 16, speed: 17, coneDeg: 80, life: 0.26, size: 0.08, flash: 0.7 } },
       fan: { halfDeg: 65, r: [1.25, 1.85, 2.45], follow: [7, 12], bobY: 0.07, bobHz: 0.7, outDeg: 7.5 },
       size: [0.85, 1.2], clear: 0.6,
-      trail: { sec: 0.16, w: 0.11, wVary: [0.8, 1.35], alpha: 0.55, minSpeed: 7, minStep: 0.06, maxLen: 5 },
-      sortie: { far: 9, farVary: [0.55, 1.4], lat: [0.25, 0.85], wind: 0.9, firstIn: 0.5, turnOut: 3.6, homeSec: 0.3, homeOut: 4.5, homeIn: 1.4, bounce: 1.2, softBend: 0.16, dodge: 2.4, markLen: [0.8, 2.0], markW: [0.07, 0.14], markSec: 0.14 },
+      trail: { sec: 0.16, w: 0.11, wVary: [0.8, 1.35], alpha: 0.55, minSpeed: 7, minStep: 0.06, maxLen: 5, taper: 0.6 },
+      sortie: { far: 9, farVary: [0.55, 1.4], lat: [0.25, 0.85], wind: 0.9, firstIn: 0.5, turnOut: 3.6, homeSec: 0.3, homeOut: 4.5, homeIn: 1.4, bounce: 1.2, softBend: 0.16, dodge: 2.4, markLen: [1.2, 2.6], markW: [0.08, 0.16], markSec: 0.16 },
       strike: { inGap: [1.4, 2.8], outGap: [2.6, 5.5], speed: [42, 60], lead: [1.2, 3.6], hop: 1.5, maxSpeed: 75, markPad: [1.0, 4.2], markW: [0.07, 0.17], markSec: 0.22, markY: 0.9, side: 0.45, jitterDeg: 9, coast: [1.5, 3.5], coastSec: 0.25, laneJitter: 0.7, laneGrow: 0.45, spinLat: 0.7, stabDeep: 0.3, leadPad: 0.5, passMark: 1.6 },
       bow: { r: [2.0, 2.9, 3.8], rVary: 0.3, halfDeg: 60, pull: 0.1, shot: 0.08, stick: [0.05, 0.12], markLen: [1.0, 2.1], spread: 0.5, deep: [0.5, 0.9], lastMark: [1.5, 1.8], reach: 8, wait: 0.25 },
       grow: { sec: 0.1, each: 0.02, from: [0.4, 0.15] }, expire: { sec: 0.25, blinkSec: 1, blinkHz: 7, blinkLow: 0.55, pull: [0.5, 12] }, renew: { sec: 0.25, boost: 0.5 },
       hud: { gap: 15, w: 4, h: 9 },
-      sound: { perSec: 8, notes: 6, cent: 140 }, spark: 0.6, noteSpark: 0.85, last: { shake: [5, 0.12], punch: [0.03, 0.14], stop: 0.05, stopOrbs: 3, spark: 2.0, number: 30, cent: -300 } },
+      sound: { perSec: 8, notes: 6, cent: 140, stabCent: 90 }, spark: 0.6, noteSpark: 0.85, last: { shake: [5, 0.12], punch: [0.03, 0.14], stop: 0.05, stopOrbs: 3, spark: 2.0, number: 30, cent: -300, edge: 0.2 } },
   },
   // 낀 것 HUD(오른쪽 아래의 칸들): slotW·slotH·gap = 칸 크기와 사이(px), bottom = 화면 아래에서 칸 아랫변까지, bodyW = 몸 카드 칸 너비,
   // fly = 주운 카드의 선이 칸까지 그어지는 초, flash = 칸이 빛나는 초, blink = 바꿔 끼울 때 깜빡이는 빠르기, near = 카드의 한 줄 설명이 뜨는 거리(U), keySec = 키·이름 배너 초, eliteSec = 정예 배너 초.
@@ -291,7 +305,7 @@ export const LOOK = {
       gearWake: -20, salvo: -12, bigBeam: -12, swarm: -16,   // 무기가 깨어남(패링), 무기 스킬
       heartbeat: -13, shatter: -9, puff: -25, puffBg: -33, gearSleep: -22,   // 탄 발사 박자(주 패턴·바탕), 무기가 꺼짐
          // 체력 위태, 보스가 부서짐
-      stab: -30, ching: -20, swordsNew: -16,
+      stab: -25, ching: -19, swordsNew: -16,
       snipe: -5, store: -13, storeFull: -11, throw: -9, throwHit: -10, throwBoom: -5, heal: -11, slash: -9, spin: -10, finish: -5, wave: -21,   // 모아 던지기(§4.11)
       door: -12, mobSpawn: -22,   // 스테이지: 문이 열림, 몬스터 등장
     },

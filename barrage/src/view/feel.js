@@ -9,7 +9,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
   const stop = (now, sec, opt) => (on('stop') ? timeFx.hitstop(now, sec, opt) : 0);
   const slow = (now, s, sec, opt) => on('slow') && timeFx.slow(now, s, sec, opt);
   const shake = (px, sec) => on('shake') && camera.shake(px, sec);
-  let lastStab = -1e9;   // 이기어검의 찌르기 소리·불티를 마지막으로 낸 때(1초에 몇 번까지만 낸다)
+  let lastStab = -1e9, stabN = 0, blade = null;   // 이기어검의 찌르기 소리를 마지막으로 낸 때(1초에 몇 번까지만) · 낸 수(소리 높이를 돌린다) · 지금 쓴 검사 스킬의 자리와 방향(벤 불티가 튈 쪽)
 
   function perfectPackage(now, withStop = true) {
     const P = F().perfectBullet;
@@ -38,6 +38,11 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
     // 예약해 둔 연출(보스가 부서지는 파편 등) — 실제 시간으로
     for (let k = st.later.length - 1; k >= 0; k--) if (now >= st.later[k].at) { const it = st.later[k]; st.later.splice(k, 1); it.fn(now); }
     let pinged = new Set();
+    // 검사의 스킬: 벤 사건(bladeHit)이 그 스킬의 사건보다 먼저 올 수 있다(회전 베기·마무리) — 불티가 튈 쪽을 알게 스킬의 자리부터 읽어 둔다
+    for (const e of events) {
+      if (e.type === 'bladeSlash') blade = { x: e.x0, z: e.z0, angle: Math.atan2(e.z1 - e.z0, e.x1 - e.x0), cut: false };
+      else if (e.type === 'bladeSpin' || e.type === 'bladeFinish') blade = { x: e.x, z: e.z, angle: null, cut: false };
+    }
     for (const e of events) {
       switch (e.type) {
         case 'parryStart': actors.ringFlash(now); sfx.play('swish'); break;
@@ -401,18 +406,25 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'dashHit': { const T = LOOK.tries; if (on('sparks')) fx.burst(e.x, e.z, 'cyan', T.dashBurst); if (on('numbers') && e.dmg > 0) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', T.dashNumber); sfx.play('thump', { detune: 500 }); break; }
         // 검사(sim/sword.js): 스킬마다 제 소리, 벤 자리마다 청록 불꽃과 숫자와 아주 짧은 멈춤. 마무리만 화면이 흔들리고 당겨진다. 칸을 써서 회복한 만큼 숫자가 뜬다
         case 'bladeWave': sfx.play('wave', { detune: e.side * LOOK.sword.cut.cent / 2 }); break;   // 쌍검의 칼바람: 좌우가 다른 높이의 짧은 소리
-        case 'waveHit': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.sword.cut.spark); break;   // 맞힌 자리의 작은 불티(칼자국은 swordView)
+        case 'waveHit': if (on('sparks')) fx.spray?.(e.x, e.z, e.angle, 'cyan', LOOK.sword.cut.spray); break;   // 맞힌 자리: 칼바람이 가던 쪽으로 튀는 불티(칼자국은 swordView)
         case 'bladeSlash': case 'bladeSpin': case 'bladeFinish': {
-          const V = LOOK.sword, fin = e.type === 'bladeFinish';
-          sfx.play(fin ? 'finish' : e.type === 'bladeSpin' ? 'spin' : 'slash');
+          const V = LOOK.sword, K = V.skill, fin = e.type === 'bladeFinish', spin = e.type === 'bladeSpin';
+          sfx.play(fin ? 'finish' : spin ? 'spin' : 'slash');
           if (fin) { stop(now, V.finishStop); shake(V.finishShake[0], V.finishShake[1]); if (on('punch')) camera.punch(V.punch[0], V.punch[1]); }
+          // 스킬을 썼다는 강조(사수의 한 방처럼): 가장자리 빛은 늘. 일섬·마무리는 몸이 움직이므로 잔상, 회전 베기는 맞혔을 때·마무리는 칸 slowOrbs 이상을 털었을 때 잠깐 느려진다(일섬은 베는 순간 — bladeHit)
+          const S = K[fin ? 'finish' : spin ? 'spin' : 'slash'];
+          if (on('edge')) fx.edge('cyan', S.edge);
+          if (!spin) actors.dashTrail?.(now);
+          if (spin && e.hits > 0) { slow(now, S.slow[0], S.slow[1], { skipIfWithin: K.chain }); if (on('punch')) camera.punch(S.punch[0], S.punch[1]); }
+          if (fin && e.n >= S.slowOrbs) slow(now, S.slow[0], S.slow[1]);
           if (e.heal > 0 && on('numbers')) fx.number(null, null, `+${Math.round(e.heal)}`, 'heal', V.healNumber);
           break;
         }
         case 'bladeHit': {
           if (!(e.dmg > 0)) break;
-          const V = LOOK.sword, fin = e.skill === 'finish';
-          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', V.burst[e.skill]);
+          const V = LOOK.sword, K = V.skill, fin = e.skill === 'finish';
+          if (on('sparks')) { fx.burst(e.x, e.z, 'cyan', V.burst[e.skill]); fx.spray?.(e.x, e.z, blade ? blade.angle ?? Math.atan2(e.z - blade.z, e.x - blade.x) : 0, 'cyan', K.spray[e.skill]); }   // 칼이 지나간 쪽으로 튀는 불티(일섬은 내가 가는 쪽, 회전 베기·마무리는 나에게서 바깥으로)
+          if (e.skill === 'slash' && blade && !blade.cut) { blade.cut = true; slow(now, K.slash.slow[0], K.slash.slow[1], { skipIfWithin: K.chain }); if (on('punch')) camera.punch(K.slash.punch[0], K.slash.punch[1]); }   // 일섬: 처음 베는 순간이 잠깐 늘어지고 화면이 당겨진다(지나가며 벤 적마다 되풀이하지 않는다)
           if (on('numbers')) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', fin ? V.numberBig : V.number);
           if (!fin) stop(now, V.stop);
           if (e.id === 0) { actors.bossJolt?.(now, fin ? V.joltBig : V.jolt); hud.flashStagger(now); }
@@ -425,19 +437,20 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           const S = LOOK.sword.swords;
           if (now - lastStab < 1 / S.sound.perSec) break;
           lastStab = now;
-          sfx.play('stab');
-          if (on('sparks')) fx.spark(e.x, e.z, 'cyan', S.spark);
+          sfx.play('stab', { detune: (stabN++ % 5 - 2) * S.sound.stabCent });   // 소리 높이를 조금씩 돌린다(같은 소리가 줄지어 나지 않게). 불티는 화면의 검이 스치는 자리에서 낸다(swordsView)
+          if (e.id === 0) actors.bossJolt?.(now, S.jolt);
           break;
         }
         case 'swordHome': if (e.blocked && e.x != null && on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.sword.swords.spark); break;
         case 'swordsBatch': sfx.play('swordsNew', { detune: e.renewed ? LOOK.sword.swords.sound.cent * 2 : 0 }); break;
         case 'swordHit': {
           const S = LOOK.sword.swords, note = Math.floor(e.k * S.sound.notes / e.total);
-          if (e.k === 0 || note !== Math.floor((e.k - 1) * S.sound.notes / e.total)) { sfx.play('ching', { detune: note * S.sound.cent }); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', S.noteSpark); }
+          if (e.k === 0 || note !== Math.floor((e.k - 1) * S.sound.notes / e.total)) { sfx.play('ching', { detune: note * S.sound.cent }); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', S.noteSpark); if (e.id === 0) actors.bossJolt?.(now, S.noteJolt); }
           if (!e.last) break;
           if (on('numbers') && e.sum > 0) fx.number(e.x, e.z, Math.round(e.sum), 'cyan', S.last.number);
           if (e.skill !== 'finish') break;
           shake(S.last.shake[0], S.last.shake[1]);
+          if (on('edge')) fx.edge('cyan', S.last.edge);
           if (on('punch')) camera.punch(S.last.punch[0], S.last.punch[1]);
           if (on('sparks')) fx.burst(e.x, e.z, 'cyan', S.last.spark);
           sfx.play('thump', { detune: S.last.cent });

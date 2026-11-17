@@ -3,7 +3,7 @@
 import { BASE_TRIES, tryKey } from '../sim/tries.js';
 import { CARDS, GROUPS, kitCards, kitAll } from '../sim/cards.js';
 import { guide } from './guide.js';
-import { isSword, slashLanding } from '../sim/sword.js';
+import { isSword, slashLanding, spinReach, finishReach } from '../sim/sword.js';
 import { BUILD } from './version.js';
 
 // 결과 화면 밝기: 승리·패배 순간에서 since초 — 늦게(큰 순간을 먼저 보여 주고) 서서히 뜬다
@@ -35,6 +35,13 @@ export function createHud(canvas, LOOK) {
     ctx.clearRect(0, 0, W, H);
     const b = w.boss, p = w.player, now = ui.now;
     const away = !!b.away, S = w.stage;   // 일반 방(스테이지): 보스 막대 대신 방 번호와 남은 적
+    if (ui.gap && (ui.gap.kind === 'slash' || ui.gap.threat)) {   // 검사의 틈(view/gap.js — 난무·연사 앞의 느려짐에서는 읽어 줄 예고가 있을 때만): 내 머리 위에, 지금 나를 덮는 예고의 색으로 할 일을 읽어 준다(흰·금 = 받아치기, 빨강 = 피하기, 없으면 몰아치기)
+      const G = LOOK.sword.gap, t = ui.gap.threat, s = ui.project(p.x, p.z, G.labelY), key = !t ? 'go' : t.color === 'red' ? 'dodge' : 'parry';
+      ctx.font = font(G.labelPx, true); ctx.textAlign = 'center';
+      ctx.lineWidth = 4; ctx.strokeStyle = C.bg ?? '#14121a'; ctx.strokeText(G.labels[key], s.x, s.y);
+      ctx.fillStyle = !t ? C.cyan : t.color === 'red' ? C.red : t.color === 'gold' ? C.gold : C.white; ctx.fillText(G.labels[key], s.x, s.y);
+      ctx.textAlign = 'left';
+    }
     if (S) stageLayer(w, ui);
     // 보스 체력 + 깎인 꼬리(잠깐 남았다 줄어듦)
     const hp = away ? 1 : b.hp / b.maxHp;
@@ -110,10 +117,10 @@ export function createHud(canvas, LOOK) {
       ctx.font = font(13, true); ctx.textAlign = 'left';
       const low = p.hp > 0 && p.hp <= w.rules.player.hp * LOOK.feel.lowHp.at && n > 0;   // 체력 위태 + 모은 것 있음 = 던져서 회복하라고 깜빡
       ctx.fillStyle = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : n > 0 ? C.cyan : C.textDim;
-      if (isSword(w)) {   // 검사: 스킬 셋 — 지금 누르면 나가는 것만 밝다(칸이 없으면 셋 다 어둡고, 일섬은 닿는 거리 밖이면 어둡다)
+      if (isSword(w)) {   // 검사: 스킬 셋 — 지금 누르면 나가는 것만 밝다(칸이 없으면 셋 다 어둡고, 닿는 적이 없는 스킬도 어둡다)
         const N = LOOK.sword.names, reach = n > 0 && !!slashLanding(w), lit = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : C.cyan;
         let tx = px + 8 + cap * 18 + 6 + sk;
-        for (const [label, ok] of [[`U ${N.slash}`, reach], [`I ${N.spin}`, n > 0], [`O ${N.finish}`, n > 0]]) {
+        for (const [label, ok] of [[`U ${N.slash}`, reach], [`I ${N.spin}`, n > 0 && spinReach(w)], [`O ${N.finish}`, n > 0 && finishReach(w)]]) {
           ctx.fillStyle = ok ? lit : C.textDim; ctx.fillText(label, tx, py - 41); tx += ctx.measureText(label).width + 14;
         }
         if (p.swords) {   // 이기어검: 검 묶음 셋(바탕은 늘 켜져 있다) — 스킬 묶음은 남은 시간만큼 밑줄이 줄어든다

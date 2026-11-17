@@ -56,10 +56,11 @@ test('회전 베기가 맞으면 열 자루가 되고, 열 자루가 모두 firs
   assert.ok(near(hits.at(-1).sum, 2 * Ss.n * Ss.spin.dmg));
 });
 
-test('헛친 회전 베기에는 묶음이 생기지 않는다', () => {
+test('닿는 적이 없어 나가지 않은 회전 베기에는 묶음이 생기지 않는다(칸도 그대로)', () => {
   const w = sw(10); give(w, 1);
   const ev = play(w, 0.5, { 0: I });
-  assert.equal(of(ev, 'bladeSpin').length, 1);
+  assert.equal(of(ev, 'bladeSpin').length, 0);
+  assert.equal(w.player.store.length, 1);
   assert.equal(of(ev, 'swordsBatch').length, 0); assert.equal(of(ev, 'swordsStrike').length, 0);
   assert.equal(swordCount(w), Ss.n);
 });

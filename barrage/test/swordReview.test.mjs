@@ -148,6 +148,7 @@ test('스테이지에서 죽고 그 방을 다시 해도 검사다(무기 없음
   assert.deepEqual(w.weapons.on, []);
   assert.deepEqual(w.player.blade, { move: null, lockUntil: -1, want: null, wantUntil: -1, cuts: [], cutAt: 0, cutN: 0, charge: 0 });
   give(w, 1);
+  const m = w.enemies[0]; m.x = m.px = w.player.x + 2; m.z = m.pz = w.player.z; m.bornAt = -1;   // 닿는 적이 있어야 스킬이 나간다
   const ev = tick(w, I);
   assert.equal(of(ev, 'bladeSpin').length, 1);
 });

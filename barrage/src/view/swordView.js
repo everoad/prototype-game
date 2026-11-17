@@ -17,15 +17,15 @@ export function createSwordView(view, LOOK) {
   const lineGeo = flat(new THREE.PlaneGeometry(1, 1)); lineGeo.translate(0.5, 0, 0);
   const lines = [];   // { m, x0, z0, x1, z1, w, t0, sec, live, move, end } — live = 몸이 아직 가는 중(끝이 몸을 따라간다), move = 그 움직임, end = 다 갔을 때의 끝(일섬)
   const free = [];
-  function line(x0, z0, x1, z1, w, t0, sec, live = null, end = null) {
+  function line(x0, z0, x1, z1, w, t0, sec, live = null, end = null, pop = 1) {   // pop = 처음에 이만큼 굵게 번쩍였다가 가늘어진다(벤 자국)
     const m = free.pop() ?? new THREE.Mesh(lineGeo, mat());
-    L.fx.add(m);
-    lines.push({ m, x0, z0, x1, z1, w, t0, sec, live, move: null, fresh: !!live, end });
+    L.shots.add(m);   // 검사의 선은 적 탄보다 아래 겹(탄을 가리지 않는다)
+    lines.push({ m, x0, z0, x1, z1, w, t0, sec, live, move: null, fresh: !!live, end, pop });
   }
   // 회전 베기: 몸 둘레를 한 바퀴 빠르게 도는 짧은 칼자국(호) — 닫힌 고리로 남지 않는다
   let arcGeo = null, arcR = 0;
   const arc = new THREE.Mesh(new THREE.BufferGeometry(), mat());
-  arc.visible = false; L.fx.add(arc);
+  arc.visible = false; L.shots.add(arc);
   const sweep = { t0: -1e9, x: 0, z: 0, a0: 0 };
   // 낼 때: 몸 앞에서 그쪽 칼이 긋는 짧은 칼자국(호)
   const Ct = V.cut, swingGeo = flat(new THREE.RingGeometry(Ct.arcR - Ct.arcW, Ct.arcR, 12, 1, -Ct.arcDeg * Math.PI / 360, Ct.arcDeg * Math.PI / 180));
@@ -50,10 +50,10 @@ export function createSwordView(view, LOOK) {
     for (const e of events) {
       if (e.type === 'bladeWave') {   // 그쪽 칼이 몸 앞에서 긋는다
         const m = swingFree.pop() ?? new THREE.Mesh(swingGeo, mat());
-        L.fx.add(m); swings.push({ m, t0: now, a: e.angle, side: e.side });
+        L.shots.add(m); swings.push({ m, t0: now, a: e.angle, side: e.side });
       } else if (e.type === 'waveHit') {   // 맞힌 자리: 비스듬한 칼자국(좌우가 엇갈려 X가 된다)
         const t = e.angle + Math.PI / 2 + e.side * Ct.markTiltDeg * Math.PI / 180, dx = Math.cos(t) * Ct.markLen / 2, dz = Math.sin(t) * Ct.markLen / 2;
-        line(e.x - dx, e.z - dz, e.x + dx, e.z + dz, Ct.markW, now, Ct.markSec);
+        line(e.x - dx, e.z - dz, e.x + dx, e.z + dz, Ct.markW, now, Ct.markSec, null, null, Ct.pop);
       } else if (e.type === 'bladeSlash') line(e.x0, e.z0, e.x0, e.z0, V.trail.w, now, V.trail.sec, 'slash', [e.x1, e.z1]);
       else if (e.type === 'bladeSpin') {
         if (!arcGeo || arcR !== e.R) { arcGeo?.dispose(); arcR = e.R; arcGeo = flat(new THREE.RingGeometry(e.R - V.sweep.w, e.R, V.sweep.seg, 1, 0, V.sweep.arcDeg * Math.PI / 180)); arc.geometry = arcGeo; }
@@ -81,12 +81,12 @@ export function createSwordView(view, LOOK) {
         else { if (l.end) [l.x1, l.z1] = l.end; l.live = null; l.t0 = now; }
       }
       const u = l.live ? 0 : (now - l.t0) / l.sec;
-      if (u >= 1) { L.fx.remove(l.m); free.push(l.m); lines.splice(k, 1); continue; }
+      if (u >= 1) { L.shots.remove(l.m); free.push(l.m); lines.splice(k, 1); continue; }
       const dx = l.x1 - l.x0, dz = l.z1 - l.z0, len = Math.hypot(dx, dz);
       l.m.visible = len > 1e-3;
       l.m.position.set(l.x0, V.y, l.z0);
       l.m.rotation.y = -Math.atan2(dz, dx);
-      l.m.scale.set(len, 1, l.w * (1 - V.trail.thin * u));   // 흐려지며 가늘어진다
+      l.m.scale.set(len, 1, l.w * (1 - V.trail.thin * u) * (1 + (l.pop - 1) * (1 - u) ** 3));   // 흐려지며 가늘어진다(벤 자국은 처음에 굵게 번쩍인다)
       l.m.material.opacity = 1 - u;
     }
     const su = (now - sweep.t0) / V.sweep.sec, hold = V.sweep.hold / V.sweep.sec;
@@ -114,7 +114,7 @@ export function createSwordView(view, LOOK) {
     // 몸 앞의 칼자국: 짧게 그었다가 사라진다(몸을 따라간다)
     for (let k = swings.length - 1; k >= 0; k--) {
       const sw = swings[k], u = (now - sw.t0) / Ct.arcSec;
-      if (u >= 1) { L.fx.remove(sw.m); swingFree.push(sw.m); swings.splice(k, 1); continue; }
+      if (u >= 1) { L.shots.remove(sw.m); swingFree.push(sw.m); swings.splice(k, 1); continue; }
       sw.m.position.set(px, V.y, pz);
       sw.m.rotation.y = -(sw.a + sw.side * (Ct.sweepDeg * (0.5 - u)) * Math.PI / 180);   // 바깥에서 안으로 긋는다
       sw.m.material.opacity = Ct.arcAlpha * (1 - u * u);
