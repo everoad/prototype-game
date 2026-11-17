@@ -13,6 +13,7 @@ import { initBrain } from './brain.js';
 import { initDragon } from './dragon.js';
 import { setTry } from './tries.js';
 import { spawnMob, refreshFoes } from './foes.js';
+import { createSwords } from './swords.js';
 import { CARDS, drawPicks, giveCard, dropCard, kitCards, kitFull, kitSnapshot, kitRestore } from './cards.js';
 
 export const stageDef = (rules, id) => rules.stage.list[id] ?? null;
@@ -65,6 +66,8 @@ function enterRoom(w, n, entry = null) {
     w.result = null;
   }
   [p.x, p.z] = R.start.player; p.px = p.x; p.pz = p.z;
+  if (w.opts.char === 'sword') { p.swords = createSwords(R, w.time); emit(w, 'swordsClear', {}); }   // 검사의 이기어검(swords.js): 새 방에서는 바탕 다섯 자루로 — 하던 타격과 출격은 없다
+  p.blade.move = null; p.blade.want = null; p.blade.cuts.length = 0;   // 검사: 하던 움직임과 기억한 누름을 끊고, 날던 칼바람을 거둔다
   p.dodge.until = Math.min(p.dodge.until, w.time);   // 구르며 문에 들어와도 새 방에서는 서서 시작한다
   Object.assign(S, { room: n, wave: 0, rewards: [], offer: null, pending: null, door: null, startedAt: w.time, entry: entry ?? snapshot(w), surviveUntil: null });
   const boss = n >= def.rooms.length, b = w.boss;

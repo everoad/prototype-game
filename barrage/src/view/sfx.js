@@ -112,6 +112,14 @@ export function createSfx(ctx, LOOK) {
     door: (t, v) => { tone(t, 'triangle', 440, 660, 0.18, v); tone(t + 0.12, 'triangle', 660, 990, 0.25, v * 0.8); },
     mobSpawn: (t, v) => tone(t, 'sawtooth', 140, 220, 0.18, v),
     heal: (t, v) => { [660, 880, 1320].forEach((f, k) => tone(t + k * 0.06, 'sine', f, f, 0.22, v * (1 - k * 0.2))); },
+    // 검사(sim/sword.js): 일섬 = 가르는 소리(높은 데서 훑어 내림) · 회전 베기 = 짧은 휙 · 마무리 = 낮은 쿵 + 찢는 소리
+    wave: (t, v, o) => { const k = Math.pow(2, (o.detune || 0) / 1200); noise(t, 0.05, v, 'bandpass', 4200 * k, 2000 * k, 1.6); },   // 쌍검의 기본 베기: 짧은 스침(좌우가 다른 높이 — 1초에 여덟 번쯤, 작게)
+    slash: (t, v) => { noise(t, 0.12, v, 'bandpass', 5200, 1400, 2.2); tone(t, 'sawtooth', 900, 240, 0.1, v * 0.35); },
+    spin: (t, v) => { noise(t, 0.16, v, 'bandpass', 1600, 3800, 1.6); tone(t, 'triangle', 420, 260, 0.12, v * 0.3); },
+    finish: (t, v) => { tone(t, 'sine', 110, 36, 0.4, v); noise(t, 0.16, v * 0.9, 'bandpass', 4200, 600, 1.2); noise(t + 0.04, 0.3, v * 0.4, 'lowpass', 1200, 240); },
+    stab: (t, v) => noise(t, 0.03, v, 'highpass', 6200),   // 이기어검의 찌르기: 아주 작고 가는 소리(얼마나 자주 낼지는 feel이 묶는다)
+    ching: (t, v, o) => { const k = Math.pow(2, (o.detune || 0) / 1200); tone(t, 'triangle', 1500 * k, 1350 * k, 0.09, v); noise(t, 0.03, v * 0.5, 'highpass', 5200); },   // 스킬 타격의 한 음(올라간다)
+    swordsNew: (t, v, o) => { const k = Math.pow(2, (o.detune || 0) / 1200); tone(t, 'triangle', 2100 * k, 1900 * k, 0.16, v); noise(t, 0.05, v * 0.7, 'bandpass', 6800, 4200, 3); },   // 검 묶음이 생긴다(새로 고쳐진다): 짧은 금속음
     execShot: (t, v, o) => { noise(t, 0.07, v, 'bandpass', 2600, 700, 2); tone(t, 'square', 260, 120, 0.09, v * 0.4, o.detune || 0); },
   };
 

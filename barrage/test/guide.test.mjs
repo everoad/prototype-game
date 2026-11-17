@@ -57,3 +57,15 @@ test('실험으로 켠 갈고리·지뢰도 제 키가 표에 나온다', () => 
   const g = guide(createWorld({ store: true, tries: 'always,snipe,sky,mine', ai: false }), LOOK);
   assert.deepEqual(keysOf(g.right), ['J', 'U', 'I', 'O', 'K+L']);
 });
+
+test('검사 판: 오른손 표가 스킬 셋이고 하는 법이 검사의 것이다', () => {
+  const g = guide(createWorld({ char: 'sword', stage: 1, tries: gameTries(null), ai: false }), LOOK);
+  assert.deepEqual(keysOf(g.right), ['J', 'U', 'I', 'O', 'K+L']);
+  assert.ok(g.right.every(r => r.text && r.text.length <= 34));
+  const all = g.how.join(' ');
+  for (const word of ['일섬', '회전 베기', '마무리', 'J']) assert.ok(all.includes(word), `하는 법에 ${word}가 없다`);
+  assert.ok(g.how.length >= 3 && g.how.length <= 5);
+  assert.ok(g.title.includes('검사'));
+  assert.deepEqual(keysOf(guide(createWorld({ char: 'sword', tries: gameTries(null), ai: false }), LOOK).right), ['J', 'U', 'I', 'O'], '보스전만: 이동기 줄이 없다');
+  assert.ok(!guide(stage(), LOOK).title.includes('검사'));
+});

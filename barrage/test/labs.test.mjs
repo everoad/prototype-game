@@ -28,7 +28,7 @@ test('장면에서는 체력이 1 밑으로 내려가지 않는다', () => {
 });
 
 test('모든 장면이 20초 동안 무언가를 한다', () => {
-  for (const name of Object.keys(LABS)) {
+  for (const name of Object.keys(LABS).filter(n => !n.startsWith('sword'))) {   // swords · swordmobs = 이기어검의 움직임을 보는 장면: 적이 일부러 가만히 서 있다(swords.test.mjs가 본다)
     const w = createWorld({ lab: name });
     const ev = play(w, 20);
     const acts = ev.filter(e => ['fire', 'lane', 'rushStart', 'meleeHit', 'groggy'].includes(e.type)).length;   // execute 장면 = 그로기를 되풀이

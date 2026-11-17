@@ -14,6 +14,7 @@ import { canExecute } from './execute.js';
 import { bossGroggy } from './boss.js';
 import { tryKey } from './tries.js';
 import { CARDS, kitFull } from './cards.js';
+import { isSword, slashLanding, bladeMoving } from './sword.js';
 
 const DIRS = [[0, 0]];
 for (let i = 0; i < 16; i++) DIRS.push([Math.cos(i * Math.PI / 8), Math.sin(i * Math.PI / 8)]);
@@ -147,14 +148,39 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
     return t >= 0 ? t : Infinity;
   }
 
+  // 검사의 둘레(sword.js): 그 안에서는 적 탄이 느려진다 — 앞날을 내다볼 때도 그만큼 느리게 센다.
+  // 탄 (x,z)가 T초 뒤 있을 자리. 둘레의 가운데는 처음 hold초는 (cx,cz)에 있고 그 뒤 (cvx,cvz)로 움직인다(내가 걸어갈 쪽).
+  function drift(F, cx, cz, cvx, cvz, hold, x, z, vx, vz, T) {
+    const n = Math.max(1, Math.ceil(T / 0.04)), h = T / n, R2 = F.R * F.R;
+    for (let i = 0; i < n; i++) {
+      const s = Math.max(0, i * h - hold), ox = cx + cvx * s, oz = cz + cvz * s;
+      const k = (x - ox) * (x - ox) + (z - oz) * (z - oz) <= R2 ? F.slow : 1;
+      x += vx * h * k; z += vz * h * k;
+    }
+    return [x, z];
+  }
+  // 둘레를 넣은 접촉까지 남은 시간(가만히 있을 때): 틱마다 밀어 본다(0.8초까지)
+  function contactSlow(F, px, pz, x, z, vx, vz, rad, dt) {
+    const R2 = F.R * F.R;
+    for (let t = 0; t <= 0.8; t += dt) {
+      const d2 = (x - px) * (x - px) + (z - pz) * (z - pz);
+      if (d2 <= rad * rad) return t;
+      const k = d2 <= R2 ? F.slow : 1;
+      x += vx * dt * k; z += vz * dt * k;
+    }
+    return Infinity;
+  }
+
   return function bot(w) {
     const R = w.rules, B0 = R.bot, p = w.player, now = w.time;
     const B = user ? (userB ??= { ...B0, react: B0.user.react, think: B0.user.think }) : B0;   // user: 늦게 보고 드물게 고쳐 움직인다
     userChance = B0.user.chance;
+    const sword = isSword(w);   // 검사(sword.js): U·I·O가 스킬이다 — 던지기 판단 대신 아래의 스킬 판단
+    const F = sword ? R.sword.field : null;   // 검사의 둘레(그 안의 탄은 느리다 — 내다보는 셈에 넣는다)
     snapshot(w, R);
     // 모아 던지기(§4.11): 던질 때
     let toss = false;
-    if (w.opts.store && parries && p.store.length > 0) {
+    if (w.opts.store && parries && p.store.length > 0 && !sword) {
       const S = R.store, n = p.store.length;
       let heal = 0; for (const o of p.store) heal += o.perfect ? S.heal[1] : S.heal[0];
       const free = p.dyingAt == null && !(p.auto && now < p.autoUntil);   // 못 던지는 때엔 누르지 않는다(틱 소리만 난다)
@@ -162,6 +188,7 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       toss = free && target && (n >= p.storeCap || (n >= 2 && R.player.hp - p.hp >= heal) || bossGroggy(w) || p.hp <= R.player.hp * 0.25);
     }
     if (w.execute) return { mx: 0, mz: 0, parry: false, dodge: false, throw: false };
+    if (sword && parries && canExecute(w) && p.store.length > 0 && p.dyingAt == null) return { mx: 0, mz: 0, parry: false, dodge: false, throw: false, spin: true };   // 검사: 처형 전에 남은 칸을 회전 베기로 몰아 쓴다(그로기 중 피해 1.5배)
     if (parries && canExecute(w)) return { mx: 0, mz: 0, parry: !toss, dodge: false, throw: toss };   // 그로기 곁 = (모은 것부터 던지고) 처형
     const f = delayed();
     const lag = f ? now - f.t : 0;
@@ -222,8 +249,9 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
         if (kd !== K.WHITE && kd !== K.GOLD) continue;
         const pl = plan(`${f.id[k]}:${f.born[k]}`, true);
         if (!pl.parry) continue;
-        const x = f.x[k] + f.vx[k] * lag, z = f.z[k] + f.vz[k] * lag;
-        const tc = contact(p.x, p.z, x, z, f.vx[k], f.vz[k], R.player.parryR + f.r[k]);
+        let x = f.x[k] + f.vx[k] * lag, z = f.z[k] + f.vz[k] * lag;
+        if (F) [x, z] = drift(F, p.x, p.z, 0, 0, 0, f.x[k], f.z[k], f.vx[k], f.vz[k], lag);
+        const tc = F ? contactSlow(F, p.x, p.z, x, z, f.vx[k], f.vz[k], R.player.parryR + f.r[k], R.dt) : contact(p.x, p.z, x, z, f.vx[k], f.vz[k], R.player.parryR + f.r[k]);
         if (tc >= lo + pl.jitter && tc <= hi + pl.jitter) parry = true;
       }
       for (const a of seenAreas) {
@@ -258,8 +286,9 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       for (let k = 0; k < f.n && !hold; k++) {
         const kd = f.kind[k];
         if ((kd !== K.WHITE && kd !== K.GOLD) || !plan(`${f.id[k]}:${f.born[k]}`, true).parry) continue;
-        const x = f.x[k] + f.vx[k] * lag, z = f.z[k] + f.vz[k] * lag;
-        if (contact(p.x, p.z, x, z, f.vx[k], f.vz[k], R.player.parryR + f.r[k]) < B.look) hold = true;
+        let x = f.x[k] + f.vx[k] * lag, z = f.z[k] + f.vz[k] * lag;
+        if (F) [x, z] = drift(F, p.x, p.z, 0, 0, 0, f.x[k], f.z[k], f.vx[k], f.vz[k], lag);
+        if ((F ? contactSlow(F, p.x, p.z, x, z, f.vx[k], f.vz[k], R.player.parryR + f.r[k], R.dt) : contact(p.x, p.z, x, z, f.vx[k], f.vz[k], R.player.parryR + f.r[k])) < B.look) hold = true;
       }
       // 받을 흰·금 근접 타가 곧 오고 지금 장판 안이면 그 자리를 지킨다(걸어 나가면 패링 기회가 사라진다)
       for (const a of seenAreas) {
@@ -291,7 +320,8 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
           if (f) for (let k = 0; k < f.n; k++) {
             const kd = f.kind[k];
             if ((kd === K.WHITE || kd === K.GOLD) && plan(`${f.id[k]}:${f.born[k]}`, true).parry) continue;
-            const x = f.x[k] + f.vx[k] * (lag + t), z = f.z[k] + f.vz[k] * (lag + t);
+            let x = f.x[k] + f.vx[k] * (lag + t), z = f.z[k] + f.vz[k] * (lag + t);
+            if (F) { if (Math.abs(f.x[k] - p.x) > 14 || Math.abs(f.z[k] - p.z) > 14) continue; [x, z] = drift(F, p.x, p.z, dx * speed, dz * speed, lag, f.x[k], f.z[k], f.vx[k], f.vz[k], lag + t); }
             if (Math.abs(x - qx) > 2 || Math.abs(z - qz) > 2) continue;
             const d = Math.hypot(x - qx, z - qz), lim = R.player.hitR + f.r[k] + B.margin;
             if (d < lim) { danger += 10 * (n + 1 - j); if (j <= 2) early++; } else if (d < lim + 0.5) danger += 0.4;
@@ -333,15 +363,16 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
             if (j === 1) danger += Math.hypot(qx - goal.x, qz - goal.z) * B0.room.pull;
           } else if (j === n && away) {   // 아니면 가장 가까운 적과 거리를 지킨다
             const tgt = w.enemies.find(e => e.kind === 'totem' && !e.dead && now >= e.bornAt) ?? w.aim;   // 보호탑이 있으면 탑 곁으로(가장 가까운 적을 겨누니 다가가야 탑을 쏜다)
+            // 검사는 받아칠 틈이 나는 거리(sword.room)에서 모으고 일섬으로 들어간다 — 가까이 서면 흰 탄을 볼 새가 없다
             // 지킬 거리: 산탄 하나만 들면 붙어 싸운다(붙을수록 세다 — keepBurst). 다른 무기와 같이 들면 여느 거리(붙으면 봇이 너무 맞는다)
-            if (tgt) { const d = Math.hypot(qx - tgt.x, qz - tgt.z), [k0, k1] = tgt.kind === 'totem' ? B0.room.totem : w.tries && w.tries.on.always && w.weapons.on.length === 1 && w.weapons.on[0] === 'burst' ? B0.room.keepBurst : B0.room.keep; danger += (Math.max(0, k0 - d) + Math.max(0, d - k1)) * 0.6; }
+            if (tgt) { const d = Math.hypot(qx - tgt.x, qz - tgt.z), [k0, k1] = tgt.kind === 'totem' ? B0.room.totem : w.tries && w.tries.on.always && w.weapons.on.length === 1 && w.weapons.on[0] === 'burst' ? B0.room.keepBurst : sword ? B0.sword.room : B0.room.keep; danger += (Math.max(0, k0 - d) + Math.max(0, d - k1)) * 0.6; }
             const edge = Math.min(R.board.hx - Math.abs(qx), R.board.hz - Math.abs(qz));
             if (edge < 1.5) danger += (1.5 - edge) * 1.0;
           } else if (j === n) {
             const db = Math.hypot(qx - w.boss.x, qz - w.boss.z);
             // 패링하는 봇은 돌진·근접 동안 달아나지 않고 붙어서 받는다(사람도 그렇다 — 달아나면 패링 기회가 사라진다)
             const duel = parries && (w.boss.state === 'rush' || w.boss.state === 'melee' || w.boss.state === 'meleeWait' || !!w.melee.combo);
-            const [k0, k1] = parries && bossGroggy(w) ? B.execBand : duel ? B.duel : w.boss.kind === 'dragon' ? Bz.keep : B.keep;   // 용: 입이 앞으로 나와 있어 몸통에서 더 멀리   // 그로기면 다가가 처형
+            const [k0, k1] = parries && bossGroggy(w) ? B.execBand : duel ? B.duel : sword ? (p.store.length > 0 && Math.hypot(p.x - w.boss.x, p.z - w.boss.z) <= R.boss.r + R.sword.spin.R ? B0.sword.stay : B0.sword.keep) : w.boss.kind === 'dragon' ? Bz.keep : B.keep;   // 검사: 붙어서 칸이 남아 있으면 그대로 붙어 있는다(그 밖에는 사수와 같은 거리 — 더 가까이 서면 탄을 못 피한다)   // 용: 입이 앞으로 나와 있어 몸통에서 더 멀리   // 그로기면 다가가 처형
             if (zoneGoal && !duel && !bossGroggy(w)) {   // 용 판 목표 자리(용이 돌면 따라 돈다)
               const a = w.boss.face + zoneGoal.off, gx = w.boss.x + Math.cos(a) * zoneGoal.R, gz = w.boss.z + Math.sin(a) * zoneGoal.R;
               danger += Math.hypot(qx - gx, qz - gz) * Bz.pull;
@@ -403,6 +434,21 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       else if (toss && w.aim && p.store.length >= p.storeCap && p.hp >= R.player.hp * B0.snipe.hpAbove) { snipeLeft = B0.snipe.ticks; aimHold = true; toss = false; }
       if (aimHold) { mx = 0; mz = 0; }   // 조준점은 겨눈 적에 붙어 있다 — 고르지 않고 쏜다
     }
-    return { mx, mz, parry, dodge, skill, throw: toss, hold: aimHold, ...keys };
+    // 검사의 스킬(확인·영상용 — 사람의 판단을 흉내 내지 못한다): 빨간 몸 공격이 임박하면 마무리로 빠지고, 닿으면 회전 베기로 몰아치다 마지막 칸은 마무리로 빠지고,
+    // 칸이 enter만큼 모였고(방에서는 하나라도) 보스가 쏘는 중이 아니면 일섬으로 들어간다. 체력이 낮으면 헛쳐서라도 회복한다.
+    let spinKey = false;
+    if (sword && parries && p.store.length > 0 && p.dyingAt == null && !bladeMoving(w)) {
+      const BS = B0.sword, Sw = R.sword, b = w.boss, a = w.aim && !w.aim.dead ? w.aim : null;
+      const surf = a ? Math.hypot(a.x - p.x, a.z - p.z) - (a === b ? R.boss.r : a.r) : Infinity;
+      const redSoon = seenAreas.some(ar => !ar.hit && ar.color === 'red' && ar.born + ar.warn - now <= BS.exitSec
+        && (ar.shape === 'circle' ? inCircle(p.x, p.z, R.player.bodyR, ar.x, ar.z, ar.R) : inSector(p.x, p.z, R.player.bodyR, ar.x, ar.z, ar.R, ar.face, ar.half))) || waves.some(h => h.color === 'red' && h.t <= BS.exitSec);
+      const shooting = !away && !bossGroggy(w) && now >= (b.stunUntil ?? -1) && (b.state === 'windup' || b.state === 'pattern' || b.state === 'patternWait' || (!!b.runs && b.runs.length > 0));
+      const close = surf <= Sw.spin.R - BS.margin;
+      if (redSoon && surf <= Sw.finish.R) { keys.orb = true; dodge = false; }
+      else if (close && p.store.length === 1 && !bossGroggy(w) && !away) keys.orb = true;   // 붙어서 마지막 칸: 마무리로 치고 빠진다(칸 없이 곁에 남지 않는다)
+      else if (close || p.hp <= R.player.hp * BS.lowHp) spinKey = true;
+      else if (slashLanding(w) && !shooting && (away ? p.store.length >= BS.enterRoom && calm : p.store.length >= BS.enter || bossGroggy(w))) toss = true;
+    }
+    return { mx, mz, parry, dodge, skill, throw: toss, spin: spinKey, hold: aimHold, ...keys };
   };
 }

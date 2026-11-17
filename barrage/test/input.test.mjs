@@ -116,3 +116,13 @@ test('U·I·O는 무기 스킬(미사일·빔·드론), 누른 순간 한 번', 
   m.keyDown('KeyI', 1); assert.equal(m.take().skill, 'beam');
   m.keyDown('KeyO', 2); assert.equal(m.take().skill, 'drone');
 });
+
+test('I를 누른 순간 spin이 한 번 선다(누르고 있어도 한 번) — hold는 누르고 있는 동안 그대로', () => {
+  const m = createInputMap(0);
+  m.keyDown('KeyI', 0); m.keyDown('KeyI', 10);
+  const a = m.take(), b = m.take();
+  assert.equal(a.spin, true); assert.equal(a.hold, true);
+  assert.equal(b.spin, false); assert.equal(b.hold, true);
+  m.keyUp('KeyI'); m.keyDown('KeyI', 20); m.clearPresses();
+  assert.equal(m.take().spin, false, '멈춘 동안 누른 것은 버린다');
+});

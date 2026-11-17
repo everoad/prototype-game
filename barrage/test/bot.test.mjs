@@ -369,3 +369,24 @@ test('산탄을 든 봇은 미사일을 든 봇보다 가까이 선다', () => {
   assert.ok(burst < missile - 1, `산탄 ${burst.toFixed(2)} U · 미사일 ${missile.toFixed(2)} U`);
   assert.ok(burst <= RULES.bot.room.keepBurst[1] + 0.8, `산탄을 든 봇의 거리 ${burst.toFixed(2)}`);
 });
+
+// ── 검사(sword.js): 확인용 봇이 스킬 셋을 쓴다
+import { gameTries } from '../src/sim/tries.js';
+test('검사 봇: 보스전에서 일섬과 회전 베기를 쓰고 던지기는 쓰지 않는다', () => {
+  const w = createWorld({ char: 'sword', seed: 3, tries: gameTries(null) }), bot = createBot('user', 3);
+  for (let k = 0; k < 120 * 60 && !w.result; k++) step(w, bot(w));
+  assert.ok(w.stats.blade.slash >= 1 && w.stats.blade.spin >= 1, JSON.stringify(w.stats.blade));
+  assert.equal(w.stats.throws, 0);
+  assert.ok(w.stats.dmg.blade > 0);
+});
+
+test('검사 봇: 스테이지의 방에서도 스킬로 몬스터를 벤다', () => {
+  const w = createWorld({ char: 'sword', stage: 1, seed: 2, tries: gameTries(null) }), bot = createBot('user', 2);
+  for (let k = 0; k < 120 * 40 && !w.result && w.stage.room === 0; k++) step(w, bot(w));
+  assert.ok(w.stats.blade.slash + w.stats.blade.spin + w.stats.blade.finish >= 1, JSON.stringify(w.stats.blade));
+});
+
+test('사수 판의 봇은 spin을 누르지 않는다', () => {
+  const w = createWorld({ store: true, seed: 3, tries: gameTries(null), gear: 'missile,burst' }), bot = createBot('user', 3);
+  for (let k = 0; k < 120 * 20 && !w.result; k++) { const i = bot(w); assert.ok(!i.spin); step(w, i); }
+});

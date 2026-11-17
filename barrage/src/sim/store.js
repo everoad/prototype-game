@@ -8,6 +8,7 @@ import { spawnBullet } from './bullets.js';
 import { executeActive } from './execute.js';
 import { autoActive } from './rewards.js';
 import { weaponSalvo } from './weapons.js';
+import { isSword } from './sword.js';
 
 export const storeOn = w => !!w.opts.store;
 // 던지기·저격·지뢰의 바탕 피해 배율: 늘 나가는 무기 판에서는 낮춘다 — 낮춘 몫은 무기의 한 방이 채운다(무기 없이 던지기만으로 충분하지 않게)
@@ -24,7 +25,7 @@ export function storeAdd(w, { perfect, gold, stagger, x, z, kind }) {
 }
 
 export function throwStore(w, input) {
-  if (!storeOn(w) || !input.throw) return;
+  if (!storeOn(w) || !input.throw || isSword(w)) return;   // 검사의 U는 일섬(sword.js)
   const p = w.player, S = w.rules.store, b = w.bullets;
   const busy = executeActive(w) || autoActive(w) || p.dyingAt != null || !!w.result || w.boss.dead;
   if (busy || p.store.length === 0) { emit(w, 'denied', { what: 'throw', why: busy ? 'busy' : 'empty' }); return; }

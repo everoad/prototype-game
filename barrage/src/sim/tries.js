@@ -36,6 +36,7 @@ import { weaponSalvo } from './weapons.js';
 import { resolveHit } from './melee.js';
 import { executeActive } from './execute.js';
 import { autoActive } from './rewards.js';
+import { isSword } from './sword.js';
 
 export const TRIES = ['rope', 'sky', 'pillars', 'fire', 'dash', 'lance', 'mine', 'orbit', 'crystal', 'swap', 'focus', 'graze', 'bubble', 'tide', 'always', 'hunt', 'snipe', 'vary'];
 
@@ -89,7 +90,7 @@ function turn(w, name, on) {
   else if (name === 'focus') { X.still = 0; X.shotMul = 1; }
   else if (name === 'orbit') X.orbitAt = w.time;
   else if (name === 'graze') { X.grazeSeen = w.stats.grazes; X.grazeN = 0; }
-  else if (name === 'snipe') X.snipe = on && w.opts.store ? { on: false, angle: 0, since: 0, wait: false, target: null, rx: 0, rz: 0, rpx: 0, rpz: 0, firedAt: -1e9, fx: 0, fz: 0, fa: 0 } : null;
+  else if (name === 'snipe') X.snipe = on && w.opts.store && !isSword(w) ? { on: false, angle: 0, since: 0, wait: false, target: null, rx: 0, rz: 0, rpx: 0, rpz: 0, firedAt: -1e9, fx: 0, fz: 0, fa: 0 } : null;
   else if (name === 'always') X.shotBase = on ? T.always.shot : 1;
 }
 
@@ -114,7 +115,7 @@ export function setTry(w, name, on) {
 function initAlways(w) {
   const A = w.rules.tries.always;
   w.boss.maxHp *= A.bossHp; w.boss.hp *= A.bossHp;
-  if (w.opts.stage != null && !w.weapons.on.length) w.weapons.on = [A.start];
+  if (w.opts.stage != null && !w.weapons.on.length && !isSword(w)) w.weapons.on = [A.start];   // 검사는 무기를 들지 않는다
 }
 
 // 저격: 틱의 맨 앞(플레이어가 움직이기 전)에 입력을 본다. 조준 중이면 이동·던지기·실험 행동을 지운 입력을 돌려준다.
@@ -229,7 +230,7 @@ export function triesMove(w, input) {
   if (!X || w.result) return;
   const R = w.rules, p = w.player;
   if (X.on.rope || X.on.sky) {
-    const T = R.tries.rope, rope = X.rope, busy = !!w.execute || (p.auto && w.time < p.autoUntil) || p.dyingAt != null;
+    const T = R.tries.rope, rope = X.rope, busy = !!w.execute || (p.auto && w.time < p.autoUntil) || p.dyingAt != null || !!p.blade.move;   // 검사의 스킬이 몸을 움직이는 동안은 줄을 놓고, 새로 걸지도 못한다
     if (rope.to && (isDodging(w) || busy)) { rope.to = null; emit(w, 'ropeEnd', { x: p.x, z: p.z, cut: true }); }   // 구르면 줄을 놓는다
     if (input[tryKey(w, X.on.sky ? 'sky' : 'rope')] && !rope.to) {
       const a = !busy && !isDodging(w) && w.time >= rope.readyAt ? pickAnchor(w, input) : null;
@@ -245,7 +246,7 @@ export function triesMove(w, input) {
       }
     }
   }
-  const busy2 = !!w.execute || (p.auto && w.time < p.autoUntil) || p.dyingAt != null;
+  const busy2 = !!w.execute || (p.auto && w.time < p.autoUntil) || p.dyingAt != null || !!p.blade.move;   // 검사의 스킬이 몸을 움직이는 동안은 자리 바꾸기·지뢰도 쉰다
   if (X.on.swap && input[tryKey(w, 'swap')]) {   // 자리 바꾸기: 겨눈 몬스터와(보스와는 안 된다 — 보스의 장판·돌진이 자리에 묶여 있다)
     const t = w.aim, S = R.tries.swap;
     if (t && !t.dead && t !== w.boss && !busy2 && !isDodging(w) && w.time >= X.swapAt) {
@@ -256,7 +257,7 @@ export function triesMove(w, input) {
       emit(w, 'swap', { x0, z0, x1: p.x, z1: p.z });
     } else emit(w, 'denied', { what: 'swap' });
   }
-  if (X.on.mine && input[tryKey(w, 'mine')]) {   // 지뢰: 모은 탄 하나를 발밑에
+  if (X.on.mine && !isSword(w) && input[tryKey(w, 'mine')]) {   // 지뢰: 모은 탄 하나를 발밑에(검사의 O는 마무리 — sword.js)
     if (p.store.length && X.mines.length < R.tries.mine.max && !busy2) { const o = p.store.pop(); X.mines.push({ x: p.x, z: p.z, born: w.time, perfect: o.perfect, stagger: o.stagger }); emit(w, 'mineSet', { x: p.x, z: p.z, n: p.store.length }); if (w.aim && !w.aim.dead) weaponSalvo(w, 1, Math.atan2(w.aim.z - p.z, w.aim.x - p.x), 'mine'); }
     else emit(w, 'denied', { what: 'mine' });
   }
@@ -296,9 +297,9 @@ export function triesMove(w, input) {
 export function triesBodies(w) {
   const X = w.tries;
   if (!X || !X.pillars.length) return;
-  const R = w.rules, p = w.player, b = w.boss;
+  const R = w.rules, p = w.player, b = w.boss, through = !!p.blade.move && p.blade.move.kind === 'slash';   // 검사의 일섬은 기둥도 지나간다(끝에 겹치면 선 틱에 밀려난다)
   for (const c of X.pillars) {
-    [p.x, p.z] = clampToBoard(R, ...slideOut(p.x, p.z, R.player.bodyR, c.x, c.z, c.r), R.player.bodyR);
+    if (!through) [p.x, p.z] = clampToBoard(R, ...slideOut(p.x, p.z, R.player.bodyR, c.x, c.z, c.r), R.player.bodyR);
     if (!b.away && !b.dead) [b.x, b.z] = clampToBoard(R, ...slideOut(b.x, b.z, R.boss.r, c.x, c.z, c.r), R.boss.r);
     for (const m of w.enemies) if (!m.dead && w.time >= m.bornAt) [m.x, m.z] = clampToBoard(R, ...slideOut(m.x, m.z, m.r, c.x, c.z, c.r), m.r);
   }

@@ -37,11 +37,11 @@ export function hitFoe(w, x0, z0, x1, z1, pad = 0) {
 }
 
 // 적 하나에게 피해. 보스면 damageBoss(과열·그로기 배율, raw = 그대로), 몬스터면 체력을 깎고 0이면 죽는다.
-// from = 탄이 온 자리(방패병의 방패 판정), pierce = 받아친 탄(방패를 뚫는다). 준 피해를 돌려준다(막혔으면 0).
-export function hurtFoe(w, f, amount, src, { raw = false, pierce = false, fromX = null, fromZ = null } = {}) {
+// from = 탄이 온 자리(방패병의 방패 판정), pierce = 받아친 탄(방패를 뚫는다), quiet = 맞은 사건에 표시(화면이 소리·불티를 겹쳐 내지 않게). 준 피해를 돌려준다(막혔으면 0).
+export function hurtFoe(w, f, amount, src, { raw = false, pierce = false, fromX = null, fromZ = null, quiet = false } = {}) {
   if (f === w.boss) {
     const bub = w.tries && w.tries.bubble && w.tries.bubble.on ? w.tries.bubble : null;   // 보호막(실험): 던진 탄만 통하고, 던진 탄 hits발이면 깨진다
-    if (bub && src !== 'throw' && src !== 'salvo') { emit(w, 'mobBlock', { id: 0, x: f.x, z: f.z }); return 0; }   // 한 방(salvo)도 던진 탄으로 친다
+    if (bub && src !== 'throw' && src !== 'salvo' && src !== 'blade') { emit(w, 'mobBlock', { id: 0, x: f.x, z: f.z }); return 0; }   // 한 방(salvo)도 던진 탄으로 친다
     if (bub && --bub.hp <= 0) { bub.on = false; bub.nextAt = w.time + w.rules.tries.bubble.every; emit(w, 'bubbleBreak', { x: f.x, z: f.z }); }
     return damageBoss(w, amount, src, raw);
   }
@@ -51,7 +51,7 @@ export function hurtFoe(w, f, amount, src, { raw = false, pierce = false, fromX 
   f.hp -= dealt;
   addDamage(w.stats, src, dealt);
   if (f.hp <= 1e-9) { f.hp = 0; f.dead = true; f.diedAt = w.time; emit(w, 'mobDeath', { id: f.id, kind: f.kind, x: f.x, z: f.z }); }
-  else emit(w, 'mobHit', { id: f.id, x: f.x, z: f.z });
+  else emit(w, 'mobHit', quiet ? { id: f.id, x: f.x, z: f.z, quiet: true } : { id: f.id, x: f.x, z: f.z });   // quiet = 제 소리·불티를 따로 내는 것(검사의 이기어검 — 1초에 서른 번을 찌른다): 화면이 맞은 소리·불티를 겹쳐 내지 않는다
   return dealt;
 }
 

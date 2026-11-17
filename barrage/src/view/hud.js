@@ -3,6 +3,7 @@
 import { BASE_TRIES, tryKey } from '../sim/tries.js';
 import { CARDS, GROUPS, kitCards, kitAll } from '../sim/cards.js';
 import { guide } from './guide.js';
+import { isSword, slashLanding } from '../sim/sword.js';
 import { BUILD } from './version.js';
 
 // 결과 화면 밝기: 승리·패배 순간에서 since초 — 늦게(큰 순간을 먼저 보여 주고) 서서히 뜬다
@@ -67,7 +68,7 @@ export function createHud(canvas, LOOK) {
       ctx.fillStyle = k < p.dodge.charges ? C.pip : C.pipEmpty; ctx.fill();
     }
     // 보조 무기(§4.10): 숫자 1~4 = 켜고 끄기(시험용), 켠 것은 청록
-    if (w.weapons) {
+    if (w.weapons && !isSword(w)) {   // 검사는 무기가 없다 — 이 줄을 그리지 않는다
       const names = { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론' };
       ctx.font = font(12, true); ctx.textAlign = 'left';
       let gx = px;
@@ -100,10 +101,31 @@ export function createHud(canvas, LOOK) {
         ctx.beginPath(); ctx.arc(px + 8 + k * 18 + sk, py - 46, full ? 6.5 + Math.sin(now * 16) : 6, 0, Math.PI * 2);
         ctx.fillStyle = k < n ? C.cyan : C.pipEmpty; ctx.fill();
       }
+      if (isSword(w) && n < cap && p.blade.charge > 0) {   // 검사: 칼바람이 채우는 칸 — 다음 빈 칸이 시계 방향으로 찬다
+        const cx = px + 8 + n * 18 + sk, cy = py - 46;
+        ctx.globalAlpha = LOOK.sword.chargeAlpha; ctx.fillStyle = C.cyan;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, 6, -Math.PI / 2, -Math.PI / 2 + Math.min(1, p.blade.charge) * Math.PI * 2); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
       ctx.font = font(13, true); ctx.textAlign = 'left';
       const low = p.hp > 0 && p.hp <= w.rules.player.hp * LOOK.feel.lowHp.at && n > 0;   // 체력 위태 + 모은 것 있음 = 던져서 회복하라고 깜빡
       ctx.fillStyle = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : n > 0 ? C.cyan : C.textDim;
-      ctx.fillText((low ? 'U 던져서 회복!' : full ? 'U 던지기 — 가득!' : 'U 던지기') + (w.tries?.on.snipe ? ' · I 누르고 있기 = 저격(WASD 적 고르기)' : ''), px + 8 + cap * 18 + 6 + sk, py - 41);
+      if (isSword(w)) {   // 검사: 스킬 셋 — 지금 누르면 나가는 것만 밝다(칸이 없으면 셋 다 어둡고, 일섬은 닿는 거리 밖이면 어둡다)
+        const N = LOOK.sword.names, reach = n > 0 && !!slashLanding(w), lit = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : C.cyan;
+        let tx = px + 8 + cap * 18 + 6 + sk;
+        for (const [label, ok] of [[`U ${N.slash}`, reach], [`I ${N.spin}`, n > 0], [`O ${N.finish}`, n > 0]]) {
+          ctx.fillStyle = ok ? lit : C.textDim; ctx.fillText(label, tx, py - 41); tx += ctx.measureText(label).width + 14;
+        }
+        if (p.swords) {   // 이기어검: 검 묶음 셋(바탕은 늘 켜져 있다) — 스킬 묶음은 남은 시간만큼 밑줄이 줄어든다
+          const H = LOOK.sword.swords.hud, keep = w.rules.sword.swords.keep, y = py - 46;
+          for (let i = 0; i < Math.round(w.rules.sword.swords.max / w.rules.sword.swords.n); i++) {
+            const b = i === 0 ? null : p.swords.batches[i - 1], x = tx + 6 + i * H.gap;
+            ctx.fillStyle = i === 0 || b ? C.cyan : C.pipEmpty;
+            ctx.beginPath(); ctx.moveTo(x, y - H.h); ctx.lineTo(x + H.w, y); ctx.lineTo(x, y + H.h * 0.45); ctx.lineTo(x - H.w, y); ctx.closePath(); ctx.fill();
+            if (b) ctx.fillRect(x - H.w, y + H.h * 0.45 + 3, 2 * H.w * Math.max(0, Math.min(1, (b.until - w.time) / keep)), 2);
+          }
+        }
+      } else ctx.fillText((low ? 'U 던져서 회복!' : full ? 'U 던지기 — 가득!' : 'U 던지기') + (w.tries?.on.snipe ? ' · I 누르고 있기 = 저격(WASD 적 고르기)' : ''), px + 8 + cap * 18 + 6 + sk, py - 41);
     }
     // 방패·폭탄 사용권(§4.9)
     if (p.stock) {
@@ -157,9 +179,9 @@ export function createHud(canvas, LOOK) {
     ctx.font = font(15, true); ctx.fillStyle = C.text; ctx.textAlign = 'right';
     ctx.fillText(mmss(w.time), W - 20, 34);
     ctx.font = font(12); ctx.fillStyle = C.textDim;
-    ctx.fillText(w.kit ? `Esc 멈춤(조작 안내) · V 시점 · F4 처음부터${w.result === 'lose' ? ' · R 이 방 다시' : ''}` : `WASD 이동 · J/Shift 패링 · Space 회피 · Q 방패 · E 폭탄 · ${w.opts.store ? 'U 던지기 · I 저격' : 'U/I/O 무기 스킬'} · 1~4 무기 · V 시점 · Esc 멈춤 · F4 다시`, W - 20, H - 18);   // 스테이지는 짧게(낀 것 HUD가 키를 보여 준다)
+    ctx.fillText(w.kit ? `Esc 멈춤(조작 안내) · V 시점 · F4 처음부터${w.result === 'lose' ? ' · R 이 방 다시' : ''}` : `WASD 이동 · J/Shift 패링 · Space 회피 · Q 방패 · E 폭탄 · ${isSword(w) ? 'U 일섬 · I 회전 베기 · O 마무리' : w.opts.store ? 'U 던지기 · I 저격 · 1~4 무기' : 'U/I/O 무기 스킬 · 1~4 무기'} · V 시점 · Esc 멈춤 · F4 다시`, W - 20, H - 18);   // 스테이지는 짧게(낀 것 HUD가 키를 보여 준다)
     if (w.kit) kitBar(w, ui);
-    ctx.fillText(`빌드 ${BUILD}`, W - 20, ui.bot ? 70 : 54);
+    ctx.fillText(`빌드 ${BUILD}${isSword(w) ? ' · 검사' : ''}`, W - 20, ui.bot ? 70 : 54);
     if (ui.bot) ctx.fillText(`봇: ${ui.bot}`, W - 20, 54);
     // F1 판정 보기
     if (ui.debug) debug(w, ui);
@@ -204,7 +226,7 @@ export function createHud(canvas, LOOK) {
   // 칸의 자리: 오른쪽 끝에서 왼쪽으로 채워 나간다(몸 카드가 늘면 왼쪽으로 자란다)
   function kitLayout(w) {
     const Kt = LOOK.kit, R = w.rules.cards.slots, out = [];
-    const body = kitCards(w, 'body'), counts = { weapon: R.weapon, orb: R.orb, move: R.move, body: body.length };
+    const body = kitCards(w, 'body'), sword = isSword(w), counts = { weapon: sword ? 0 : R.weapon, orb: sword ? 0 : R.orb, move: R.move, body: body.length };   // 검사 판에는 무기·탄 기술 칸이 없다
     let x = W - 20;
     for (const g of [...GROUPS].reverse()) {
       const sw = g === 'body' ? Kt.bodyW : Kt.slotW;
@@ -309,7 +331,7 @@ export function createHud(canvas, LOOK) {
     } else if (w.result) {
       ctx.font = font(40, true); ctx.fillText(w.result === 'win' ? (w.stage ? '스테이지 완료' : '승리') : '패배', W / 2, H / 2 - 60);
       ctx.font = font(16);
-      ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
+      ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${isSword(w) ? ` · 일섬 ${s.blade.slash} · 회전 베기 ${s.blade.spin} · 마무리 ${s.blade.finish} · 회복 ${Math.round(s.healed)}` : w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
       ctx.fillStyle = C.textDim; ctx.fillText(w.stage && w.result === 'lose' ? 'R 이 방 다시 · F4 처음부터' : 'F4 다시', W / 2, H / 2 + 14);
       if (w.stage) ctx.fillText(`방 ${w.stage.room + 1} / ${w.stage.of} · 다시 한 횟수 ${w.stage.retries}` + w.stage.times.map(t => ` · 방 ${t.room} ${t.sec.toFixed(0)}초`).join(''), W / 2, H / 2 + 40);
     } else pauseGuide(w);

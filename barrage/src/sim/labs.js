@@ -7,6 +7,7 @@ import { bossGroggy, addStagger } from './boss.js';
 import { startPattern, updatePattern, windupColor } from './patterns.js';
 import { startRush, updateRush, startCombo, updateCombo } from './melee.js';
 import { clampToBoard } from './geom.js';
+import { spawnMob } from './foes.js';
 
 const aim = w => Math.atan2(w.player.z - w.boss.z, w.player.x - w.boss.x);
 function fire(w, kind, a, speed) {
@@ -108,6 +109,45 @@ export const LABS = {
     },
   },
 };
+
+// 이기어검의 움직임을 보는 장면(설계 2026-11-17-barrage-flying-swords-design.md §9): 적은 가만히 서 있고 죽지 않는다. 칸은 늘 가득하다(무너짐 값 없이 — 그로기가 끼지 않게).
+// 손은 사람 대신 정해진 시간표(CLIPS — opts.clip, 주소 clip=)대로 누른다: labHand(w)가 그 틱의 입력을 준다(주소 bot=script).
+function fillStore(w) {
+  const p = w.player;
+  while (p.store.length < p.storeCap) p.store.push({ perfect: true, gold: false, stagger: 0 });
+}
+LABS.swords = {
+  setup(w) {
+    const far = w.opts.clip === 'idle';   // 떠 있기만 볼 때는 보스를 사거리 밖에 둔다
+    w.player.x = w.player.px = far ? -4 : -2.6; w.player.z = w.player.pz = 0;
+    w.boss.x = w.boss.px = far ? 8.5 : 1; w.boss.z = w.boss.pz = 0;
+  },
+  think(w) { fillStore(w); },
+};
+LABS.swordmobs = {
+  setup(w) {
+    w.player.x = w.player.px = -3.4; w.player.z = w.player.pz = 0;
+    w.boss.away = true;
+    for (const [x, z] of [[-0.4, 0], [1.8, 1.9], [1.8, -1.9], [4, 0]]) spawnMob(w, 'shooter', x, z, 0);
+  },
+  think(w) { fillStore(w); for (const m of w.enemies) m.hp = m.maxHp; },
+};
+// 시간표: keys = [초, 입력 칸] 한 번 누름(throw = U 일섬 · spin = I 회전 베기 · orb = O 마무리 · dodge), moves = [부터, 까지, mx, mz] 누르고 있는 방향.
+export const CLIPS = {
+  chain: {},
+  idle: { moves: [[0.6, 1.6, 0, 1], [2.0, 2.7, -1, 0], [3.4, 4.2, 0, -1], [4.7, 5.2, 0, 1]], keys: [[4.8, 'dodge']] },
+  slash: { keys: [[1.0, 'throw'], [2.4, 'throw'], [3.8, 'throw']] },
+  spin: { keys: [[1.0, 'spin'], [2.4, 'spin'], [3.8, 'spin']] },
+  finish: { keys: [[1.0, 'orb'], [2.6, 'throw'], [3.2, 'orb']] },
+  burst: { keys: [[1.0, 'throw'], [1.1, 'spin'], [1.36, 'orb'], [3.4, 'throw'], [3.5, 'spin'], [3.76, 'orb']] },
+  stack: { keys: [[1.0, 'spin'], [1.5, 'spin']] },
+};
+export function labHand(w) {
+  const c = CLIPS[w.opts.clip] ?? CLIPS.chain, t = w.time, input = { mx: 0, mz: 0, parry: false, dodge: false };
+  for (const [a, b, mx, mz] of c.moves ?? []) if (t >= a - 1e-9 && t < b - 1e-9) { input.mx = mx; input.mz = mz; }
+  for (const [at, key] of c.keys ?? []) if (Math.round(at / w.rules.dt) === w.tick) input[key] = true;
+  return input;
+}
 
 export const labName = name => (name && LABS[name] ? name : null);
 

@@ -9,6 +9,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
   const stop = (now, sec, opt) => (on('stop') ? timeFx.hitstop(now, sec, opt) : 0);
   const slow = (now, s, sec, opt) => on('slow') && timeFx.slow(now, s, sec, opt);
   const shake = (px, sec) => on('shake') && camera.shake(px, sec);
+  let lastStab = -1e9;   // 이기어검의 찌르기 소리·불티를 마지막으로 낸 때(1초에 몇 번까지만 낸다)
 
   function perfectPackage(now, withStop = true) {
     const P = F().perfectBullet;
@@ -44,7 +45,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           sfx.play('tick');
           if (e.what === 'dodge' && e.why === 'charges') hud.shakePips(now);
           else if (e.what === 'shield' || e.what === 'bomb' || e.what === 'skill') hud.shakeStock?.(now, e.what);
-          else if (e.what === 'throw') hud.shakeStock?.(now, 'store');   // 던질 것이 없음·못 던지는 때   // 사용권 칸이 흔들림(몸 어둡게는 패링·회피 잠김 뜻)
+          else if (e.what === 'throw' || e.what === 'slash' || e.what === 'spin' || e.what === 'finish') hud.shakeStock?.(now, 'store');   // 던질 것이 없음·못 던지는 때   // 사용권 칸이 흔들림(몸 어둡게는 패링·회피 잠김 뜻)
           else actors.dim(now);
           break;
         case 'parry': {
@@ -325,6 +326,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'heal': if (on('numbers')) fx.number(null, null, `+${e.amount}`, 'cyan', 18); break;
         // ── 스테이지: 일반 몬스터·방
         case 'mobHit':
+          if (e.quiet) break;   // 검사의 이기어검이 낸 맞음: 불티와 소리는 찌르기·타격 사건이 따로 낸다(1초에 서른 번을 겹쳐 내지 않는다)
           if (st.hit.n === 0) st.hit.start = now;
           st.hit.n++;
           if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.4);
@@ -397,6 +399,52 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           break;
         }
         case 'dashHit': { const T = LOOK.tries; if (on('sparks')) fx.burst(e.x, e.z, 'cyan', T.dashBurst); if (on('numbers') && e.dmg > 0) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', T.dashNumber); sfx.play('thump', { detune: 500 }); break; }
+        // 검사(sim/sword.js): 스킬마다 제 소리, 벤 자리마다 청록 불꽃과 숫자와 아주 짧은 멈춤. 마무리만 화면이 흔들리고 당겨진다. 칸을 써서 회복한 만큼 숫자가 뜬다
+        case 'bladeWave': sfx.play('wave', { detune: e.side * LOOK.sword.cut.cent / 2 }); break;   // 쌍검의 칼바람: 좌우가 다른 높이의 짧은 소리
+        case 'waveHit': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.sword.cut.spark); break;   // 맞힌 자리의 작은 불티(칼자국은 swordView)
+        case 'bladeSlash': case 'bladeSpin': case 'bladeFinish': {
+          const V = LOOK.sword, fin = e.type === 'bladeFinish';
+          sfx.play(fin ? 'finish' : e.type === 'bladeSpin' ? 'spin' : 'slash');
+          if (fin) { stop(now, V.finishStop); shake(V.finishShake[0], V.finishShake[1]); if (on('punch')) camera.punch(V.punch[0], V.punch[1]); }
+          if (e.heal > 0 && on('numbers')) fx.number(null, null, `+${Math.round(e.heal)}`, 'heal', V.healNumber);
+          break;
+        }
+        case 'bladeHit': {
+          if (!(e.dmg > 0)) break;
+          const V = LOOK.sword, fin = e.skill === 'finish';
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', V.burst[e.skill]);
+          if (on('numbers')) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', fin ? V.numberBig : V.number);
+          if (!fin) stop(now, V.stop);
+          if (e.id === 0) { actors.bossJolt?.(now, fin ? V.joltBig : V.jolt); hud.flashStagger(now); }
+          sfx.play('throwHit', { detune: fin ? -300 : 300 });
+          break;
+        }
+        // 이기어검(sim/swords.js): 찌르기는 작은 소리와 불티(1초에 perSec번까지), 스킬 타격은 올라가는 음 몇 개와 합계 숫자 하나.
+        // 검은 화면을 멈추지 않는다 — 칸 stopOrbs 이상을 턴 마무리의 마지막 검만(그 검에서 흔들리고 당겨진다).
+        case 'swordStab': {
+          const S = LOOK.sword.swords;
+          if (now - lastStab < 1 / S.sound.perSec) break;
+          lastStab = now;
+          sfx.play('stab');
+          if (on('sparks')) fx.spark(e.x, e.z, 'cyan', S.spark);
+          break;
+        }
+        case 'swordHome': if (e.blocked && e.x != null && on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.sword.swords.spark); break;
+        case 'swordsBatch': sfx.play('swordsNew', { detune: e.renewed ? LOOK.sword.swords.sound.cent * 2 : 0 }); break;
+        case 'swordHit': {
+          const S = LOOK.sword.swords, note = Math.floor(e.k * S.sound.notes / e.total);
+          if (e.k === 0 || note !== Math.floor((e.k - 1) * S.sound.notes / e.total)) { sfx.play('ching', { detune: note * S.sound.cent }); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', S.noteSpark); }
+          if (!e.last) break;
+          if (on('numbers') && e.sum > 0) fx.number(e.x, e.z, Math.round(e.sum), 'cyan', S.last.number);
+          if (e.skill !== 'finish') break;
+          shake(S.last.shake[0], S.last.shake[1]);
+          if (on('punch')) camera.punch(S.last.punch[0], S.last.punch[1]);
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', S.last.spark);
+          sfx.play('thump', { detune: S.last.cent });
+          if (e.orbs >= S.last.stopOrbs) stop(now, S.last.stop);
+          break;
+        }
+        case 'swordMiss': if (e.last && e.sum > 0 && e.x != null && on('numbers')) fx.number(e.x, e.z, Math.round(e.sum), 'cyan', LOOK.sword.swords.last.number); break;   // 마지막 검이 헛돌았다(그 사이 적이 죽었다): 그때까지의 합계는 띄운다
         case 'roomRetry': actors.playerUp?.(); timeFx.reset?.(); hud.fadeIn?.(now, F().stage.fade); break;
         default: break;
       }

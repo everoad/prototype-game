@@ -22,14 +22,17 @@ import { initStage, updateStage, stageDef } from './stage.js';
 import { initTries, triesAim, triesMove, triesBodies, triesBullets, tryOn } from './tries.js';
 import { initKit, kitAll } from './cards.js';
 import { labName, setupLab, thinkLab } from './labs.js';
+import { CHARS, isSword, swordSkills, swordWaves, bladeMoving, stepBlade, cancelBlade } from './sword.js';
+import { createSwords, stepSwords, clearSwords } from './swords.js';
 import { updateLayers } from './layers.js';
 import { updateBeams } from './beams.js';
 import { updateWaves } from './floor.js';
 
 export const BOSSES = ['ranged', 'dragon'];   // 보스 고르기(?boss=) — 모르는 값은 첫 보스
 
-export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, heal = false, ai = true, gear = null, boss = 'ranged', store = false, hard = false, stage = null, room = 1, tries = null, kit = null } = {}) {
+export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, heal = false, ai = true, gear = null, boss = 'ranged', store = false, hard = false, stage = null, room = 1, tries = null, kit = null, char = 'gunner', clip = null } = {}) {
   const r = RULES;
+  const who = CHARS.includes(char) ? char : 'gunner', sword = who === 'sword';   // 캐릭터(sword.js) — 검사는 늘 모아 받고 무기를 들지 않는다
   const w = {
     rules: r, rng: makeRng(seed), seed,
     tick: 0, time: 0, acc: 0, events: [], result: null,
@@ -38,12 +41,13 @@ export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, h
     bullets: createBullets(r.bullets.cap), shots: createShots(r.shots.cap), lanes: [], beams: [], waves: [], items: [], floor: null, floorAreas: [], melee: { areas: [], taken: true, rush: null, combo: null },
     enemies: [], foeList: null, aim: null, mobAreas: [],   // 일반 몬스터와 적 목록·겨눈 적(스테이지, foes.js) · 떨어지는 포탄(mobs.js)
     stats: createStats(),
-    opts: { phase, pattern, lab: labName(lab), heal, ai, boss: BOSSES.includes(boss) ? boss : 'ranged', store: !!store || !!stageDef(r, stage), hard: !!hard, stage: stageDef(r, stage) ? stage : null },
-    weapons: createWeapons(r, gear),   // 보조 무기(§4.10) — 기본 없음, 화면은 ?gear=
+    opts: { phase, pattern, lab: labName(lab), heal, ai, boss: BOSSES.includes(boss) ? boss : 'ranged', store: !!store || !!stageDef(r, stage) || sword, hard: !!hard, stage: stageDef(r, stage) ? stage : null, char: who, clip },
+    weapons: createWeapons(r, sword ? 'none' : gear),   // 보조 무기(§4.10) — 기본 없음, 화면은 ?gear=
     stage: null,   // 스테이지(stage.js) — 보스전·연습 장면에서는 null
     kit: null,     // 낀 것(카드, cards.js) — 스테이지에서만
     tries: null,   // 실험 기믹(tries.js, ?try=) — 꺼져 있으면 null
   };
+  if (sword) w.player.swords = createSwords(r);   // 이기어검(swords.js) — 검사 판에만 있다
   if (w.opts.boss === 'dragon' && !w.opts.lab) initDragon(w); else initBrain(w);   // 연습 장면은 용을 모른다(지금 그대로)
   if (w.opts.lab) setupLab(w);
   refreshFoes(w);
@@ -66,17 +70,18 @@ export function step(w, input) {
   refreshFoes(w);   // 적 목록과 겨눌 적(이 틱 내내 쓴다)
   input = triesAim(w, input);   // 실험 기믹: 저격 자세(조준 중엔 이동 입력이 조준이 된다)
   // 입력·플레이어
-  if (executeActive(w)) stepExecute(w, input);
-  else if (autoActive(w)) stepAuto(w, input);
+  if (executeActive(w)) { cancelBlade(w); clearSwords(w); stepExecute(w, input); }   // 처형·자동 반격이 몸을 가져가면 검사의 움직임(일섬·튕김)은 거기서 끝난다
+  else if (autoActive(w)) { cancelBlade(w); stepAuto(w, input); }
   else {
-    updatePlayer(w, input);
+    if (bladeMoving(w)) stepBlade(w, input); else updatePlayer(w, input);   // 검사의 스킬이 몸을 움직이는 동안은 걷기·회피 대신 그 움직임
     if ((input.parry || w.time <= p.buffer.parryUntil) && canExecute(w)) startExecute(w);   // 그로기 곁 패링 키(미리 누른 것 포함) = 처형(§5.8)
     else tryParry(w, input);
   }
   triesMove(w, input);   // 실험 기믹: 갈고리·돌진 베기
   useItems(w, input);   // Q 방패·E 폭탄(§4.9)
   throwStore(w, input);   // U 던지기(§4.11, ?store=1)
-  if (!(tryOn(w, 'dash') && isDodging(w))) separateBodies(w);   // 돌진 베기(실험): 구르는 동안은 몸을 지나간다
+  swordSkills(w, input);   // 검사의 스킬(U 일섬 · I 회전 베기 · O 마무리 — sword.js)
+  if (!(tryOn(w, 'dash') && isDodging(w))) separateBodies(w);   // 돌진 베기(실험): 구르는 동안은 몸을 지나간다(검사의 일섬은 판정 안에서 건너뛴다 — boss.js)
   triesBodies(w);
   if (w.aim) p.face = Math.atan2(w.aim.z - p.z, w.aim.x - p.x);   // 몸은 늘 겨눈 적(보스)을 본다(돌아보는 시간 없음)
   updateItemSpawns(w);
@@ -90,6 +95,8 @@ export function step(w, input) {
   // 사격
   fireShots(w);
   moveShots(w);
+  swordWaves(w);   // 검사의 기본 공격(칼바람 — sword.js)
+  stepSwords(w);   // 검사의 무기(이기어검 — swords.js): 건너다니며 찌르기 · 스킬 타격
   updateWeapons(w, input);   // 보조 무기(§4.10)
   // 탄 이동 · 판정
   moveBullets(w);
@@ -129,6 +136,7 @@ export function stateHash(w) {
   const base = [w.tick, f(p.x), f(p.z), p.hp, f(b.x), f(b.z), b.hp ?? 0, live, w.rng.peek().toFixed(9), st, it, p.dyingAt ?? ''];
   if (w.opts.store) base.push('s' + p.store.length);   // 기본 판 해시는 그대로(떼어 내기 시험)
   if (w.tries) base.push('t' + w.tries.names.join('+') + w.tries.fires.length + (w.tries.rope.to ? 'r' : '') + w.tries.mines.length + (w.tries.snipe && w.tries.snipe.on ? 's' : ''));
+  if (isSword(w)) base.push('c' + w.opts.char + (p.blade.move ? p.blade.move.kind[0] : '-') + p.blade.cuts.length + f(p.blade.charge) + (p.swords ? '|w' + p.swords.list.length + ',' + p.swords.list.filter(s => s.leg).length + ',' + p.swords.strikes.length + ',' + f(p.swords.busyUntil) : ''));   // 사수 판 해시는 그대로
   if (w.kit) base.push('k' + kitAll(w).join('+'));
   if (w.stage) base.push('g' + w.stage.room + w.stage.phase + w.stage.rewards.map(r => r.kind[0] + r.what + (r.armed ? 1 : 0)).join(',') + (w.stage.pending ? w.stage.pending.id : '') + f(w.stage.playSec));
   if (w.weapons.salvoBeam || w.weapons.salvoDroneUntil > w.time) base.push('v' + f(w.weapons.salvoBeam ? w.weapons.salvoBeam.until : 0) + f(w.weapons.salvoDroneUntil));

@@ -5,6 +5,7 @@
 import { emit } from './events.js';
 import { GEAR } from './weapons.js';
 import { setTry, tryKey } from './tries.js';
+import { isSword } from './sword.js';
 
 export const GROUPS = ['weapon', 'orb', 'move', 'body'];
 
@@ -17,6 +18,9 @@ export const CARDS = {
 };
 
 const KEY_NAME = { orb: 'O', move1: 'K', move2: 'L' };
+
+// 그 판에 있는 갈래인가: 검사 판(sword.js)에는 이동기·몸만 — 무기와 탄 기술 카드는 사수의 것이다
+const inPlay = (w, group) => !isSword(w) || w.rules.sword.groups.includes(group);
 
 export const kitCards = (w, group) => (group === 'weapon' ? [...w.weapons.on] : w.kit ? [...w.kit[group]] : []);
 export const kitAll = w => GROUPS.flatMap(g => kitCards(w, g));
@@ -35,7 +39,7 @@ export function giveCard(w, id, at = null) { return put(w, id, false, at); }
 
 function put(w, id, quiet, at = null) {
   const c = CARDS[id];
-  if (!c || !w.kit || kitCards(w, c.group).includes(id) || kitFull(w, c.group)) return false;
+  if (!c || !w.kit || !inPlay(w, c.group) || kitCards(w, c.group).includes(id) || kitFull(w, c.group)) return false;
   const W = w.weapons, C = w.rules.cards, p = w.player;
   if (c.group === 'weapon') {
     W.on = GEAR.filter(g => g === id || W.on.includes(g));
@@ -87,7 +91,7 @@ export function supplyFor(w) {
 export function drawPicks(w, roomIndex) {
   const pick = list => list[Math.floor(w.rng.next() * list.length) % list.length];
   const left = g => Object.keys(CARDS).filter(id => CARDS[id].group === g && !kitCards(w, g).includes(id));
-  const groups = GROUPS.filter(g => left(g).length), cards = [];
+  const groups = GROUPS.filter(g => inPlay(w, g) && left(g).length), cards = [];
   if (groups.length) {
     const g1 = roomIndex === 0 && groups.includes('weapon') ? 'weapon' : pick(groups);
     cards.push(pick(left(g1)));

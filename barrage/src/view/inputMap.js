@@ -18,7 +18,7 @@ export function createInputMap(yawRad) {
   const held = new Map();           // 코드 → 누른 차례
   const down = new Set();           // 지금 눌려 있는 패링·회피 키(자동 반복 거르기)
   let pickH = 0, pickV = 0;   // 이번에 누른 방향 키(가로·세로, −1·0·+1) — 저격의 적 고르기(누른 순간 한 번)
-  let order = 0, parry = false, dodge = false, shield = false, bomb = false, toggle = 0, skill = null, toss = false, orb = false, move1 = false, move2 = false, last = 0;
+  let order = 0, parry = false, dodge = false, shield = false, bomb = false, toggle = 0, skill = null, toss = false, orb = false, move1 = false, move2 = false, spin = false, last = 0;
   const sin = Math.sin(yawRad), cos = Math.cos(yawRad);
 
   function axis(name) {
@@ -37,7 +37,8 @@ export function createInputMap(yawRad) {
       if (BOMB.has(code)) bomb = true;
       if (GEAR_KEYS[code]) toggle = GEAR_KEYS[code];
       if (SKILL_KEYS[code]) skill = SKILL_KEYS[code];
-      if (code === 'KeyO') orb = true;      // 탄 기술(키가 필요한 카드 — 지뢰)
+      if (code === 'KeyI') spin = true;     // 검사의 회전 베기(누른 순간 — 사수 판은 I를 누르고 있는 동안의 hold를 쓴다)
+      if (code === 'KeyO') orb = true;      // 탄 기술(키가 필요한 카드 — 지뢰) · 검사의 마무리
       if (code === 'KeyK') move1 = true;    // 이동기 1
       if (code === 'KeyL') move2 = true;    // 이동기 2
       if (code === 'KeyU') toss = true;   // 모아 던지기(§4.11) — ?store=1에서만 쓰인다(아니면 U = 일제 사격 스킬)
@@ -46,7 +47,7 @@ export function createInputMap(yawRad) {
     mouseDown(btn, tMs) { if (btn === 0) parry = true; if (btn === 2) dodge = true; last = tMs; },
     mouseUp() {},
     blur() { held.clear(); down.clear(); },
-    clearPresses() { shield = false; bomb = false; toss = false; orb = false; move1 = false; move2 = false; pickH = 0; pickV = 0; },   // 멈춘 동안 누른 Q·E(사용권)·O·K·L은 버린다
+    clearPresses() { shield = false; bomb = false; toss = false; orb = false; move1 = false; move2 = false; spin = false; pickH = 0; pickV = 0; },   // 멈춘 동안 누른 Q·E(사용권)·O·K·L은 버린다
     // 화면 위(v) = 바닥 (−sin ψ, −cos ψ), 화면 오른쪽(h) = (cos ψ, −sin ψ)
     take() {
       const v = axis('v'), h = axis('h');
@@ -54,9 +55,9 @@ export function createInputMap(yawRad) {
       const len = Math.hypot(mx, mz);
       if (len > 1e-9) { mx /= len; mz /= len; } else { mx = 0; mz = 0; }
       const hold = down.has(HOLD);   // 저격 키를 누르고 있는 동안
-      const out = { mx, mz, parry, dodge, shield, bomb, toggle, skill, throw: toss, hold, orb, move1, move2, pickX: (cos * pickH - sin * pickV) || 0, pickZ: (-sin * pickH - cos * pickV) || 0 };   // 누른 방향 키의 바닥 방향(이동과 같은 변환)
+      const out = { mx, mz, parry, dodge, shield, bomb, toggle, skill, throw: toss, hold, orb, move1, move2, spin, pickX: (cos * pickH - sin * pickV) || 0, pickZ: (-sin * pickH - cos * pickV) || 0 };   // 누른 방향 키의 바닥 방향(이동과 같은 변환)
       pickH = 0; pickV = 0;
-      parry = false; dodge = false; shield = false; bomb = false; toggle = 0; skill = null; toss = false; orb = false; move1 = false; move2 = false;
+      parry = false; dodge = false; shield = false; bomb = false; toggle = 0; skill = null; toss = false; orb = false; move1 = false; move2 = false; spin = false;
       return out;
     },
     lastPressMs: () => last,

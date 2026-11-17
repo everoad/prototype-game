@@ -16,6 +16,13 @@ export function createActors(view, LOOK, opts = {}) {
   const nose = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, 0.18), new THREE.MeshLambertMaterial({ color: C.playerDark }));
   nose.position.set(S.playerR + 0.12, S.playerR + S.playerH * 0.55, 0); nose.castShadow = true;
   const lean = new THREE.Group(); lean.add(body, nose);
+  const blades = [];   // 검사의 쌍검: 좌우에 칼 하나씩(사수와 구분되는 도형 — 청록). 벨 때마다 그쪽 칼이 바깥에서 안으로 휘둘린다
+  if (opts.char === 'sword') for (const side of [1, -1]) {
+    const Bl = LOOK.sword.blade, g = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(Bl.len, Bl.h, Bl.w), new THREE.MeshBasicMaterial({ color: C.cyan }));
+    m.position.set(Bl.out + Bl.len / 2, 0, 0);
+    g.add(m); g.position.set(0, Bl.y, side * Bl.side); lean.add(g);
+    blades.push({ g, side, at: -1e9 });
+  }
   player.add(lean);
   L.actors.add(player);
 
@@ -104,6 +111,7 @@ export function createActors(view, LOOK, opts = {}) {
     for (const e of events) {
       if (e.type === 'windup') { st.flashColor = C.windup[e.color] ?? C.windup.purple; st.flashAt = now; }
       else if (e.type === 'meleeHit') st.lunge = now;
+      else if (e.type === 'bladeWave') { const bl = blades.find(q => q.side === e.side); if (bl) bl.at = now; }
       else if (e.type === 'bossHit') { st.shakeUntil = now + 0.06; st.shakeAmp = 0.04; }
       else if (e.type === 'orbFire' && orbs[e.k]) orbs[e.k].flashAt = now;
       else if (e.type === 'storeAdd' && storeOrbs[e.n - 1]) { storeOrbs[e.n - 1].from = { x: e.x, z: e.z }; storeOrbs[e.n - 1].at = now; }   // 받은 자리에서 빨려 들어온다
@@ -130,6 +138,11 @@ export function createActors(view, LOOK, opts = {}) {
     // 맞은 뒤 무적: 깜빡임 · 잠김 표시: 잠깐 어둡게
     const blink = w.time < p.invulnUntil && !(p.dodge.startedAt >= 0 && w.time < p.dodge.startedAt + w.rules.dodge.invuln) ? (Math.floor(now * 20) % 2 === 0) : false;
     body.visible = !blink; nose.visible = !blink;
+    for (const bl of blades) {   // 쌍검: 휘두르는 동안 from → to(바깥이 +), 그 밖에는 쉬는 각. 몸이 깜빡일 때는 같이 깜빡인다
+      bl.g.visible = !blink;
+      const Sg = LOOK.sword.swing, u = (now - bl.at) / Sg.sec, deg = u >= 0 && u < 1 ? Sg.from + (Sg.to - Sg.from) * (1 - (1 - u) * (1 - u)) : Sg.rest;
+      bl.g.rotation.y = -bl.side * deg * Math.PI / 180;
+    }
     const armed = !!w.weapons && w.time < w.weapons.chargeUntil && w.weapons.on.some(g => g !== 'burst');   // 무기 가동 중: 몸이 더 밝게
     pMat.emissiveIntensity = now - st.dimAt < 0.15 ? 0 : armed ? LOOK.feel.aura.glow : 0.25;
     pMat.color.set(now - st.dimAt < 0.15 ? C.playerDark : C.player);

@@ -53,6 +53,7 @@ export const liveCount = w => w.bullets.live;
 export function moveBullets(w) {
   const b = w.bullets, dt = w.rules.dt, hx = w.rules.board.hx + 1, hz = w.rules.board.hz + 1;
   const boss = w.aim === undefined ? w.boss : w.aim, rs = w.rules.bullets.reflectSpeed;   // 겨눈 적(foes.js) — 보스전에선 늘 보스
+  const F = w.opts && w.opts.char === 'sword' ? w.rules.sword.field : null, p = w.player;   // 검사의 둘레(sword.js): 그 안의 적 탄은 느려진다
   for (let i = 0; i < b.cap; i++) {
     if (!b.alive[i]) continue;
     b.px[i] = b.x[i]; b.pz[i] = b.z[i];
@@ -64,7 +65,8 @@ export function moveBullets(w) {
       if (boss) { const dx = boss.x - b.x[i], dz = boss.z - b.z[i], d = Math.hypot(dx, dz) || 1; b.vx[i] = dx / d * rs; b.vz[i] = dz / d * rs; }
       else if (b.vx[i] === 0 && b.vz[i] === 0) { killBullet(w, i); continue; }   // 겨눌 적이 없다(방 정리 뒤): 날던 것은 곧게 가다 판 밖에서, 멈춰 있던 것은 여기서 사라진다
     }
-    b.x[i] += b.vx[i] * dt; b.z[i] += b.vz[i] * dt;
+    if (F && b.kind[i] !== K.REFLECT && (b.x[i] - p.x) * (b.x[i] - p.x) + (b.z[i] - p.z) * (b.z[i] - p.z) <= F.R * F.R) { b.x[i] += b.vx[i] * dt * F.slow; b.z[i] += b.vz[i] * dt * F.slow; }
+    else { b.x[i] += b.vx[i] * dt; b.z[i] += b.vz[i] * dt; }
     if (b.x[i] < -hx || b.x[i] > hx || b.z[i] < -hz || b.z[i] > hz) killBullet(w, i);
   }
 }

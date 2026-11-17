@@ -231,3 +231,27 @@ test('보급: 체력이 80% 아래면 회복, 아니면 적게 가진 사용권(
   p.stock = { shield: R.stage.chargeMax, bomb: R.stage.chargeMax };
   assert.deepEqual(mid(), { kind: 'heal', what: 'heal' });
 });
+
+// ── 검사(설계 2026-11-17-barrage-sword-design.md §9): 이동기·몸 카드만
+const swordStage = (opts = {}) => { const w = createWorld({ char: 'sword', stage: 1, tries: 'always,vary,snipe', ai: false, ...opts }); drainEvents(w); return w; };
+
+test('검사 판의 카드는 이동기·몸뿐 — 방 1 뒤에도 무기가 뜨지 않는다', () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const w = swordStage({ seed });
+    for (let room = 0; room < 4; room++) for (const r of drawPicks(w, room)) if (r.kind === 'card') assert.ok(['move', 'body'].includes(CARDS[r.what].group), `seed ${seed}: ${r.what}`);
+  }
+});
+
+test('검사는 무기·탄 기술 카드를 끼울 수 없다(주소 &kit=로도)', () => {
+  const w = swordStage({ kit: ['missile', 'mine', 'dash', 'cap'] });
+  assert.deepEqual(kitAll(w), ['dash', 'cap']);
+  assert.equal(giveCard(w, 'burst'), false);
+  assert.equal(giveCard(w, 'lance'), false);
+  assert.equal(giveCard(w, 'sky'), true);
+});
+
+test('사수 판의 뽑기는 그대로다(같은 seed → 같은 카드, 무기가 먼저)', () => {
+  const a = drawPicks(stage({ seed: 7 }), 0), b = drawPicks(stage({ seed: 7 }), 0);
+  assert.deepEqual(a, b);
+  assert.equal(CARDS[a[0].what].group, 'weapon');
+});

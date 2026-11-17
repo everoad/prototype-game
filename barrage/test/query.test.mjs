@@ -56,3 +56,10 @@ test('&kit=카드,카드 — 처음부터 들 카드(스테이지에서만)', ()
   assert.equal(worldOptions(q('stage=1')).kit, null);
   assert.equal(worldOptions(q('kit=burst')).kit, null, '보스전에는 없다');
 });
+
+test('char=sword → 검사, 그 밖에는 사수', () => {
+  assert.equal(opts('char=sword').char, 'sword');
+  assert.equal(opts('stage=1&char=sword').char, 'sword');
+  assert.equal(opts('').char, 'gunner');
+  assert.equal(opts('char=wizard').char, 'gunner');
+});

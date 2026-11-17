@@ -13,6 +13,7 @@ export function createPlayer(rules) {
     buffer: { parryUntil: -1, dodgeUntil: -1 },
     parry: { startedAt: -1, active: false, caught: 0, failUntil: -1 },
     stock: freshStock(rules), shieldUntil: -1, bombUntil: -1, lastHurt: null, dyingAt: null,   // 방패·폭탄 사용권, 구제 창(§4.9)
+    blade: { move: null, lockUntil: -1, want: null, wantUntil: -1, cuts: [], cutAt: 0, cutN: 0, charge: 0 },   // 검사(sword.js): 일섬·튕김의 움직임 · 다음 스킬까지 · 기억한 스킬 누름 · 날아가는 칼바람 · 다음 칼바람 · 낸 칼바람 수 · 차는 칸(0~1)
     store: [], storeCap: rules.store.cap, throwSum: 0,   // 모아 던지기(§4.11): 모은 것 { perfect, gold, stagger } · 칸 수(몸 카드가 늘린다)
   };
 }

@@ -97,3 +97,7 @@ test('깨진 값은 없는 것으로 친다', () => {
   assert.deepEqual(writeBest(st, 1, { sec: 300, grade: 'C' }).best, { sec: 300, grade: 'C' });
   assert.deepEqual(readBest(st, 1), { sec: 300, grade: 'C' });
 });
+
+test('검사 판(char=sword)은 기록을 남기지 않는다 — 등급 문턱이 사수 기준이다', () => {
+  assert.equal(recordable(new URLSearchParams('stage=1&char=sword')), false);
+});

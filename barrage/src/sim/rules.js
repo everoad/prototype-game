@@ -164,6 +164,35 @@ export const RULES = {
   // 모아 던지기(§4.11, 변형 ?store=1): 받은 것을 cap개까지 모았다가 U로 한 번에. dmg·heal = [보통, 완벽], n개면 피해·무력화 × (1 + bonus × (n − 1)).
   // every = 던질 때 탄 사이 간격, orbitR = 모인 탄이 도는 반지름(패링 고리 0.8 안쪽), hard = &hard=1의 받는 피해 배율, bossHp = 이 변형의 보스 체력 배율.
   store: { cap: 4, dmg: [100, 150], heal: [2, 4], bonus: 0.1, every: 0.06, orbitR: 0.5, hard: 1.3, bossHp: 1.2 },
+  // 검사(설계 2026-11-17-barrage-sword-design.md §6·§11, 주소 char=sword): 약한 사격 + 모은 칸을 쓰는 스킬 셋. 보스·몬스터 수치는 사수 판과 같다.
+  // 시험판 2(사용자 2026-11-17 "탄이 느려지는 둘레고 기본공격에 게이지를 조금씩 채우게 해서 스킬을 자주 쓰게" — 사수보다 안쪽에 서게 한다):
+  //   wave(칼바람 — 쌍검의 기본 공격, 사수의 자동 사격 대신. 사용자 "주무기는 쌍검만 하자") = every초마다 겨눈 적 쪽으로 반지름 r의 칼바람이 speed로 range만큼 날아가며 닿는 적을 한 번씩 벤다(피해 dmg). 좌우 칼이 번갈아 낸다.
+  //     사거리가 서는 자리를 정한다(보스 가운데에서 boss.r + range + r까지 닿는다). 맞힌 칼바람마다 칸이 조금 찬다 — charge초 동안 계속 맞히면 한 칸(보통 칸). 가득이면 더 차지 않는다.
+  //     빠르게 낸다(사용자 "검 기본 공격도 빠르게 — 지금은 너무 허전하다": 0.4초 → 0.12초). 한 번의 피해와 한 번에 차는 양은 그만큼 나눴다 — 초당 피해 30, 칸 하나에 charge초 그대로.
+  //   field(둘레) = 내 가운데에서 R 안에 들어온 적 탄은 slow배로 느려진다(받아친 탄·던진 탄은 빼고) — 안쪽에 서도 읽을 시간이 난다.
+  //     R은 3에서 4.5로 넓혔다: 3이면 봇이 1단계의 빨간 창을 사수의 두 배로 맞아 40판 중 13~21판만 이겼고, 4.5면 29~32판(사수 31판)이다.
+  // mob = 몬스터에게 주는 베기 피해 배율(몬스터에는 무너짐·처형이 없어 그 몫을 피해로),
+  // buffer = 스킬 누름을 기억하는 시간, groups = 검사 판에 뜨는 카드 갈래.
+  // 스킬의 값 = 쓴 칸의 던지기 피해(store.dmg) × dmg, 그 칸의 무너짐 값 × stag. 회복은 칸마다 store.heal.
+  // 봇으로 맞춘 값(2026-11-17): reach 6 → 9.5(6이면 그 거리에 선 봇이 탄을 못 피해 10판을 다 졌다) → 시험판 2에서 7(둘레가 안쪽을 버틸 만하게 한다), 피해 배율 2.0·1.8·1.2 → 2.8·2.6·1.7(수호자 약 1분).
+  // slash(U 일섬): 겨눈 적의 몸 표면까지 reach 안이면 그 적을 지나 건너편(몸 사이 past)에 dur초에 선다 — 가는 동안과 선 뒤 after초 무적.
+  // spin(I 회전 베기): 내 가운데에서 R 안에 몸 표면이 든 적 모두. 무적 없음. 뒤 lock초 동안 다음 스킬이 기다린다.
+  // finish(O 마무리): 남은 칸 전부 — 겨눈 쪽 부채(R, 반각 halfDeg)를 칸마다의 값을 더해 한 번에 베고, back초에 backDist 물러난다(그동안과 선 뒤 after초 무적).
+  sword: {
+    mob: 1.0, buffer: 0.2, groups: ['move', 'body'],
+    wave: { every: 0.12, range: 4.7, speed: 22, r: 0.9, dmg: 3.6, charge: 6 },
+    field: { R: 4.5, slow: 0.5 },
+    slash: { reach: 7, past: 1.0, dur: 0.14, after: 0.1, dmg: 2.8, stag: 1.3 },
+    spin: { R: 2.8, lock: 0.25, dmg: 2.6, stag: 2.0 },
+    finish: { R: 3.4, halfDeg: 70, dmg: 1.7, stag: 1.0, backDist: 4.5, back: 0.2, after: 0.1 },
+    // swords = 이기어검(sim/swords.js — 설계 2026-11-17-barrage-flying-swords-design.md §8. 처음 값 — 봇으로 맞추기 전이다):
+    // n = 묶음 하나의 자루 수(바탕 묶음은 늘 있다), max = 가장 많을 때, keep = 스킬 묶음이 남는 초,
+    // beat = 검 하나가 찌르는 간격(초 — 닿는 적이 있는 동안 돌아오지 않고 계속), rest = 기둥·방패에 막혀 돌아온 검이 쉬는 초, hopR = 다음 적으로 건너가는 거리(끈도 이 거리다), fly = 등 뒤에서 첫 적까지 걸리는 초,
+    // stab = 찌를 때의 피해, roundDeg = 건너갈 적이 없을 때 같은 적을 돌아가는 각(도), join = 스킬에 가진 검이 모두 나서나(0이면 새 다섯만),
+    // slash·spin·finish = 그 스킬의 검 타격: 벤 뒤 first초부터 span초 안에 고르게, 검 한 번의 피해 dmg(마무리는 × 쓴 칸 수). finish.first는 튕김(finish.back)이 끝나는 때다.
+    swords: { n: 5, max: 15, keep: 4, beat: 0.5, rest: 1.5, hopR: 5, fly: 0.14, stab: 2.6, roundDeg: 120, join: 1,
+      slash: { first: 0.04, span: 0.12, dmg: 5.6 }, spin: { first: 0.03, span: 0.20, dmg: 6.4 }, finish: { first: 0.20, span: 0.34, dmg: 6 } },
+  },
   // on = 콤보를 다 받아내면 자동 반격을 하는가 — 사용자 2026-11-17 "빼자"(보스가 한동안 멈추는 것이 과하다) → 끔. 장치는 남겨 둔다.
   fullCounter: { on: false, dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },
   heal: { amount: 3 },   // ?heal=1 변형만(§4.7)
@@ -191,7 +220,9 @@ export const RULES = {
   // zone = 용 판 자리 정하기: from U 안에서 받은 공격이 끝날 때 chance꼴로 옆·뒤 R U 자리를 sec초 지킨다(pull = 그 자리로 끄는 세기, keep = 용과 지키는 거리, 설계 용 §9)
   // user = 사용자 판(60초·맞음 6·패링 16·완벽 14)에 맞춘 봇: 늦게 보고(react) 드물게 고쳐 움직인다(think), 패링 기회의 chance만 받는다.
   // 맞춘 결과(기본 판, 무기 다 켬, 10판, 죽지 않게): 63초 · 맞음 5.8 · 패링 15.8 · 완벽 13.9
-  bot: { user: { react: 0.38, think: 0.2, chance: 0.9 }, hunt: { within: 0.4, ahead: 1.2, pull: 6 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
+  // sword = 검사 봇(확인용): keep = 보스전에서 지키는 거리(칼바람이 닿는 안쪽 — 보스 가운데에서 boss.r + wave.range + wave.r까지 닿는다), stay = 붙어서 칸이 남아 있을 때, room = 방에서 가장 가까운 적과 지키는 거리(칼바람이 닿게), enter·enterRoom = 이만큼 모이면 일섬으로 들어간다(보스전·방),
+  //   exitSec = 빨간 몸 공격이 이 안에 닿으면 마무리, lowHp = 체력이 이 몫 아래면 칸을 써서 회복, margin = 회전 베기를 누르는 거리의 여유.
+  bot: { sword: { keep: [6, 7], stay: [2.4, 3.8], room: [4.5, 5.8], enter: 3, enterRoom: 1, exitSec: 0.25, lowHp: 0.25, margin: 0.2 }, user: { react: 0.38, think: 0.2, chance: 0.9 }, hunt: { within: 0.4, ahead: 1.2, pull: 6 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
   // 보스 두뇌(§5.1~5.3): 준비 → 패턴 → 숨, 거리 묶음, 돌진 시계, 깨어남, 2단계 새 패턴 하나씩.
   brain: {
     // 박자(§5.5): 준비 0.25초, 숨 0.15~0.35초, 다음 준비는 앞 패턴 마지막 0.3초와 겹친다

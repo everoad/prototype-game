@@ -109,7 +109,7 @@ export function weaponSalvo(w, n, angle, how) {
 export function updateWeapons(w, input) {
   const W = w.weapons, R = w.rules, WR = R.weapons, p = w.player, b = w.aim, dt = R.dt;   // b = 겨눈 적(foes.js)
   if (!W) return;
-  if (input.toggle) toggle(w, input.toggle);
+  if (input.toggle && w.opts.char !== 'sword') toggle(w, input.toggle);   // 검사(sword.js)는 무기를 들지 않는다
   const A = always(w);   // 늘 나가는 무기: 받아치지 않아도 쏘고, 가동 = 과열(over배 자주)
   const newParries = w.stats.parries - W.parries, newPerfects = w.stats.perfects - W.perfects;
   W.parries = w.stats.parries; W.perfects = w.stats.perfects;

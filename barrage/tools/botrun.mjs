@@ -25,13 +25,14 @@ const phase = Number(opt('phase', 1)), immortal = args.includes('--immortal');
 const stage = args.includes('--stage') ? Number(opt('stage', 1)) : null, retries = Number(opt('retries', 3));
 const tries = plain ? null : gameTries(opt('try', null));   // 기본 판(올린 것) + --try 이름(-이름 = 빼기). --plain = 아무것도 켜지 않은 예전 판
 const picks = opt('picks', null), kit = opt('kit', null), greedy = args.includes('--greedy');   // 스테이지: 봇의 고르기 차례 · 처음부터 들 카드 · 체력이 낮아도 카드를 고른다
+const char = opt('char', 'gunner');   // 캐릭터(sword = 검사 — 무기 없음, 스킬 셋)
 const gear = opt('gear', plain ? 'none' : tries.includes('always') ? 'missile,burst' : 'all'), boss = opt('boss', 'ranged');   // 보조 무기: 기본 판은 화면처럼 미사일 + 산탄, all · none · missile,beam,…
 
 function playOne(kind, seed) {
-  const w = createWorld({ seed, heal, phase, gear, boss, store, hard, tries }), bot = createBot(kind, seed);
+  const w = createWorld({ seed, heal, phase, gear, boss, store, hard, tries, char }), bot = createBot(kind, seed);
   if (immortal) w.player.hp = w.player.maxHp = 1e9;
   const runs = {}, max = Math.round(minutes * 60 / RULES.dt), zones = { front: 0, side: 0, back: 0 };
-  let k = 0;
+  let k = 0, groggies = 0, stuns = 0;
   for (; k < max && !w.result; k++) {
     step(w, bot(w));
     if (w.boss.kind === 'dragon') { const z = zoneOf(w); zones[z === 'left' || z === 'right' ? 'side' : z]++; }
@@ -44,15 +45,17 @@ function playOne(kind, seed) {
       if (e.type === 'swordStart') add(S.sword);
       if (e.type === 'tailStart') add(S.tail);
       if (e.type === 'wingStart') add(S.wing);
+      if (e.type === 'groggy') groggies++;
+      if (e.type === 'counterChance') stuns++;
     }
   }
   const s = w.stats;
-  return { result: w.result ?? 'time', t: k * RULES.dt, hits: s.hits, share: parryShare(s), perfects: s.perfects, parries: s.parries, grazes: s.grazes, byPattern: s.hitsByPattern, runs, bossHp: w.boss.hp / w.boss.maxHp, zones, throws: s.throws, healed: s.healed, hpLeft: w.player.hp, throwShare: s.total > 0 ? s.dmg.throw / s.total : 0 };
+  return { result: w.result ?? 'time', t: k * RULES.dt, hits: s.hits, share: parryShare(s), perfects: s.perfects, parries: s.parries, grazes: s.grazes, byPattern: s.hitsByPattern, runs, bossHp: w.boss.hp / w.boss.maxHp, zones, throws: s.throws, healed: s.healed, hpLeft: w.player.hp, throwShare: s.total > 0 ? s.dmg.throw / s.total : 0, groggies, stuns, bladeShare: s.total > 0 ? s.dmg.blade / s.total : 0, shotShare: s.total > 0 ? (s.dmg.shot + s.dmg.overdrive) / s.total : 0, execShare: s.total > 0 ? s.dmg.execute / s.total : 0, blade: { ...s.blade } };
 }
 
 // 스테이지 한 판: 죽으면 그 방을 retries번까지 다시. 방마다 { 죽은 횟수, 깬 시간, 깼을 때 체력 }
 function playStage(kind, seed) {
-  const w = createWorld({ seed, stage, hard, tries, kit }), bot = createBot(kind, seed, { greedy, ...(picks == null ? {} : { picks: picks === 'none' ? [] : picks.split(',') }) });
+  const w = createWorld({ seed, stage, hard, tries, kit, char }), bot = createBot(kind, seed, { greedy, ...(picks == null ? {} : { picks: picks === 'none' ? [] : picks.split(',') }) });
   const dist = []; let still = 0, ticks = 0;
   const max = Math.round(minutes * 60 / RULES.dt), rooms = Array.from({ length: w.stage.of }, () => ({ deaths: 0, sec: null, hp: null, reached: false }));
   let k = 0;
@@ -71,10 +74,10 @@ function playStage(kind, seed) {
   }
   for (const t of w.stage.times) { rooms[t.room - 1].sec = t.sec; rooms[t.room - 1].hp = t.hp; }
   const s = w.stats, d = s.dmg, tot = s.total || 1;
-  const share = { weapon: (d.weapon + d.salvo + d.burst) / tot, throw: d.throw / tot, shot: (d.shot + d.overdrive) / tot, reflect: d.reflect / tot };
+  const share = { weapon: (d.weapon + d.salvo + d.burst) / tot, throw: d.throw / tot, shot: (d.shot + d.overdrive) / tot, reflect: d.reflect / tot, blade: d.blade / tot };
   const grade = w.result === 'win' ? gradeOf(RULES.grade[stage], { sec: w.stage.playSec, hits: s.hits, retries: w.stage.retries }) : null;   // 등급은 싸운 시간으로(고르는 시간은 뺀다)
   return { result: w.result ?? 'time', t: k * RULES.dt, rooms, clean: w.result === 'win' && rooms.every(r => r.deaths === 0), parries: s.parries, perfects: s.perfects, hits: s.hits, throws: s.throws, healed: s.healed, gear: w.weapons.on.join('+') || '-', byPattern: s.hitsByPattern,
-    share, grade, dist: median(dist), still: ticks ? still / ticks : 0, kit: kitAll(w).join('+') || '-' };
+    share, grade, blade: { ...s.blade }, dist: median(dist), still: ticks ? still / ticks : 0, kit: kitAll(w).join('+') || '-' };
 }
 
 const NAMES = { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', [RULES.src.laser]: '레이저', [RULES.src.orbs]: '구슬', [RULES.src.combo]: '콤보', [RULES.src.slam]: '박치기', [RULES.src.wave]: '파도', [RULES.src.sword]: '검기', [RULES.src.background]: '바탕', [RULES.src.tail]: '꼬리', [RULES.src.wing]: '날개' };
@@ -98,7 +101,7 @@ if (stage != null) {
     console.log(`       ${cols.join(' | ')}`);
     const pct = v => (v * 100).toFixed(0) + '%', mid = key => median(games.map(g => g.share[key]));
     const grades = wins.map(g => g.grade), gmid = grades.length ? GRADES[Math.round(median(grades.map(g => GRADES.indexOf(g))))] : '-';
-    console.log(`       피해 몫: 무기 ${pct(mid('weapon'))} · 던지기·저격 ${pct(mid('throw'))} · 평타 ${pct(mid('shot'))} · 받아친 것 ${pct(mid('reflect'))} | 등급 ${gmid}(${GRADES.map(g => `${g}${grades.filter(x => x === g).length}`).reverse().join(' ')}) | 선 거리 ${median(games.map(g => g.dist)).toFixed(1)} U · 서 있음 ${pct(median(games.map(g => g.still)))}`);
+    console.log(`       피해 몫: 무기 ${pct(mid('weapon'))} · 던지기·저격 ${pct(mid('throw'))} · 평타 ${pct(mid('shot'))} · 받아친 것 ${pct(mid('reflect'))}${char === 'sword' ? ` · 베기 ${pct(mid('blade'))}(일섬 ${median(games.map(g => g.blade.slash)).toFixed(0)} 회전 ${median(games.map(g => g.blade.spin)).toFixed(0)} 마무리 ${median(games.map(g => g.blade.finish)).toFixed(0)})` : ''} | 등급 ${gmid}(${GRADES.map(g => `${g}${grades.filter(x => x === g).length}`).reverse().join(' ')}) | 선 거리 ${median(games.map(g => g.dist)).toFixed(1)} U · 서 있음 ${pct(median(games.map(g => g.still)))}`);
     console.log(`       낀 것(판마다): ${games.map(g => g.kit).join(' | ')}`);
     console.log(`       몬스터에게 맞음/판: ${Object.entries(hitsP).map(([k2, v]) => `${k2} ${(v / games.length).toFixed(1)}`).join(' ') || '-'}`);
   }
@@ -122,7 +125,7 @@ for (const kind of kinds) {
     perfect: median(games.map(g => g.perfects)).toFixed(0), parry: median(games.map(g => g.parries)).toFixed(0),
     graze: median(games.map(g => g.grazes)).toFixed(0), bossLeft: (median(games.map(g => g.bossHp)) * 100).toFixed(0) + '%',
     perPattern,
-    store: store ? `던지기 ${median(games.map(g => g.throws)).toFixed(0)} 회복 ${median(games.map(g => g.healed)).toFixed(0)} 던진 피해 몫 ${(median(games.map(g => g.throwShare)) * 100).toFixed(0)}% 남은 체력 ${median(games.map(g => g.hpLeft)).toFixed(0)}` : '',
+    store: store ? `던지기 ${median(games.map(g => g.throws)).toFixed(0)} 회복 ${median(games.map(g => g.healed)).toFixed(0)} 던진 피해 몫 ${(median(games.map(g => g.throwShare)) * 100).toFixed(0)}% 남은 체력 ${median(games.map(g => g.hpLeft)).toFixed(0)} · 그로기 ${median(games.map(g => g.groggies)).toFixed(0)} 금 패링 경직 ${median(games.map(g => g.stuns)).toFixed(0)} · 평타 ${(median(games.map(g => g.shotShare)) * 100).toFixed(0)}% 처형 ${(median(games.map(g => g.execShare)) * 100).toFixed(0)}%${char === 'sword' ? ` · 베기 ${(median(games.map(g => g.bladeShare)) * 100).toFixed(0)}% 일섬 ${median(games.map(g => g.blade.slash)).toFixed(0)} 회전 ${median(games.map(g => g.blade.spin)).toFixed(0)} 마무리 ${median(games.map(g => g.blade.finish)).toFixed(0)}` : ''}` : '',
     parts: boss === 'dragon' ? (() => { const S = RULES.src, n = games.length, sum = ids => ids.reduce((a, id) => a + (runsP[id] || 0), 0) / n;
       return `머리 ${sum([1, 2, 3, 4, 6, 8]).toFixed(1)} 날개 ${sum([7, S.wing]).toFixed(1)} 꼬리 ${sum([S.tail]).toFixed(1)} 몸 ${sum([S.slam, S.wave, S.combo]).toFixed(1)}`; })() : '',
     zones: boss === 'dragon' ? (() => { const t = { front: 0, side: 0, back: 0 }; for (const g of games) for (const k in t) t[k] += g.zones[k]; const all = t.front + t.side + t.back || 1; return `앞 ${(t.front / all * 100).toFixed(0)}% 옆 ${(t.side / all * 100).toFixed(0)}% 뒤 ${(t.back / all * 100).toFixed(0)}%`; })() : '',

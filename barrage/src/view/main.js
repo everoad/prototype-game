@@ -12,6 +12,9 @@ import { createBulletsView } from './bulletsView.js';
 import { createWeaponsView } from './weaponsView.js';
 import { createMobsView } from './mobsView.js';
 import { createTriesView } from './triesView.js';
+import { createSwordView } from './swordView.js';
+import { createSwordsView } from './swordsView.js';
+import { labHand } from '../sim/labs.js';
 import { viewTime } from './warp.js';
 import { restartRoom, stageDef } from '../sim/stage.js';
 import { createHud, resultAlpha } from './hud.js';
@@ -32,16 +35,19 @@ const num = (k, d) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Number(q.
 if (q.get('raf') === 'timer') window.requestAnimationFrame = cb => setTimeout(() => cb(performance.now()), 16);   // 확인용: 숨은 창에서는 rAF가 멈춘다
 const seed = num('seed', 1), speed = num('speed', 1), recording = q.has('record');
 if (q.has('bh')) LOOK.sizes.bh = num('bh', LOOK.sizes.bh);
+if (q.get('join') === '0') RULES.sword.swords.join = 0;   // 이기어검: 스킬에 새 다섯만 나서게(견줘 보는 용 — 설계 §8의 손잡이)
 const world = createWorld(worldOptions(q));   // 모아 던지기가 기본(?store=0 = 예전 방식)
 
 document.getElementById('wait')?.remove();
 const canvas = document.getElementById('view'), hudCanvas = document.getElementById('hud');
 const view = createScene(canvas, LOOK, { preserveDrawingBuffer: recording });
-const actors = createActors(view, LOOK, { ring: q.get('ring') !== '0', boss: (world.stage ? stageDef(RULES, world.stage.id).boss : world.boss.kind) === 'dragon' ? 'dragon' : 'ranged', storeCap: world.opts.store ? RULES.store.cap : 0 });
+const actors = createActors(view, LOOK, { ring: q.get('ring') !== '0', boss: (world.stage ? stageDef(RULES, world.stage.id).boss : world.boss.kind) === 'dragon' ? 'dragon' : 'ranged', storeCap: world.opts.store ? RULES.store.cap : 0, char: world.opts.char });
 const bullets = createBulletsView(view, LOOK, RULES.bullets.cap);
 const weaponsView = createWeaponsView(view, LOOK, RULES);
 const mobsView = createMobsView(view, LOOK);   // 일반 몬스터·보상·문(스테이지)
 const triesView = createTriesView(view, LOOK);   // 실험 기믹(?try=)
+const swordsView = createSwordsView(view, LOOK);   // 검사의 무기(이기어검 — 떠 있는 검들)
+const swordView = createSwordView(view, LOOK);   // 검사의 칼자국·내릴 자리(?char=sword)
 const hud = createHud(hudCanvas, LOOK);
 const camera = createCamera(view, LOOK);
 const timeFx = createTimeFx(LOOK);
@@ -62,7 +68,7 @@ const onTune = f => { if (f.key === 'parrySpeed') RULES.bullets.minParrySpawn = 
 const feel = createFeel({ timeFx, camera, fx, get sfx() { return sfx; }, actors, hud, LOOK });
 const map = createInputMap(LOOK.camera.yawDeg * Math.PI / 180);
 const botKind = q.get('bot');
-const bot = botKind ? createBot(botKind, seed) : null;
+const bot = botKind === 'script' ? labHand : botKind ? createBot(botKind, seed) : null;   // script = 연습 장면의 정해진 손(sim/labs.js — clip=)
 
 const ui = { paused: false, debug: false, fps: 60, lagMs: null, maxFrameMs: 0, now: 0, dt: 0, lab: world.opts.lab, bot: botKind, project: view.project };
 let pitchIdx = Math.max(0, LOOK.camera.pitches.indexOf(num('pitch', LOOK.camera.pitches[0])));
@@ -99,6 +105,8 @@ function frame(now, dtReal) {
   if (!ui.paused && !world.result && !inIntro) advance(world, dtReal * speed * scale, inputFn, 12);
   const events = drainEvents(world);
   actors.onEvents(events, now);
+  swordView.onEvents(events, now);
+  swordsView.onEvents(events, now, world);
   feel.handle(events, now);
   feel.tick(world, now);
   // 판이 끝난 순간: 이겼으면 남은 적 탄이 반짝이며 사라진다. 결과 화면은 큰 순간이 지난 뒤 서서히, 졌으면 화면 색이 빠진다.
@@ -129,6 +137,8 @@ function frame(now, dtReal) {
   weaponsView.update(world, alpha, now);
   mobsView.update(world, alpha, now);
   triesView.update(world, alpha, now);
+  swordView.update(world, alpha, now);
+  swordsView.update(world, alpha, now);
   view.render();
   hud.draw(world, ui);
   const sz = hud.size;

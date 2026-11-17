@@ -2,6 +2,7 @@
 import { emit } from './events.js';
 import { hitFoe, hurtFoe } from './foes.js';
 import { isDodging } from './player.js';
+import { isSword } from './sword.js';
 
 export function createShots(cap) {
   const f = () => new Float64Array(cap);
@@ -10,7 +11,7 @@ export function createShots(cap) {
 
 export function fireShots(w) {
   const s = w.shots, p = w.player, b = w.aim, S = w.rules.shots;
-  if (w.result || !b || b.dead || w.execute) return;   // 처형 중엔 처형의 붙어 쏘기만. 겨눌 적이 없으면 쏘지 않는다
+  if (w.result || !b || b.dead || w.execute || isSword(w)) return;   // 검사는 쏘지 않는다 — 기본 공격은 칼바람(sword.js)   // 처형 중엔 처형의 붙어 쏘기만. 겨눌 적이 없으면 쏘지 않는다
   if (isDodging(w)) { s.nextAt = Math.max(s.nextAt, w.time); return; }
   if (w.time + 1e-9 < s.nextAt) return;
   s.nextAt = Math.max(s.nextAt + 1 / S.rate, w.time + 1 / S.rate - 1e-9);

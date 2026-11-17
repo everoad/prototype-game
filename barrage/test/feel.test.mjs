@@ -491,3 +491,88 @@ test('한 방의 크기는 칸 수에 따라 — 네 칸을 넘으면(탄 칸 +1
   assert.equal(a.has('fx.burst')[0].at(-1), b.has('fx.burst')[0].at(-1));
   assert.ok(Number.isFinite(LOOK.feel.salvo.span));
 });
+
+// ── 검사(sim/sword.js): 스킬 셋의 연출
+test('검사의 사건: 벨 때마다 청록 불꽃과 숫자, 스킬마다 제 소리, 마무리는 화면이 흔들린다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bladeSlash', { x0: 0, z0: 0, x1: 4, z1: 0, heal: 4 }), ev('bladeHit', { skill: 'slash', id: 0, x: 2, z: 0, dmg: 420 })], 1);
+  feel.handle([ev('bladeSpin', { x: 0, z: 0, R: 2.8, n: 1, hits: 1, heal: 0 }), ev('bladeFinish', { x: 0, z: 0, angle: 0, n: 3, dmg: 765, hits: 1, dirX: -1, dirZ: 0, heal: 12 }), ev('bladeHit', { skill: 'finish', id: 0, x: 2, z: 0, dmg: 765 })], 1.5);
+  const played = has('sfx.play').map(c => c[1]);
+  for (const s of ['slash', 'spin', 'finish']) assert.ok(played.includes(s), `${s} 소리`);
+  assert.ok(has('fx.burst').some(c => c[3] === 'cyan'));
+  assert.ok(has('fx.number').some(c => c[3] === 420 && c[4] === 'cyan'));
+  assert.ok(has('fx.number').some(c => c[3] === 765 && c[5] > has('fx.number').find(c2 => c2[3] === 420)[5]), '마무리의 숫자가 더 크다');
+  assert.equal(has('camera.shake').length, 1);
+  assert.ok(has('fx.number').some(c => c[3] === '+12' && c[4] === 'heal'), '칸을 써서 회복한 만큼');
+  assert.ok(!has('fx.burst').some(c => c[3] === 'white'), '흰색은 받아칠 것에만 쓴다');
+});
+
+test('닿는 거리 밖에서 누른 일섬·칸 없이 누른 스킬은 칸을 흔든다(몸이 어두워지지 않는다)', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('denied', { what: 'slash', why: 'far' }), ev('denied', { what: 'spin', why: 'empty' }), ev('denied', { what: 'finish', why: 'empty' })], 1);
+  assert.equal(has('hud.shakeStock').filter(c => c[2] === 'store').length, 3);
+  assert.equal(has('actors.dim').length, 0);
+});
+
+test('빗나간 베기(피해 0)에는 불꽃도 숫자도 없다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bladeHit', { skill: 'spin', id: 3, x: 1, z: 0, dmg: 0 })], 1);
+  assert.equal(has('fx.burst').length, 0); assert.equal(has('fx.number').length, 0);
+});
+
+test('칼바람: 낼 때마다 좌우가 다른 높이의 소리, 맞힌 자리마다 불티 — 화면은 흔들리지 않는다', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('bladeWave', { x: 0, z: 0, angle: 0, side: 1 }), ev('bladeWave', { x: 0, z: 0, angle: 0, side: -1 }), ev('waveHit', { x: 3, z: 0, angle: 0, side: 1 })], 1);
+  const waves = has('sfx.play').filter(c => c[1] === 'wave');
+  assert.equal(waves.length, 2);
+  assert.notEqual(waves[0][2].detune, waves[1][2].detune);
+  assert.equal(has('fx.spark').filter(c => c[1] === 3 && c[3] === 'cyan').length, 1, '맞힌 자리에만');
+  assert.equal(has('camera.shake').length, 0);
+});
+
+// ── 이기어검(sim/swords.js — 설계 2026-11-17-barrage-flying-swords-design.md §6)
+const swordHits = (sid, skill, total, orbs) => [...Array(total).keys()].map(k => ev('swordHit', { sid, skill, k, total, id: 0, x: 0, z: 0, dmg: 6, sum: 6 * (k + 1), last: k === total - 1, orbs }));
+
+test('이기어검: 찌르기의 소리와 불티는 1초에 perSec번까지만', () => {
+  const { feel, has } = rig();
+  for (let i = 0; i < 30; i++) feel.handle([ev('swordStab', { x: 0, z: 0, dmg: 2.6 })], 1 + i / 30);   // 열다섯 자루가 1초에 서른 번
+  const n = has('sfx.play').filter(c => c[1] === 'stab').length;
+  assert.ok(n >= 5 && n <= LOOK.sword.swords.sound.perSec + 1, `${n}번`);
+});
+
+test('이기어검: 스킬 타격은 화면을 멈추지 않는다 — 칸 셋 이상을 턴 마무리의 마지막 검만', () => {
+  const { feel, has } = rig();
+  swordHits(1, 'spin', 15, 1).forEach((e, k) => feel.handle([e], 1 + k * 0.013));
+  swordHits(2, 'finish', 10, 2).forEach((e, k) => feel.handle([e], 2 + k * 0.03));
+  assert.equal(has('timeFx.hitstop').length, 0, '난무와 두 칸 마무리는 멈추지 않는다');
+  assert.equal(has('camera.shake').length, 1, '마무리의 마지막 검에서 한 번 흔들린다');
+  swordHits(3, 'finish', 10, 3).forEach((e, k) => feel.handle([e], 3 + k * 0.03));
+  assert.equal(has('timeFx.hitstop').length, 1, '칸 셋을 턴 마무리의 마지막 검 하나');
+});
+
+test('이기어검: 스킬 타격의 소리는 검마다가 아니라 올라가는 음 몇 개, 숫자는 합계 하나', () => {
+  const { feel, has } = rig();
+  swordHits(1, 'spin', 15, 1).forEach((e, k) => feel.handle([e], 1 + k * 0.013));
+  const notes = has('sfx.play').filter(c => c[1] === 'ching');
+  assert.equal(notes.length, LOOK.sword.swords.sound.notes);
+  assert.ok(notes.at(-1)[2].detune > notes[0][2].detune, '음이 올라간다');
+  const nums = has('fx.number');
+  assert.equal(nums.length, 1); assert.equal(nums[0][3], 90);
+});
+
+test('이기어검: 검이 낸 맞음(quiet)에는 맞은 불티를 겹쳐 내지 않는다(제 불티와 소리는 찌르기·타격 사건이 낸다)', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('mobHit', { id: 1, x: 0, z: 0, quiet: true })], 1);
+  assert.equal(has('fx.spark').length, 0);
+  feel.handle([ev('mobHit', { id: 1, x: 0, z: 0 })], 1.1);
+  assert.equal(has('fx.spark').length, 1);
+});
+
+test('이기어검: 마지막 검이 헛돌아도 그때까지의 합계 숫자는 뜬다(벤 것이 없으면 안 뜬다)', () => {
+  const { feel, has } = rig();
+  feel.handle([ev('swordMiss', { sid: 1, skill: 'spin', k: 9, total: 10, last: true, sum: 25.6, x: 1, z: 2 })], 1);
+  assert.equal(has('fx.number').length, 1); assert.equal(has('fx.number')[0][3], 26);
+  feel.handle([ev('swordMiss', { sid: 2, skill: 'spin', k: 9, total: 10, last: true, sum: 0, x: null, z: null })], 2);
+  feel.handle([ev('swordMiss', { sid: 3, skill: 'spin', k: 4, total: 10, last: false, sum: 12, x: 1, z: 2 })], 3);
+  assert.equal(has('fx.number').length, 1);
+});

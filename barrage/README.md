@@ -44,11 +44,12 @@
 
 | 이름 | 뜻 |
 |---|---|
+| `char` | `sword` = 검사(근접 캐릭터 — 약한 사격, 무기 없음, 모은 칸을 U 일섬 · I 회전 베기 · O 마무리로 쓴다). 없으면 사수 |
 | `seed` | 판 난수(같은 seed = 같은 판) |
-| `bot` | 시범 봇: `1` 숙련 · `some` 가끔 패링 · `dodge` 피하기만 · `walk` 걷기만 · `turtle` 서서 패링만 |
+| `bot` | 시범 봇: `1` 숙련 · `some` 가끔 패링 · `dodge` 피하기만 · `walk` 걷기만 · `turtle` 서서 패링만 · `script` 연습 장면의 정해진 손(`clip=`) |
 | `phase` | `2`면 2단계(체력 50%)부터 |
 | `pattern` | 그 패턴만 되풀이(1~8, 8 = 레이저) |
-| `lab` | 상황 되풀이 장면: `parry` `stream` `melee` `rush` `dodge` `graze` `execute` |
+| `lab` | 상황 되풀이 장면: `parry` `stream` `melee` `rush` `dodge` `graze` `execute` · 이기어검의 움직임을 보는 장면 `swords`(가만히 선 보스) `swordmobs`(가만히 선 몬스터 넷) — `char=sword&bot=script&clip=idle\|chain\|slash\|spin\|finish\|burst\|stack`과 같이 쓴다 |
 | `pitch` | 시점 각도(45·60, 그 밖은 고정 확인용) |
 | `bh` | 탄 높이 |
 | `speed` | 게임 빠르기 배율 |
@@ -77,3 +78,11 @@
 9. 한 동작씩 연습: `?lab=parry` · `?lab=stream` · `?lab=melee` · `?lab=rush` · `?lab=dodge` · `?lab=graze` · `?lab=execute`(그로기 처형 — 다가가 Shift).
 10. 시작 장면(보스 이름, 약 1초)은 아무 키로 건너뛰고, `?intro=0`이면 없다. 소리 끄기는 `?mute=1`.
 11. 시점은 V, 고리는 G, 회복 변형은 `?heal=1`.
+12. **검사**(2026-11-17, 스킬 셋만 — 설계 `docs/superpowers/specs/2026-11-17-barrage-sword-design.md`): `?char=sword`(보스전, 용은 `&boss=dragon`) · `?stage=1&char=sword`.
+    지금 판(설계 §18): 주 무기는 **쌍검**이다. 기본 공격은 좌우 칼이 번갈아 내는 **칼바람**이고 사거리가 있다(보스 가운데에서 7 U쯤 — 그 안에서 싸운다). 칼바람이 맞는 동안 칸이 조금씩 차고(6초에 한 칸), **내 둘레 4.5 U 안의 적 탄은 절반 속도로 느려진다.**
+    받아쳐 칸을 모으고, **U 일섬**(한 칸 — 겨눈 적을 베며 뚫고 건너편에 선다, 가는 동안 무적) · **I 회전 베기**(한 칸 — 몸 둘레, 무적 없음, 무너짐이 가장 많이 찬다) · **O 마무리**(남은 칸 전부 — 앞을 베고 뒤로 튕겨 나온다, 무적)로 쓴다. 칸을 쓸 때마다 회복된다.
+    볼 것: 건너편(작은 청록 표시)이 비었는지 읽고 들어가게 되는가, 붙어서 받아치며 이어 치게 되는가, 억울하게 맞지 않는가. 스테이지에서는 이동기·몸 카드만 뜬다. 기록은 남지 않는다.
+    재기: `node prototypes/barrage/tools/botrun.mjs --kinds user --seeds 10 --char sword [--boss dragon | --stage 1]`.
+    **이기어검**(검사의 무기 — 설계 `docs/superpowers/specs/2026-11-17-barrage-flying-swords-design.md`, 판정 `src/sim/swords.js`, 그리기 `src/view/swordsView.js`): 검 다섯 자루가 늘 떠 있다. 사거리 안에 적이 있으면 모두 나가서 돌아오지 않고 0.5초에 한 번씩 번갈아 찌른다(적 사이를 오가고, 혼자면 그 적을 돌며). 스킬이 적을 벨 때마다 다섯 자루가 더 생겨 4초 남고(열다섯까지), **가진 검이 모두 그 스킬을 따라 벤다** — 일섬은 내 줄과 나란히, 회전 베기는 난무, 마무리는 나와 함께 물러났다가 착지하며 차례로 쏜다. 검은 무너짐을 주지 않고 칸도 채우지 않는다.
+    움직임 보기: `?char=sword&lab=swords&bot=script&clip=burst`(주소에 `join=0` = 스킬에 새 다섯만 나서게 — 견줘 보는 용). 느린 영상: `tools/record.ps1 -Fps 120 -Slow 4 -Query "char=sword&lab=swords&clip=spin&bot=script&mute=1"`(판과 효과가 같이 느려진다 — `speed=`는 판만 느려진다).
+    봇(수호자 40판, 2026-11-17): 검사 29승 · 이긴 판 68초(사수 31승 · 65초). 용 20판: 검사 18승 · 54초(사수 14승 · 54초).
