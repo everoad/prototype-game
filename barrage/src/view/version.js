@@ -1,2 +1,2 @@
 // 빌드 표시(화면 오른쪽 위). Pages는 파일을 10분 기억하게 하므로, 올릴 때마다 올려 적어 새 판인지 눈으로 가린다.
-export const BUILD = '11-17 e';
+export const BUILD = '11-17 f';
