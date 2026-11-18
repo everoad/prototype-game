@@ -14,7 +14,7 @@ import { canExecute } from './execute.js';
 import { bossGroggy } from './boss.js';
 import { tryKey } from './tries.js';
 import { CARDS, kitFull } from './cards.js';
-import { isSword, slashLanding, bladeMoving } from './sword.js';
+import { isSword, slashLanding, bladeMoving, chainLive } from './sword.js';
 
 const DIRS = [[0, 0]];
 for (let i = 0; i < 16; i++) DIRS.push([Math.cos(i * Math.PI / 8), Math.sin(i * Math.PI / 8)]);
@@ -71,22 +71,6 @@ function beamAt(w, m, qx, qz, t, margin) {
   const ux = Math.cos(a), uz = Math.sin(a), s = (qx - m.x) * ux + (qz - m.z) * uz;
   if (s < 0) return false;
   return Math.abs(-(qx - m.x) * uz + (qz - m.z) * ux) < L.width / 2 + w.rules.player.hitR + margin;
-}
-
-// 흰 탄 찾아가기: (ux, uz)로 look초 걷고 선다면, 받을 탄 가운데 하나라도 ahead초 안에 within 안으로 지나가는가
-function meets(f, wants, lag, px, pz, ux, uz, look, HB) {
-  for (const k of wants) {
-    const vx = f.vx[k], vz = f.vz[k], x0 = f.x[k] + vx * lag - px, z0 = f.z[k] + vz * lag - pz;
-    // 걷는 동안: 서로의 속도 차로 가장 가까운 때
-    const dvx = vx - ux, dvz = vz - uz, dd = dvx * dvx + dvz * dvz;
-    const t1 = dd > 0 ? Math.max(0, Math.min(look, -(x0 * dvx + z0 * dvz) / dd)) : 0;
-    if (Math.hypot(x0 + dvx * t1, z0 + dvz * t1) <= HB.within) return true;
-    // 선 뒤: 탄의 길에서 가장 가까운 때(ahead초 안)
-    const x1 = x0 + dvx * look, z1 = z0 + dvz * look, vv = vx * vx + vz * vz;
-    const t2 = vv > 0 ? Math.max(0, Math.min(HB.ahead, -(x1 * vx + z1 * vz) / vv)) : 0;
-    if (Math.hypot(x1 + vx * t2, z1 + vz * t2) <= HB.within) return true;
-  }
-  return false;
 }
 
 // picks = 방마다 고를 것의 차례(갈래 이름이나 카드 id) — 한 판의 뼈대 §9의 기준 판 = 무기 → 탄 기술 → 이동기 → 몸.
@@ -306,12 +290,6 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       nextThink = now + B.think;
       let best = Infinity, bestDir = DIRS[0], bestEarly = 0, stayDanger = Infinity;
       const look = B.look, n = B.samples, speed = R.player.speed;
-      // 흰 탄 찾아가기(실험): 받을 흰·금 탄 가운데 곧(ahead초 안) 곁을 지나갈 것 — 그 길로 들어서는 쪽에 점수를 준다
-      const HB = B0.hunt, wants = [];
-      if (parries && f && w.tries && w.tries.on.hunt) for (let k = 0; k < f.n; k++) {
-        const kd = f.kind[k];
-        if ((kd === K.WHITE || kd === K.GOLD) && plan(`${f.id[k]}:${f.born[k]}`, true).parry) wants.push(k);
-      }
       for (const [dx, dz] of DIRS) {
         let danger = 0, early = 0;
         for (let j = 1; j <= n; j++) {
@@ -354,7 +332,6 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
             if (sp && t >= sp[0] - hw && t <= sp[1] + hw) { danger += 30; if (sp[0] < 0.17) early++; }
           }
           // 불 장판(실험): 타는 자리는 밟지 않는다
-          if (w.tries && w.tries.fires.length && j <= 3) for (const fr of w.tries.fires) if (Math.hypot(qx - fr.x, qz - fr.z) <= fr.r + B.margin) danger += 12;
           // 밀물(실험): 예고된 반쪽에 남아 있을수록 위험 — 일찍 건너간다
           if (w.tries && w.tries.tide && w.tries.tide.area && !w.tries.tide.area.hit && j === n) { const ta = w.tries.tide.area; if (qx * ta.side > -R.player.bodyR) danger += 12 + Math.abs(qx) * 2; }
           // 레이저 빔
@@ -382,7 +359,6 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
           }
         }
         if (dx === 0 && dz === 0) stayDanger = danger;
-        if (wants.length && meets(f, wants, lag, p.x, p.z, dx * speed, dz * speed, look, HB)) danger -= HB.pull;
         // 받을 흰 포탄 원(포격병): 떨어질 때 그 안에 서 있게 되는 쪽에 점수 — 빨간 원을 피한 뒤 걸어 들어가 받아친다
         if (parries) for (const a of seenAreas) {
           if (a.hit || a.kind !== 'shell' || a.color === 'red' || !plan(`area:${a.born}`, true).parry) continue;
@@ -417,7 +393,7 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
     const X = w.tries;
     if (X && moves) {
       // 무적 없는 줄(rope)을 피하는 데 쓰면 탄 속으로 끌려가 더 맞는다(봇 판 4/10) — 멀리 갈 때만. 날아가는 줄(sky)은 피할 때도 쓴다
-      if ((X.on.rope || X.on.sky) && !X.rope.to && now >= X.rope.readyAt && ((X.on.sky && pinch) || (goal && Math.hypot(goal.x - p.x, goal.z - p.z) > B0.room.ropeFar)) && (mx !== 0 || mz !== 0)) keys[tryKey(w, X.on.sky ? 'sky' : 'rope')] = true;
+      if (X.on.sky && !X.rope.to && now >= X.rope.readyAt && (pinch || (goal && Math.hypot(goal.x - p.x, goal.z - p.z) > B0.room.ropeFar)) && (mx !== 0 || mz !== 0)) keys[tryKey(w, 'sky')] = true;
       const a = w.aim;
       const da = a && !a.dead ? Math.hypot(a.x - p.x, a.z - p.z) : Infinity;
       if (X.on.swap && w.boss.away && pinch && da < Infinity && now >= X.swapAt) keys[tryKey(w, 'swap')] = true;   // 자리 바꾸기: 서 있으면 맞을 때 겨눈 몬스터와
@@ -437,7 +413,8 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
     // 검사의 스킬(확인·영상용 — 사람의 판단을 흉내 내지 못한다): 빨간 몸 공격이 임박하면 마무리로 빠지고, 닿으면 회전 베기로 몰아치다 마지막 칸은 마무리로 빠지고,
     // 칸이 enter만큼 모였고(방에서는 하나라도) 보스가 쏘는 중이 아니면 일섬으로 들어간다. 체력이 낮으면 칸이 덜 모였어도 들어가 베어서 회복한다(닿는 적이 없는 스킬은 나가지 않는다).
     let spinKey = false;
-    if (sword && parries && p.store.length > 0 && p.dyingAt == null && !bladeMoving(w)) {
+    if (sword && parries && chainLive(w) && p.dyingAt == null && !bladeMoving(w) && slashLanding(w)) toss = true;   // 잇는 일섬(sword.js의 형태): 이어지는 동안은 칸 없이 한 번 더 — 창이 닫히기 전에 누른다
+    else if (sword && parries && p.store.length > 0 && p.dyingAt == null && !bladeMoving(w)) {
       const BS = B0.sword, Sw = R.sword, b = w.boss, a = w.aim && !w.aim.dead ? w.aim : null;
       const surf = a ? Math.hypot(a.x - p.x, a.z - p.z) - (a === b ? R.boss.r : a.r) : Infinity;
       const redSoon = seenAreas.some(ar => !ar.hit && ar.color === 'red' && ar.born + ar.warn - now <= BS.exitSec

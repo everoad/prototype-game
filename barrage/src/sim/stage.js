@@ -48,7 +48,7 @@ function sweep(w) {
   w.shots.alive.fill(0);   // 날던 평타
   w.player.throwSum = 0;
   if (w.tries && w.tries.snipe) { w.tries.snipe.on = false; w.tries.snipe.wait = false; }   // 저격 자세(실험)는 방을 넘어가지 않는다
-  if (w.tries) { w.tries.mines.length = 0; w.tries.fires.length = 0; w.tries.rope.to = null; }   // 놓인 지뢰·타던 불·끌려가던 줄도
+  if (w.tries) { w.tries.mines.length = 0; w.tries.rope.to = null; }   // 놓인 지뢰·끌려가던 줄도
 }
 
 const snapshot = w => ({ hp: w.player.hp, stock: { ...w.player.stock }, store: w.player.store.map(s => ({ ...s })), gear: [...w.weapons.on], kit: kitSnapshot(w) });

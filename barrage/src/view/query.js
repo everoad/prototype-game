@@ -15,6 +15,7 @@ export function worldOptions(q, rand = Math.random) {
     // 기본 판 = 올린 것(늘 나가는 무기·공격 다양화·저격) + ?try=이름(더 켜기) · -이름(빼기) · none(예전 판) · all. 연습 장면은 적은 것만
     tries: (q.get('lab') ? q.get('try') : gameTries(q.get('try')).join(',')) || null,
     stage, store: stage != null || q.get('store') !== '0', hard: q.get('hard') === '1',
+    forms: q.get('char') === 'sword' && Object.hasOwn(RULES.sword.forms.slash, q.get('slash') ?? '') ? { slash: q.get('slash') } : null,   // 검사 스킬의 형태(?slash=chain 잇는 일섬 · deep 깊은 일섬 — 시험판, 카드는 나중)
     char: q.get('char') === 'sword' ? 'sword' : 'gunner',   // 캐릭터(?char=sword = 검사 — sim/sword.js). 검사는 무기를 들지 않는다(아래 gear는 듣지 않는다)
     // 보조 무기: 연습 장면·스테이지(카드로 얻는다)는 없음. 보스전만 여는 판은 무기 칸 규칙대로 미사일 + 산탄 둘(한 판의 뼈대 §3 — 넷이 한 방을 같이 내면 넘친다), 예전 판(?try=none)은 넷 다
     gear: q.get('gear') ?? (q.get('lab') || stage != null ? 'none' : gameTries(q.get('try')).includes('always') ? 'missile,burst' : 'all'),

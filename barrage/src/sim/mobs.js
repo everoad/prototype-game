@@ -51,9 +51,8 @@ function shooter(w, m) {
     m.atkN++;
     if (type === 2) { m.burst = { left: Vs.streamN, at: w.time, ang: a }; set(w, m, 'burst'); }
     else {
-      const hunt = !!w.tries && !!w.tries.on.hunt;   // 흰 탄 찾아가기(실험): 가운데는 보라, 그 양옆이 흰
       const n = type === 1 ? Vs.wideN : S.n, half = (n - 1) / 2, stepA = (type === 1 ? Vs.wideDeg : S.spreadDeg) / (n - 1) * D;
-      for (let k = 0; k < n; k++) one(a + (k - half) * stepA, (hunt ? Math.abs(k - half) === 1 : k === half) ? K.WHITE : K.NORMAL);
+      for (let k = 0; k < n; k++) one(a + (k - half) * stepA, k === half ? K.WHITE : K.NORMAL);
       done();
       return;
     }

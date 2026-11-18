@@ -207,7 +207,7 @@ export function createSwordsView(view, LOOK, fx = null) {
         goHome(s, ts, e.blocked);
       } else if (e.type === 'bladeSlash') {   // 일섬: 내가 지나갈 줄이 먼저 길게 번쩍인다(몸보다 앞서 — 벤 줄이 읽히게. 몸 위에 그린다)
         const F = LOOK.sword.skill.slash.flash, a = Math.atan2(e.z1 - e.z0, e.x1 - e.x0);
-        mark((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2, a, Math.hypot(e.x1 - e.x0, e.z1 - e.z0) + 2 * F.ext, F.w, F.sec, true);
+        mark((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2, a, Math.hypot(e.x1 - e.x0, e.z1 - e.z0) + 2 * F.ext, F.w * (e.form === 'deep' ? LOOK.sword.forms.deep.flashW : 1), F.sec, true);
       } else if (e.type === 'swordsBatch') {
         until.set(e.batch, e.until);
         if (e.renewed) { for (const s of swords) if (s.b === e.batch) s.boost = ts; continue; }

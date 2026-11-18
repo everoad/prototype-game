@@ -41,7 +41,8 @@ const idOf = (w, f) => (f === w.boss ? 0 : f.id);
 
 // 스킬이 적 하나를 벴다(sword.js의 cut이 부른다). 같은 스킬 한 번 — 일섬은 같은 움직임, 회전 베기·마무리는 같은 틱 — 의 첫 베기에서
 // 묶음을 만들고(가득이면 가장 오래된 묶음의 시간만 새로) 타격을 줄에 세운다. 뒤따르는 베기는 그 타격이 벨 적에 더한다.
-export function swordsOnCut(w, skill, f, orbs = 1) {
+// batch = false면 묶음 없이 타격만(잇는 일섬의 둘째 번부터), mul = 검 한 번의 세기 배율.
+export function swordsOnCut(w, skill, f, orbs = 1, { batch: fresh = true, mul = 1 } = {}) {
   const S = w.player.swords;
   if (!S) return;
   const p = w.player, C = w.rules.sword.swords, K = C[skill];
@@ -53,7 +54,8 @@ export function swordsOnCut(w, skill, f, orbs = 1) {
   }
   const cap = Math.round(C.max / C.n) - 1;
   let batch = null, renewed = false;
-  if (S.batches.length < cap) {
+  if (!fresh) batch = null;   // 잇는 일섬의 이어지는 번: 묶음을 새로 만들지도, 남은 시간을 새로 하지도 않는다(타격만 나선다)
+  else if (S.batches.length < cap) {
     batch = { id: ++S.seq, until: w.time + C.keep };
     S.batches.push(batch);
     for (let k = 0; k < C.n; k++) S.list.push({ b: batch.id, k, nextAt: 0, leg: null });
@@ -64,7 +66,7 @@ export function swordsOnCut(w, skill, f, orbs = 1) {
     renewed = true;
   }
   const angle = mv ? Math.atan2(mv.z1 - mv.z0, mv.x1 - mv.x0) : Math.atan2(f.z - p.z, f.x - p.x);
-  const strike = { sid: ++S.sid, skill, tick: w.tick, move: mv, foes: [f], aim: w.aim, orbs, total: C.join || !batch ? S.list.length : C.n, armed: false, startAt: null, span: K.span, done: 0, sum: 0, told: false, angle, fresh: batch ? batch.id : 0 };
+  const strike = { sid: ++S.sid, skill, tick: w.tick, move: mv, foes: [f], aim: w.aim, orbs, mul, total: C.join || !batch ? S.list.length : C.n, armed: false, startAt: null, span: K.span, done: 0, sum: 0, told: false, angle, fresh: batch ? batch.id : 0 };
   S.cast = strike;
   S.strikes.push(strike);
   if (live(w, f)) arm(w, S, strike);
@@ -85,7 +87,7 @@ function strikeOnce(w, st) {
   const C = w.rules.sword.swords, k = st.done++, last = st.done >= st.total, alive = st.foes.filter(f => live(w, f));
   const targets = st.skill === 'slash' ? alive : st.skill === 'spin' ? alive.slice(k % (alive.length || 1), k % (alive.length || 1) + 1) : alive.includes(st.aim) ? [st.aim] : alive.slice(0, 1);
   if (!targets.length) { emit(w, 'swordMiss', { sid: st.sid, skill: st.skill, k, total: st.total, last, sum: st.sum, x: st.lastX ?? null, z: st.lastZ ?? null }); return; }   // 헛돈 검: 그때까지의 합계와 마지막으로 벤 자리를 같이 알린다(마지막 검이면 화면이 합계를 띄운다)
-  const dmg = C[st.skill].dmg * (st.skill === 'finish' ? st.orbs : 1);
+  const dmg = C[st.skill].dmg * (st.skill === 'finish' ? st.orbs : 1) * st.mul;   // mul = 형태가 바꾼 세기(잇는 일섬 — sword.js)
   for (const f of targets) {
     const x = f.x, z = f.z, id = idOf(w, f);
     const dealt = hurtFoe(w, f, dmg * (f === w.boss ? 1 : w.rules.sword.mob), 'salvo', { pierce: true, quiet: true });

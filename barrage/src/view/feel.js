@@ -4,7 +4,7 @@ import { K, RULES } from '../sim/rules.js';
 import { rayInBoard } from './warp.js';
 
 export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
-  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, salvo: { how: null, stopped: true, droneN: 0 }, later: [], beatAt: -1e9, pillarAt: -1e9, burnAt: -1e9, blockAt: -1e9, spawnAt: -1e9, puffAt: -1e9, puffBgAt: -1e9, bossHpR: null, charged: false, auraAt: -1e9 };
+  const st = { lastPerfectAt: -1e9, grazeAt: -1e9, grazeN: 0, firedAt: null, hit: { n: 0, start: 0 }, slamFrom: null, throwHits: 0, salvo: { how: null, stopped: true, droneN: 0 }, later: [], beatAt: -1e9, pillarAt: -1e9, blockAt: -1e9, spawnAt: -1e9, puffAt: -1e9, puffBgAt: -1e9, bossHpR: null, charged: false, auraAt: -1e9 };
   const F = () => LOOK.feel, on = k => F().on[k] !== false;
   const stop = (now, sec, opt) => (on('stop') ? timeFx.hitstop(now, sec, opt) : 0);
   const slow = (now, s, sec, opt) => on('slow') && timeFx.slow(now, s, sec, opt);
@@ -40,7 +40,7 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
     let pinged = new Set();
     // 검사의 스킬: 벤 사건(bladeHit)이 그 스킬의 사건보다 먼저 올 수 있다(회전 베기·마무리) — 불티가 튈 쪽을 알게 스킬의 자리부터 읽어 둔다
     for (const e of events) {
-      if (e.type === 'bladeSlash') blade = { x: e.x0, z: e.z0, angle: Math.atan2(e.z1 - e.z0, e.x1 - e.x0), cut: false };
+      if (e.type === 'bladeSlash') blade = { x: e.x0, z: e.z0, angle: Math.atan2(e.z1 - e.z0, e.x1 - e.x0), cut: false, form: e.form ?? null };
       else if (e.type === 'bladeSpin' || e.type === 'bladeFinish') blade = { x: e.x, z: e.z, angle: null, cut: false };
     }
     for (const e of events) {
@@ -377,14 +377,10 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'ropeEnd': if (!e.cut) { fx.dust?.(e.x, e.z, 0.7); sfx.play('tick'); } break;
         case 'pillarBlock': if (now - st.pillarAt >= LOOK.tries.blockGap) { st.pillarAt = now; if (on('sparks')) fx.spark(e.x, e.z, e.enemy ? 'purple' : 'cyan', 0.4); } break;
         case 'pillarBreak': fx.dust?.(e.x, e.z, 2); if (on('sparks')) fx.burst(e.x, e.z, 'purple', 1.5); shake(6, 0.15); sfx.play('shatter', { detune: -200 }); break;
-        case 'fireStart': sfx.play('puff', { detune: -600 }); break;
-        case 'fireBurn': if (now - st.burnAt >= 0.1) { st.burnAt = now; if (on('sparks')) fx.spark(e.x, e.z, 'red', 0.7); } break;
         case 'mineSet': sfx.play('tick'); if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.6); break;
         case 'mineBoom': { const T = LOOK.tries; if (on('sparks')) fx.burst(e.x, e.z, 'cyan', T.boomBurst); fx.dust?.(e.x, e.z, 1.4); shake(T.boomShake, T.boomShakeSec); sfx.play('throwBoom'); break; }
-        case 'crystalPulse': if (on('sparks')) fx.burst(e.x, e.z, 'white', 2); if (on('numbers') && e.n > 0) fx.number(e.x, e.z, `흰 탄 ${e.n}`, 'white', 22); sfx.play('pingGold'); break;
         case 'swap': actors.dashTrail?.(now); if (on('sparks')) { fx.burst(e.x0, e.z0, 'purple', 1.2); fx.burst(e.x1, e.z1, 'cyan', 1.2); } sfx.play('whoosh', { detune: 800 }); break;
         case 'orbitHit': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', 0.5); break;
-        case 'focus': if (e.on) { sfx.play('gearWake'); fx.rise?.(e.x, e.z, 'cyan', 6); } break;
         case 'bubbleOn': sfx.play('shield'); hud.banner(now, '보호막 — 던진 탄만 통한다', 1.4); break;
         case 'bubbleBreak': if (on('sparks')) fx.burst(e.x, e.z, 'purple', 3); shake(12, 0.25); sfx.play('shatter'); if (on('numbers')) fx.number(e.x, e.z, '깨짐', 'cyan', 30); break;
         case 'bubbleOff': sfx.play('gearSleep'); break;
@@ -409,7 +405,8 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         case 'waveHit': if (on('sparks')) fx.spray?.(e.x, e.z, e.angle, 'cyan', LOOK.sword.cut.spray); break;   // 맞힌 자리: 칼바람이 가던 쪽으로 튀는 불티(칼자국은 swordView)
         case 'bladeSlash': case 'bladeSpin': case 'bladeFinish': {
           const V = LOOK.sword, K = V.skill, fin = e.type === 'bladeFinish', spin = e.type === 'bladeSpin';
-          sfx.play(fin ? 'finish' : spin ? 'spin' : 'slash');
+          const Fm = !fin && !spin && e.form ? V.forms[e.form] : null;   // 일섬의 형태: 잇는 일섬은 이어질 때마다 소리가 오르고, 깊은 일섬은 낮게 난다
+          sfx.play(fin ? 'finish' : spin ? 'spin' : 'slash', Fm ? { detune: e.form === 'chain' ? (e.k - 1) * Fm.cent : Fm.cent } : undefined);
           if (fin) { stop(now, V.finishStop); shake(V.finishShake[0], V.finishShake[1]); if (on('punch')) camera.punch(V.punch[0], V.punch[1]); }
           // 스킬을 썼다는 강조(사수의 한 방처럼): 가장자리 빛은 늘. 일섬·마무리는 몸이 움직이므로 잔상, 회전 베기는 맞혔을 때·마무리는 칸 slowOrbs 이상을 털었을 때 잠깐 느려진다(일섬은 베는 순간 — bladeHit)
           const S = K[fin ? 'finish' : spin ? 'spin' : 'slash'];
@@ -422,12 +419,12 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
         }
         case 'bladeHit': {
           if (!(e.dmg > 0)) break;
-          const V = LOOK.sword, K = V.skill, fin = e.skill === 'finish';
+          const V = LOOK.sword, K = V.skill, fin = e.skill === 'finish', deep = e.skill === 'slash' && blade && blade.form === 'deep' ? V.forms.deep : null;   // 깊은 일섬은 벨 때 더 무겁다
           if (on('sparks')) { fx.burst(e.x, e.z, 'cyan', V.burst[e.skill]); fx.spray?.(e.x, e.z, blade ? blade.angle ?? Math.atan2(e.z - blade.z, e.x - blade.x) : 0, 'cyan', K.spray[e.skill]); }   // 칼이 지나간 쪽으로 튀는 불티(일섬은 내가 가는 쪽, 회전 베기·마무리는 나에게서 바깥으로)
-          if (e.skill === 'slash' && blade && !blade.cut) { blade.cut = true; slow(now, K.slash.slow[0], K.slash.slow[1], { skipIfWithin: K.chain }); if (on('punch')) camera.punch(K.slash.punch[0], K.slash.punch[1]); }   // 일섬: 처음 베는 순간이 잠깐 늘어지고 화면이 당겨진다(지나가며 벤 적마다 되풀이하지 않는다)
-          if (on('numbers')) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', fin ? V.numberBig : V.number);
-          if (!fin) stop(now, V.stop);
-          if (e.id === 0) { actors.bossJolt?.(now, fin ? V.joltBig : V.jolt); hud.flashStagger(now); }
+          if (e.skill === 'slash' && blade && !blade.cut) { blade.cut = true; slow(now, K.slash.slow[0], K.slash.slow[1], { skipIfWithin: K.chain }); if (on('punch')) camera.punch(...(deep ? deep.punch : K.slash.punch)); if (deep) shake(deep.shake[0], deep.shake[1]); }   // 일섬: 처음 베는 순간이 잠깐 늘어지고 화면이 당겨진다(지나가며 벤 적마다 되풀이하지 않는다)
+          if (on('numbers')) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', fin ? V.numberBig : deep ? deep.number : V.number);
+          if (!fin) stop(now, deep ? deep.stop : V.stop);
+          if (e.id === 0) { actors.bossJolt?.(now, fin ? V.joltBig : deep ? deep.jolt : V.jolt); hud.flashStagger(now); }
           sfx.play('throwHit', { detune: fin ? -300 : 300 });
           break;
         }

@@ -21,7 +21,7 @@ const finite = (o, path) => { for (const [k, v] of Object.entries(o)) { if (v &&
 
 test('실험 수치는 유한한 수, 이름은 아는 것만 남는다', () => {
   finite(T, 'tries');
-  assert.deepEqual(parseTries('rope, nope,fire'), ['rope', 'fire']);
+  assert.deepEqual(parseTries('sky, nope,dash'), ['sky', 'dash']);
   assert.deepEqual(parseTries('all'), TRIES);
   assert.deepEqual(parseTries(null), []);
   assert.equal(createWorld().tries, null);
@@ -47,7 +47,7 @@ test('실험을 켜도 같은 seed면 같은 판', () => {
 
 // ── 갈고리
 test('갈고리: 가는 쪽 말뚝으로 빠르게 끌려가 말뚝 앞에서 멈춘다. 다시 쓰기까지 cooldown', () => {
-  const w = boss('rope'), p = w.player;
+  const w = boss('sky'), p = w.player;
   step(w, { ...idle, mx: 1, move1: true });
   const ev = drainEvents(w), a = w.tries.rope.to;
   assert.equal(of(ev, 'ropeStart').length, 1);
@@ -66,23 +66,17 @@ test('갈고리: 가는 쪽 말뚝으로 빠르게 끌려가 말뚝 앞에서 �
   assert.equal(of(drainEvents(w), 'ropeStart').length, 1);
 });
 
-test('갈고리: 끌려가는 동안 무적이 아니고, 구르면 줄을 놓는다', () => {
-  const w = boss('rope'), p = w.player;
+
+test('갈고리: 구르면 줄을 놓는다', () => {
+  const w = boss('sky');
   step(w, { ...idle, mx: 1, move1: true });
   assert.ok(w.tries.rope.to, '줄이 안 걸림');
-  spawnBullet(w, K.NORMAL, p.x + 1.5, p.z, Math.PI, 2, 1);
-  const to = w.tries.rope.to, b = w.bullets;
-  for (let i = 0; i < b.cap; i++) if (b.alive[i]) { const d = Math.hypot(to.x - p.x, to.z - p.z); b.x[i] = b.px[i] = p.x + (to.x - p.x) / d * 1.5; b.z[i] = b.pz[i] = p.z + (to.z - p.z) / d * 1.5; b.vx[i] = b.vz[i] = 0; }
-  play(w, 0.3);
-  assert.ok(p.hp < P.hp, '끌려가며 탄을 지나쳤는데 안 맞음');
-  const w2 = boss('rope');
-  step(w2, { ...idle, mx: 1, move1: true });
-  const ev = play(w2, 0.1, (x, k) => ({ ...idle, dodge: k === 2, mz: 1 }));
-  assert.equal(w2.tries.rope.to, null);
+  const ev = play(w, 0.1, (x, k) => ({ ...idle, dodge: k === 2, mz: 1 }));
+  assert.equal(w.tries.rope.to, null);
   assert.equal(of(ev, 'ropeEnd')[0].cut, true);
 });
 
-test('날아가는 갈고리(sky): 끌려가는 동안은 맞지 않고, 내리면 다시 맞는다', () => {
+test('갈고리: 끌려가는 동안은 맞지 않고, 내리면 다시 맞는다', () => {
   const w = boss('sky'), p = w.player;
   step(w, { ...idle, mx: 1, move1: true });
   const to = w.tries.rope.to, b = w.bullets;
@@ -133,30 +127,6 @@ test('기둥: 흰 탄은 지나가고(받아칠 것은 남는다), hp발 막으�
   assert.ok(!w.tries.pillars.includes(c));
 });
 
-// ── 불 장판
-test('불 장판: 빨간 원이 떨어진 자리가 sec초 타고, 안에 선 플레이어와 몬스터가 탄다', () => {
-  const w = room('fire'), p = w.player;
-  const m = spawnMob(w, 'shield', p.x + 8, p.z, 0);
-  w.mobAreas.push({ kind: 'shell', shape: 'circle', x: m.x, z: m.z, face: 0, R: 1.3, half: Math.PI, color: 'red', warn: 0.05, born: w.time, hit: false, owner: 99 });
-  w.floorAreas.push(w.mobAreas[0]);
-  w.opts.ai = true; m.nextAt = 1e9; m.face = 0;   // 포탄 판정이 돌게 두뇌를 켠다(방패병은 제자리)
-  const ev = play(w, 0.2);
-  assert.equal(of(ev, 'fireStart').length, 1);
-  assert.equal(w.tries.fires.length, 1);
-  const hp0 = m.hp;
-  m.x = w.tries.fires[0].x; m.z = w.tries.fires[0].z;
-  w.opts.ai = false;
-  play(w, 2);
-  assert.ok(m.hp < hp0 - T.fire.mobDps, `몬스터가 덜 탐 ${hp0 - m.hp}`);
-  p.x = p.px = w.tries.fires[0].x; p.z = p.pz = w.tries.fires[0].z + 3;
-  play(w, 0.6);
-  assert.equal(p.hp, P.hp, '불 밖에서 탐');
-  p.x = p.px = w.tries.fires[0].x; p.z = p.pz = w.tries.fires[0].z;
-  play(w, 0.6);
-  assert.equal(p.hp, P.hp - T.fire.dmg);
-  play(w, T.fire.sec);
-  assert.equal(w.tries.fires.length, 0);
-});
 
 // ── 돌진 베기
 test('돌진 베기: 회피로 적의 몸을 지나가면 한 번 피해를 주고 반대편에 선다', () => {
@@ -197,7 +167,7 @@ test('꿰뚫는 던지기: 던진 탄이 곧게 날며 줄 선 적을 모두 뚫
   assert.equal(p.throwSum, 0);
 });
 
-// ── 3차: 지뢰 · 오라 · 수정 · 자리 바꾸기 · 집중 사격 · 스침 모으기
+// ── 3차: 지뢰 · 오라 · 자리 바꾸기 · 스침 모으기
 test('지뢰: 모은 탄 하나를 발밑에 놓고(회복 없음), 적의 몸이 닿으면 둘레의 적이 다친다', () => {
   const w = room('mine'), p = w.player;
   step(w, { ...idle, orb: true });
@@ -233,25 +203,6 @@ test('오라: 모은 탄이 있는 동안 가까운 적이 깎이고, 없으면 
   assert.equal(m.hp, hp, '멀리 있는 적이 깎임');
 });
 
-test('수정: 곁에서 패링을 누르면 둘레의 보라 탄이 흰 탄으로 바뀐다. 한 번 쓰면 rest초 쉰다', () => {
-  const w = boss('crystal'), p = w.player, c = w.tries.crystals[0], b = w.bullets;
-  p.x = p.px = c.x - 1.5; p.z = p.pz = c.z;
-  for (const [dx, dz] of [[3, 0], [-3, 1], [0, -3]]) spawnBullet(w, K.NORMAL, c.x + dx, c.z + dz, 0, 0.01, 1);
-  spawnBullet(w, K.NORMAL, c.x + T.crystal.R + 3, c.z, 0, 0.01, 1);
-  spawnBullet(w, K.RED, c.x + 2, c.z + 2, 0, 0.01, 1);
-  const count = k => { let n = 0; for (let i = 0; i < b.cap; i++) if (b.alive[i] && b.kind[i] === k) n++; return n; };
-  step(w, { ...idle, parry: true });
-  const ev = drainEvents(w);
-  assert.equal(of(ev, 'crystalPulse')[0].n, 3);
-  assert.equal(count(K.WHITE), 3); assert.equal(count(K.NORMAL), 1); assert.equal(count(K.RED), 1);
-  play(w, 1);
-  spawnBullet(w, K.NORMAL, c.x + 3, c.z, 0, 0.01, 1);
-  step(w, { ...idle, parry: true });
-  assert.equal(of(drainEvents(w), 'crystalPulse').length, 0, '쉬는 중에 또 울림');
-  play(w, T.crystal.rest);
-  step(w, { ...idle, parry: true });
-  assert.equal(of(drainEvents(w), 'crystalPulse').length, 1);
-});
 
 test('자리 바꾸기: 겨눈 몬스터와 자리를 바꾸고 잠깐 무적, cooldown 동안은 못 쓴다. 보스와는 못 바꾼다', () => {
   const w = room('swap'), p = w.player;
@@ -272,16 +223,6 @@ test('자리 바꾸기: 겨눈 몬스터와 자리를 바꾸고 잠깐 무적, c
   assert.equal(w2.boss.x, bx);
 });
 
-test('집중 사격: after초 서 있으면 평타가 mul배, 움직이면 바로 풀린다', () => {
-  const run1 = tries => { const w = room(tries); w.shots.nextAt = 0; const m = spawnMob(w, 'shield', w.player.x + 5, w.player.z, 0); m.face = 0; m.hp = m.maxHp = 5000; play(w, 3); return m.maxHp - m.hp; };
-  const base = run1(null), focused = run1('focus');
-  assert.ok(focused > base * 1.6, `집중 ${focused} · 보통 ${base}`);
-  const w = room('focus');
-  play(w, T.focus.after + 0.05);
-  assert.equal(w.tries.shotMul, T.focus.mul);
-  step(w, { ...idle, mx: 1 });
-  assert.equal(w.tries.shotMul, 1);
-});
 
 test('스침 모으기: per번 스치면 한 칸 모인다', () => {
   const w = boss('graze'), p = w.player;
@@ -346,13 +287,11 @@ test('밀물: 판의 반쪽에 빨간 예고가 깔리고 warn초 뒤 그 반쪽
   assert.equal(p2.hp, P.hp);
 });
 
-// ── 5차(사용자 2026-11-17 "무기는 기본으로 나가고 패링하면 강화" · "흰 탄을 찾아가서 받기"): always · hunt
-import { startPattern, updatePattern } from '../src/sim/patterns.js';
+// ── 5차(사용자 2026-11-17 "무기는 기본으로 나가고 패링하면 강화" ): always
 import { createBot } from '../src/sim/bot.js';
 
 const fires = (ev, kind) => of(ev, 'weaponFire').filter(e => e.kind === kind).length;
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
-const aliveIds = w => { const out = []; for (let i = 0; i < w.bullets.cap; i++) if (w.bullets.alive[i]) out.push(i); return out; };
 
 test('늘 나가는 무기: 받아치지 않아도 쏜다 — 꺼져 있으면 지금처럼 패링 뒤에만', () => {
   const w = boss('always', { gear: 'missile' });
@@ -405,50 +344,9 @@ test('늘 나가는 무기: 스테이지는 start 무기 하나를 들고 시작
   assert.deepEqual(createWorld({ stage: 1, ai: false }).weapons.on, []);
 });
 
-test('흰 탄 찾아가기: 조준 부채는 나를 겨눈 가운데 탄이 보라, 그 양옆이 흰색이다', () => {
-  const w = boss('hunt'), b = w.bullets, P1 = RULES.patterns[1], stepA = P1.spreadDeg / (P1.n - 1) * Math.PI / 180;
-  updatePattern(w, startPattern(w, 1));
-  const ids = aliveIds(w), aim = Math.atan2(w.player.z - w.boss.z, w.player.x - w.boss.x);
-  assert.equal(ids.length, P1.n);
-  const kindAt = Object.fromEntries(ids.map(i => [Math.round(wrap(Math.atan2(b.vz[i], b.vx[i]) - aim) / stepA), b.kind[i]]));
-  assert.equal(kindAt[0], K.NORMAL, '나를 겨눈 탄이 받아칠 탄');
-  assert.equal(kindAt[1], K.WHITE); assert.equal(kindAt[-1], K.WHITE);
-  assert.equal(ids.filter(i => b.kind[i] === K.WHITE).length, 2);
-});
 
-test('흰 탄 찾아가기: 사수의 세 발은 가운데가 보라, 양옆이 흰색이다', () => {
-  const w = createWorld({ store: true, tries: 'hunt' });
-  w.boss.away = true; w.shots.nextAt = 1e9;
-  const m = spawnMob(w, 'shooter', w.player.x + 6, w.player.z, 0);
-  m.nextAt = w.time;
-  const fired = of(play(w, RULES.mobs.shooter.warn + 0.05), 'fire').filter(e => e.src === RULES.src.shooter);
-  assert.deepEqual(fired.map(e => e.kind), [K.WHITE, K.NORMAL, K.WHITE]);
-});
 
-test('흰 탄 찾아가기: 쪼개지는 구슬은 내 쪽 조각이 보라, 그 다음으로 가까운 조각들이 흰색이다', () => {
-  const w = boss('hunt'), b = w.bullets, P4 = RULES.patterns[4], p = w.player;
-  const run = startPattern(w, 4);
-  for (let k = 0; k < ticks(P4.maxSec + 1); k++) { updatePattern(w, run); if (run.burst) break; step(w, idle); }
-  assert.ok(run.burst, '구슬이 터지지 않음');
-  const ids = aliveIds(w), toP = Math.atan2(p.z - b.z[ids[0]], p.x - b.x[ids[0]]);
-  const byNear = ids.map(i => [Math.abs(wrap(Math.atan2(b.vz[i], b.vx[i]) - toP)), b.kind[i]]).sort((x, y) => x[0] - y[0]).map(e => e[1]);
-  assert.equal(byNear[0], K.NORMAL, '내 쪽 조각이 받아칠 탄');
-  for (let k = 1; k <= P4.whites; k++) assert.equal(byNear[k], K.WHITE, `${k}번째로 가까운 조각`);
-  assert.equal(byNear.filter(k => k === K.WHITE).length, P4.whites);
-});
 
-test('흰 탄 찾아가기: 봇은 옆으로 지나갈 흰 탄의 길로 들어가 받아친다 — 꺼져 있으면 쫓지 않는다', () => {
-  const tryIt = tries => {
-    const w = createWorld({ ai: false, store: true, tries }), p = w.player, bot = createBot('1', 3);
-    w.shots.nextAt = 1e9;
-    for (let k = 0; k < ticks(0.3); k++) step(w, bot(w));   // 반응 지연만큼 판을 먼저 본다
-    spawnBullet(w, K.WHITE, p.x + 10, p.z + 1.6, Math.PI, 9, RULES.src.shooter);   // 1.6 U 옆을 지나갈 흰 탄(패링 원 0.8 U 밖)
-    for (let k = 0; k < ticks(1.6); k++) step(w, bot(w));
-    return w.stats.parries;
-  };
-  assert.equal(tryIt('hunt'), 1);
-  assert.equal(tryIt(null), 0);
-});
 
 test('늘 나가는 무기: 몬스터 체력이 mobHp배(무기가 늘 깎는 만큼 — 방이 쉬워지지 않게)', () => {
   const w = room('always'), m = spawnMob(w, 'shooter', 0, 0, 0);
@@ -640,11 +538,6 @@ test('공격 다양화: 사수는 세 발 → 넓은 부채 → 연사를 돌아
   assert.equal(shooterShots(w, S.warn + 0.05).length, 3, '다시 세 발');
 });
 
-test('공격 다양화: 흰 탄 찾아가기와 같이 켜면 넓은 부채도 가운데가 보라, 그 양옆이 흰색', () => {
-  const w = liveRoom('vary,hunt'), m = ready(w, 'shooter', 6, 0, 1, 3), mid = (V.shooter.wideN - 1) / 2;
-  const wide = shooterShots(w, Mb.shooter.warn + 0.05);
-  assert.deepEqual(wide.map(e => e.kind), wide.map((e, k) => (Math.abs(k - mid) === 1 ? K.WHITE : K.NORMAL)));
-});
 
 test('공격 다양화: 돌격병은 두 번에 한 번 연속 돌진 — 첫 돌진이 끝나면 쉬지 않고 짧은 예고(warn2) 뒤 한 번 더', () => {
   const w = liveRoom('vary'), C = Mb.charger, m = ready(w, 'charger', 5, 0, 1, 2), at = [];
@@ -756,25 +649,25 @@ test('기본 판: 주소에 try가 없으면 올린 셋이 켜지고, ?try=는 �
   assert.deepEqual(gameTries(null), TRIES.filter(t => BASE_TRIES.includes(t)));
   assert.equal(opt(''), gameTries(null).join(','));
   assert.equal(opt('stage=1'), gameTries(null).join(','));
-  assert.deepEqual(gameTries('rope, nope,dash'), TRIES.filter(t => BASE_TRIES.includes(t) || t === 'rope' || t === 'dash'));
-  assert.equal(opt('try=hunt'), gameTries('hunt').join(','));
-  assert.ok(gameTries('hunt').includes('hunt') && gameTries('hunt').includes('always'));
+  assert.deepEqual(gameTries('sky, nope,dash'), TRIES.filter(t => BASE_TRIES.includes(t) || t === 'sky' || t === 'dash'));
+  assert.equal(opt('try=bubble'), gameTries('bubble').join(','));
+  assert.ok(gameTries('bubble').includes('bubble') && gameTries('bubble').includes('always'));
 });
 
 test('기본 판: ?try=none은 아무것도 켜지 않고(예전 판), -이름은 그것만 뺀다. 연습 장면에는 기본으로 켜지 않는다', () => {
   const opt = q => worldOptions(new URLSearchParams(q)).tries;
   assert.equal(opt('try=none'), null);
   assert.deepEqual(gameTries('-snipe'), TRIES.filter(t => BASE_TRIES.includes(t) && t !== 'snipe'));
-  assert.deepEqual(gameTries('-snipe,hunt'), TRIES.filter(t => (BASE_TRIES.includes(t) && t !== 'snipe') || t === 'hunt'));
+  assert.deepEqual(gameTries('-snipe,bubble'), TRIES.filter(t => (BASE_TRIES.includes(t) && t !== 'snipe') || t === 'bubble'));
   assert.deepEqual(gameTries('all'), TRIES);
   assert.equal(opt('lab=parry'), null);
-  assert.equal(opt('lab=parry&try=rope'), 'rope');
+  assert.equal(opt('lab=parry&try=sky'), 'sky');
   assert.equal(createWorld().tries, null, 'sim의 기본값은 그대로');
 });
 
 // ── 독립 검토(2026-11-17 밤)에서 나온 것
 test('저격은 갈고리·지뢰를 켠 판에도 있다 — 키가 따로다(I 저격 · K 갈고리 · O 지뢰)', () => {
-  const w = boss('always,vary,snipe,rope');
+  const w = boss('always,vary,snipe,sky');
   assert.ok(w.tries.snipe, '갈고리와 같이 켜도 저격이 있다');
   const ev = play(w, 0.05, (x, k) => ({ ...idle, mx: 1, mz: 0, move1: k === 0 }));
   assert.equal(of(ev, 'ropeStart').length, 1);

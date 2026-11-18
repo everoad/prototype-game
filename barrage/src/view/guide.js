@@ -9,7 +9,7 @@ const KEY = { orb: 'O', move1: 'K', move2: 'L' };
 
 export function guide(w, LOOK) {
   const G = LOOK.guide, R = G.rows, on = w.tries ? w.tries.on : {}, store = !!w.opts.store, stage = !!w.stage;
-  const orb = store && (stage || !!on.mine), moves = store && (stage || !!on.rope || !!on.sky || !!on.swap);
+  const orb = store && (stage || !!on.mine), moves = store && (stage || !!on.sky || !!on.swap);
   const sword = isSword(w);   // 검사: 오른손이 스킬 셋(U 일섬 · I 회전 베기 · O 마무리), 탄 기술 카드는 없다
   const right = sword ? [R.parry, R.slash, R.spinCut, R.finish, ...(moves ? [R.moves] : [])] : store ? [R.parry, R.throw, ...(on.snipe ? [R.snipe] : []), ...(orb ? [R.orb] : []), ...(moves ? [R.moves] : [])] : [R.parry, R.skills];
   const cards = w.kit ? kitAll(w).map(id => {

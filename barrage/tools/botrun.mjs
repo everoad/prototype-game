@@ -84,7 +84,7 @@ const NAMES = { 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', [RULES.s
 function median(a) { const b = [...a].sort((x, y) => x - y); return b.length ? (b.length % 2 ? b[(b.length - 1) / 2] : (b[b.length / 2 - 1] + b[b.length / 2]) / 2) : 0; }
 const t0 = Date.now();
 if (stage != null) {
-  const SRC = { [RULES.src.shooter]: '사수', [RULES.src.charger]: '돌격', [RULES.src.mortar]: '포격', [RULES.src.shieldMob]: '방패', [RULES.src.fire]: '불', [RULES.src.bomber]: '자폭', [RULES.src.waller]: '장벽', [RULES.src.spinner]: '회전포', [RULES.src.tide]: '밀물' };
+  const SRC = { [RULES.src.shooter]: '사수', [RULES.src.charger]: '돌격', [RULES.src.mortar]: '포격', [RULES.src.shieldMob]: '방패', [RULES.src.bomber]: '자폭', [RULES.src.waller]: '장벽', [RULES.src.spinner]: '회전포', [RULES.src.tide]: '밀물' };
   console.log(`스테이지 ${stage}, seeds ${seeds}, ${minutes}분 상한, 방마다 다시 ${retries}번까지${hard ? ', hard' : ''}${tries && tries.length ? `, 켠 것 ${tries}` : ', 예전 판'}`);
   for (const kind of kinds) {
     const games = [];

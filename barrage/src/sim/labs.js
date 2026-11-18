@@ -141,6 +141,7 @@ export const CLIPS = {
   finish: { keys: [[1.0, 'orb'], [2.6, 'throw'], [3.2, 'orb']] },
   burst: { keys: [[1.0, 'throw'], [1.1, 'spin'], [1.36, 'orb'], [3.4, 'throw'], [3.5, 'spin'], [3.76, 'orb']] },
   stack: { keys: [[1.0, 'spin'], [1.5, 'spin']] },
+  forms: { keys: [[1.0, 'throw'], [1.5, 'throw'], [2.0, 'throw'], [4.0, 'throw'], [4.5, 'throw'], [5.0, 'throw'], [5.2, 'spin']] },   // 일섬의 형태를 보는 손(주소 slash=chain | deep): 일섬 셋을 잇고, 두 번째에는 바로 회전 베기를 누른다
   gap: { keys: [[1.0, 'throw'], [1.25, 'spin'], [2.8, 'throw'], [3.05, 'dodge'], [4.6, 'throw'], [6.2, 'throw'], [6.45, 'orb']] },   // 일섬 뒤의 틈을 보는 손: 조금 보고 회전 베기 / 조금 보고 구르기 / 누르지 않기 / 조금 보고 마무리
 };
 export function labHand(w) {

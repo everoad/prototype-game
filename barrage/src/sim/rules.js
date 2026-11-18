@@ -20,7 +20,7 @@ export const RULES = {
   },
   start: { player: [-6, 0], boss: [6, 0] },      // 판 양 끝(§5.2 여는 순서)
   // 맞은 출처 번호(hurt src, stats.hitsByPattern 키): 패턴 1~7은 그 번호
-  src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14, tail: 15, wing: 16, shooter: 17, charger: 18, mortar: 19, shieldMob: 20, fire: 21, bomber: 22, tide: 23, waller: 24, spinner: 25 },
+  src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14, tail: 15, wing: 16, shooter: 17, charger: 18, mortar: 19, shieldMob: 20, bomber: 22, tide: 23, waller: 24, spinner: 25 },
   // 두 겹 탄막의 아래(§5.4): 바탕 고리(+ 2단계 느린 나선), 2단계 쌍둥이 구슬. 흰·금 없음.
   layers: {
     bg1: { every: 2.2, n: 10, speed: 6 },
@@ -91,14 +91,11 @@ export const RULES = {
   tries: {
     rope: { anchors: [[-7.5, -4.5], [7.5, -4.5], [-7.5, 4.5], [7.5, 4.5], [0, -5.5], [0, 5.5]], range: 13, minDist: 2.5, speed: 26, stopAt: 1.0, cooldown: 1.2, cone: 0.3 },
     pillars: { at: [[-3.5, -3], [3.5, 3], [-3.5, 3], [3.5, -3]], r: 0.9, hp: 45 },
-    fire: { r: 1.3, sec: 5, arm: 0.3, tick: 0.25, dmg: 8, mobDps: 60, bossDps: 40 },
     dash: { dmg: 110 },
     lance: { mul: 0.85 },
     mine: { max: 3, R: 2.0, mul: 1.5, arm: 0.4, touch: 0.3 },
     orbit: { R: 1.8, dps: 60, tick: 0.2 },
-    crystal: { at: [[-2.5, 4.5], [2.5, -4.5]], reach: 2.2, R: 5.5, rest: 8 },
     swap: { cooldown: 5, invuln: 0.3 },
-    focus: { after: 0.4, mul: 2 },
     graze: { per: 4 },
     bubble: { first: 12, every: 16, sec: 9, hits: 3 },
     tide: { first: 8, every: 11, warn: 1.6, dmg: 22, linger: 0.15 },
@@ -192,6 +189,10 @@ export const RULES = {
     // slash·spin·finish = 그 스킬의 검 타격: 벤 뒤 first초부터 span초 안에 고르게, 검 한 번의 피해 dmg(마무리는 × 쓴 칸 수). finish.first는 튕김(finish.back 0.2초)이 끝나고 조금 뒤다 — 착지와 첫 검 사이가 화면이 느려지는 틈이다(view/gap.js).
     swords: { n: 5, max: 15, keep: 4, beat: 0.5, rest: 1.5, hopR: 5, fly: 0.14, stab: 2.6, roundDeg: 120, join: 1,
       slash: { first: 0.04, span: 0.12, dmg: 5.6 }, spin: { first: 0.03, span: 0.20, dmg: 6.4 }, finish: { first: 0.25, span: 0.34, dmg: 6 } },
+    // forms = 스킬의 형태(설계 2026-11-18-barrage-run-growth-design.md §3 — 처음 값. 지금은 주소 slash=chain | deep으로 고른다, 카드는 나중이다):
+    // slash.chain = 잇는 일섬(여럿에게): 한 칸으로 n번까지 — 선 뒤 window초 안에 U를 다시 누르면 칸 없이 한 번 더. 한 번의 세기 dmg배 · 무너짐 stag배 · 검의 타격 swords배(묶음은 첫 번에만 생긴다).
+    // slash.deep = 깊은 일섬(하나에게): 한 칸에 한 번, 세기 dmg배 · 무너짐 stag배. 선 뒤 lock초 동안 다른 스킬이 기다린다(그동안의 누름은 기억했다가 풀리는 틱에 낸다).
+    forms: { slash: { chain: { n: 3, window: 0.6, dmg: 0.4, stag: 0.4, swords: 0.4 }, deep: { dmg: 1.6, stag: 1.6, lock: 0.3 } } },
   },
   // on = 콤보를 다 받아내면 자동 반격을 하는가 — 사용자 2026-11-17 "빼자"(보스가 한동안 멈추는 것이 과하다) → 끔. 장치는 남겨 둔다.
   fullCounter: { on: false, dashIn: 0.15, volley: 0.35, back: 0.3, backDist: 5, steerDeg: 90, dmg: 120, stagger: 15, standOff: 2.6 },
@@ -222,7 +223,7 @@ export const RULES = {
   // 맞춘 결과(기본 판, 무기 다 켬, 10판, 죽지 않게): 63초 · 맞음 5.8 · 패링 15.8 · 완벽 13.9
   // sword = 검사 봇(확인용): keep = 보스전에서 지키는 거리(칼바람이 닿는 안쪽 — 보스 가운데에서 boss.r + wave.range + wave.r까지 닿는다), stay = 붙어서 칸이 남아 있을 때, room = 방에서 가장 가까운 적과 지키는 거리(칼바람이 닿게), enter·enterRoom = 이만큼 모이면 일섬으로 들어간다(보스전·방),
   //   exitSec = 빨간 몸 공격이 이 안에 닿으면 마무리, lowHp = 체력이 이 몫 아래면 칸을 써서 회복, margin = 회전 베기를 누르는 거리의 여유.
-  bot: { sword: { keep: [6, 7], stay: [2.4, 3.8], room: [4.5, 5.8], enter: 3, enterRoom: 1, exitSec: 0.25, lowHp: 0.25, margin: 0.2 }, user: { react: 0.38, think: 0.2, chance: 0.9 }, hunt: { within: 0.4, ahead: 1.2, pull: 6 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
+  bot: { sword: { keep: [6, 7], stay: [2.4, 3.8], room: [4.5, 5.8], enter: 3, enterRoom: 1, exitSec: 0.25, lowHp: 0.25, margin: 0.2 }, user: { react: 0.38, think: 0.2, chance: 0.9 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
   // 보스 두뇌(§5.1~5.3): 준비 → 패턴 → 숨, 거리 묶음, 돌진 시계, 깨어남, 2단계 새 패턴 하나씩.
   brain: {
     // 박자(§5.5): 준비 0.25초, 숨 0.15~0.35초, 다음 준비는 앞 패턴 마지막 0.3초와 겹친다

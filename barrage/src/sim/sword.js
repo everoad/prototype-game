@@ -16,6 +16,25 @@ export const CHARS = ['gunner', 'sword'];   // 캐릭터 고르기(?char=) — �
 
 export const isSword = w => w.opts.char === 'sword';
 
+// 스킬의 형태(설계 2026-11-18-barrage-run-growth-design.md §3 — 수치는 RULES.sword.forms): 같은 스킬이 설정에 따라 다른 물건이 된다. 지금은 일섬 둘뿐이고 판을 열 때 정한다(w.forms).
+//  잇는 일섬(chain): 한 칸으로 n번까지. 깊은 일섬(deep): 한 칸에 한 번, 세게. 형태가 없으면(null) 지금 그대로다.
+export function parseForms(rules, forms) {
+  const s = forms && typeof forms.slash === 'string' && Object.hasOwn(rules.sword.forms.slash, forms.slash) ? forms.slash : null;
+  return s ? { slash: s } : null;
+}
+const slashForm = w => (w.forms ? w.forms.slash : null);
+// 잇는 일섬이 이어지는 중인가: 남은 횟수가 있고 창(선 뒤 window초)이 열려 있다. 가는 동안에도 참이다(미리 누른 U를 받는다). 화면(남은 횟수)과 봇도 쓴다.
+export const chainLive = w => { const c = isSword(w) ? w.player.blade.chain : null; return !!c && c.left > 0 && w.time <= c.until + 1e-9; };
+export const chainLeft = w => (chainLive(w) ? w.player.blade.chain.left : 0);
+// 일섬이 지나갈 적: 보통은 겨눈 적. 잇는 일섬이 이어지는 동안은 이번 묶음에서 아직 안 벤 가까운 적 → 없으면 방금 벤 적이 아닌 가까운 적 → 그것도 없으면 겨눈 적(같은 적을 되지나간다).
+function slashTarget(w) {
+  const t = w.aim;
+  if (!chainLive(w)) return t;
+  const p = w.player, c = p.blade.chain, reach = w.rules.sword.slash.reach, alive = (w.foeList ?? []).filter(f => !f.dead);
+  const near = list => { let best = null, bd = Infinity; for (const f of list) { const d = Math.hypot(f.x - p.x, f.z - p.z) - foeR(w, f); if (d <= reach + 1e-9 && d < bd) { bd = d; best = f; } } return best; };
+  return near(alive.filter(f => !c.cut.includes(f))) ?? near(alive.filter(f => f !== c.last)) ?? t;
+}
+
 // 칼바람(기본 공격 — 사수의 자동 사격 자리): every초마다 겨눈 적 쪽으로 하나. range만큼 날아가며 닿는 적을 한 번씩 벤다(엄폐 기둥에는 막힌다 — 평타와 같다).
 // 구르는 동안 · 스킬이 몸을 움직이는 동안 · 처형 중에는 쉰다. 맞힌 칼바람마다(적 수와 무관하게 한 번) 칸이 조금 찬다 — 사거리 안에서 싸우는 만큼 스킬이 자주 나온다.
 export function swordWaves(w) {
@@ -74,11 +93,11 @@ function spend(w) {
 
 // 적 하나를 벤다: 받아친 탄으로 베므로 방패·보호를 지난다. 몬스터에게는 mob배(무너짐·처형이 없는 몫), 보스에게는 무너짐.
 // 특성(설계 §8 — 자국·맞부딪힘·되찾기·등 베기·틈 베기)이 끼어들 자리가 여기다.
-function cut(w, f, skill, dmg, stagger, orbs = 1) {
+function cut(w, f, skill, dmg, stagger, orbs = 1, swords = null) {
   const boss = f === w.boss, x = f.x, z = f.z;
   const dealt = hurtFoe(w, f, dmg * (boss ? 1 : w.rules.sword.mob), 'blade', { pierce: true });
   if (boss && dealt > 0) addStagger(w, stagger);
-  if (dealt > 0) swordsOnCut(w, skill, f, orbs);   // 이기어검(swords.js): 벤 스킬마다 묶음이 생기고 가진 검이 모두 따라 벤다(orbs = 그 스킬이 쓴 칸 수)
+  if (dealt > 0) swordsOnCut(w, skill, f, orbs, swords ?? undefined);   // 이기어검(swords.js): 벤 스킬마다 묶음이 생기고 가진 검이 모두 따라 벤다(orbs = 그 스킬이 쓴 칸 수, swords = 형태가 바꾸는 것)
   emit(w, 'bladeHit', { skill, id: boss ? 0 : f.id, x, z, dmg: dealt });
   return dealt;
 }
@@ -113,11 +132,11 @@ function spin(w) {
   return true;
 }
 
-// 일섬으로 설 자리: 겨눈 적의 몸 표면까지 reach 안이면 그 적 가운데를 지나 건너편(몸 사이 past), 판 안으로 자른 자리. 아니면 null.
+// 일섬으로 설 자리: 지나갈 적(slashTarget — 보통은 겨눈 적)의 몸 표면까지 reach 안이면 그 적 가운데를 지나 건너편(몸 사이 past), 판 안으로 자른 자리. 아니면 null.
 // 칸 수와 무관하다 — 화면(내릴 자리 표시)과 봇도 쓴다.
 export function slashLanding(w) {
   if (!isSword(w)) return null;
-  const p = w.player, t = w.aim, R = w.rules, Sl = R.sword.slash;
+  const p = w.player, t = slashTarget(w), R = w.rules, Sl = R.sword.slash;
   if (!t || t.dead) return null;
   const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz), r = foeR(w, t);
   if (d - r > Sl.reach + 1e-9) return null;
@@ -137,13 +156,20 @@ function startMove(w, move, after) {
 }
 
 // U 일섬: 겨눈 적을 지나 건너편에 선다. 닿는 거리 밖이면 나가지 않는다(false — 칸은 그대로)
+// 형태(RULES.sword.forms.slash): 잇는 일섬 = 첫 번만 칸을 쓰고, 이어지는 번은 그 칸의 값으로 칸 없이 나간다(free). 깊은 일섬 = 세게 한 번, 선 뒤 lock초 동안 다른 스킬이 기다린다.
+// 사건의 form = 형태(없으면 null), k / of = 이번이 몇 번째 / 한 칸으로 몇 번까지, free = 칸을 쓰지 않은 번.
 function slash(w) {
   const land = slashLanding(w);
   if (!land) return false;
-  const p = w.player, Sl = w.rules.sword.slash, o = spend(w), x0 = p.x, z0 = p.z;
-  startMove(w, { kind: 'slash', dur: Sl.dur, x1: land.x, z1: land.z, target: land.target, dmg: o.dmg * Sl.dmg, stagger: o.stagger * Sl.stag }, Sl.after);
+  const p = w.player, B = p.blade, Sl = w.rules.sword.slash, F = w.rules.sword.forms.slash, form = slashForm(w), free = chainLive(w), x0 = p.x, z0 = p.z;
+  let o, c = null, mul = 1, stag = 1, swords = null, k = 1, of = 1;
+  if (free) { c = B.chain; o = { dmg: c.dmg, stagger: c.stagger, perfect: c.perfect, heal: 0 }; c.left--; }
+  else { o = spend(w); B.chain = c = form === 'chain' ? { left: F.chain.n - 1, until: Infinity, dmg: o.dmg, stagger: o.stagger, perfect: o.perfect, cut: [], last: null } : null; }
+  if (c) { c.until = Infinity; mul = F.chain.dmg; stag = F.chain.stag; swords = { batch: !free, mul: F.chain.swords }; of = F.chain.n; k = of - c.left; }   // 창은 선 틱에 다시 센다(stepBlade)
+  else if (form === 'deep') { mul = F.deep.dmg; stag = F.deep.stag; B.lockUntil = B.keepUntil = w.time + w.rules.dt + Sl.dur + F.deep.lock; }
+  startMove(w, { kind: 'slash', dur: Sl.dur, x1: land.x, z1: land.z, target: land.target, dmg: o.dmg * Sl.dmg * mul, stagger: o.stagger * Sl.stag * stag, chain: c, swords }, Sl.after);
   w.stats.blade.slash++;
-  emit(w, 'bladeSlash', { x0, z0, x1: land.x, z1: land.z, perfect: o.perfect, heal: o.heal });
+  emit(w, 'bladeSlash', { x0, z0, x1: land.x, z1: land.z, perfect: o.perfect, heal: o.heal, form, k, of, free });
   return true;
 }
 
@@ -156,7 +182,7 @@ export function stepBlade(w, input) {
   const u = Math.min(1, (w.time + R.dt - m.t0) / m.dur);
   if (m.kind === 'slash') {
     p.x = m.x0 + (m.x1 - m.x0) * u; p.z = m.z0 + (m.z1 - m.z0) * u;
-    const hit = f => { m.hit.push(f); cut(w, f, 'slash', m.dmg, m.stagger); };
+    const hit = f => { m.hit.push(f); if (m.chain) m.chain.cut.push(f); cut(w, f, 'slash', m.dmg, m.stagger, 1, m.swords); };
     for (const f of [...w.foeList]) if (!f.dead && !m.hit.includes(f) && segCircle(p.px, p.pz, p.x, p.z, f.x, f.z, foeR(w, f) + R.player.bodyR)) hit(f);   // 이번 틱에 지나간 길 위의 적
     if (u >= 1 && !m.target.dead && !m.hit.includes(m.target)) hit(m.target);   // 겨눈 적은 그 사이 움직였어도 반드시 맞는다
   } else {   // 마무리의 튕김: 틱마다 그 몫만큼(난간에서는 축마다 잘려 미끄러진다 — 몸끼리는 world.step이 민다)
@@ -164,14 +190,15 @@ export function stepBlade(w, input) {
     m.f = u;
     [p.x, p.z] = clampToBoard(R, p.x + m.dirX * k, p.z + m.dirZ * k, R.player.bodyR);
   }
+  if (u >= 1 && m.chain) { m.chain.last = m.target; m.chain.until = w.time + R.sword.forms.slash.chain.window; }   // 잇는 일섬: 다시 누를 창은 선 때부터 센다
   if (u >= 1) { B.move = null; emit(w, 'bladeEnd', { skill: m.kind === 'slash' ? 'slash' : 'finish', x: p.x, z: p.z }); }
 }
 
 // 하던 움직임을 끊는다(처형·자동 반격이 몸을 가져갈 때). 기억한 누름도 버린다. 방을 넘어갈 때는 stage.js가 그냥 지운다(벨 적이 없다)
 export function cancelBlade(w) {
   const B = w.player.blade, m = B.move;
-  if (m && m.kind === 'slash' && !m.target.dead && !m.hit.includes(m.target)) { m.hit.push(m.target); cut(w, m.target, 'slash', m.dmg, m.stagger); }   // 칸을 쓴 일섬의 베기는 사라지지 않는다 — 겨눈 적은 반드시 맞는다
-  B.move = null; B.want = null;
+  if (m && m.kind === 'slash' && !m.target.dead && !m.hit.includes(m.target)) { m.hit.push(m.target); cut(w, m.target, 'slash', m.dmg, m.stagger, 1, m.swords); }   // 칸을 쓴 일섬의 베기는 사라지지 않는다 — 겨눈 적은 반드시 맞는다
+  B.move = null; B.want = null; B.chain = null;   // 이어지던 잇는 일섬도 거기서 끝난다
 }
 
 // O 마무리: 남은 칸을 다 써서 겨눈 쪽 부채를 한 번에 베고(칸마다의 값을 더한다), 곧바로 물러난다 — 이동 키를 누르고 있으면 그쪽, 아니면 겨눈 적의 반대쪽(회피와 같다).
@@ -204,12 +231,12 @@ export function swordSkills(w, input) {
   if (!isSword(w)) return;
   const p = w.player, B = p.blade, Sw = w.rules.sword;
   const pressed = SKILLS.find(s => input[KEY[s]]) ?? null;
-  if (pressed) { B.want = pressed; B.wantUntil = w.time + Sw.buffer; }
+  if (pressed) { B.want = pressed; B.wantUntil = Math.max(w.time, B.keepUntil) + Sw.buffer; }   // keepUntil = 깊은 일섬의 잠금이 풀리는 때(그때까지의 누름은 버리지 않는다)
   if (!B.want) return;
   if (w.time > B.wantUntil + 1e-9) { B.want = null; return; }
   const skill = B.want, deny = why => { emit(w, 'denied', { what: skill, why }); B.want = null; };
   if (busy(w)) return deny('busy');
-  if (p.store.length === 0) return deny('empty');
+  if (p.store.length === 0 && !(skill === 'slash' && chainLive(w))) return deny('empty');   // 이어지는 잇는 일섬은 칸 없이 나간다
   if (B.move || w.time < B.lockUntil - 1e-9) return;
   if (!START[skill](w, input)) return deny('far');
   B.want = null;

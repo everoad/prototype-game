@@ -22,7 +22,7 @@ import { initStage, updateStage, stageDef } from './stage.js';
 import { initTries, triesAim, triesMove, triesBodies, triesBullets, tryOn } from './tries.js';
 import { initKit, kitAll } from './cards.js';
 import { labName, setupLab, thinkLab } from './labs.js';
-import { CHARS, isSword, swordSkills, swordWaves, bladeMoving, stepBlade, cancelBlade } from './sword.js';
+import { CHARS, isSword, swordSkills, swordWaves, bladeMoving, stepBlade, cancelBlade, parseForms } from './sword.js';
 import { createSwords, stepSwords, clearSwords } from './swords.js';
 import { updateLayers } from './layers.js';
 import { updateBeams } from './beams.js';
@@ -30,7 +30,7 @@ import { updateWaves } from './floor.js';
 
 export const BOSSES = ['ranged', 'dragon'];   // 보스 고르기(?boss=) — 모르는 값은 첫 보스
 
-export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, heal = false, ai = true, gear = null, boss = 'ranged', store = false, hard = false, stage = null, room = 1, tries = null, kit = null, char = 'gunner', clip = null } = {}) {
+export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, heal = false, ai = true, gear = null, boss = 'ranged', store = false, hard = false, stage = null, room = 1, tries = null, kit = null, char = 'gunner', clip = null, forms = null } = {}) {
   const r = RULES;
   const who = CHARS.includes(char) ? char : 'gunner', sword = who === 'sword';   // 캐릭터(sword.js) — 검사는 늘 모아 받고 무기를 들지 않는다
   const w = {
@@ -44,6 +44,7 @@ export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, h
     opts: { phase, pattern, lab: labName(lab), heal, ai, boss: BOSSES.includes(boss) ? boss : 'ranged', store: !!store || !!stageDef(r, stage) || sword, hard: !!hard, stage: stageDef(r, stage) ? stage : null, char: who, clip },
     weapons: createWeapons(r, sword ? 'none' : gear),   // 보조 무기(§4.10) — 기본 없음, 화면은 ?gear=
     stage: null,   // 스테이지(stage.js) — 보스전·연습 장면에서는 null
+    forms: sword ? parseForms(r, forms) : null,   // 검사 스킬의 형태(sword.js — { slash: 'chain' | 'deep' }, 없으면 null)
     kit: null,     // 낀 것(카드, cards.js) — 스테이지에서만
     tries: null,   // 실험 기믹(tries.js, ?try=) — 꺼져 있으면 null
   };
@@ -135,8 +136,8 @@ export function stateHash(w) {
   const st = p.stock ? `${p.stock.shield}${p.stock.bomb}` : '', it = w.items ? w.items.map(i => `${i.kind[0]}${f(i.x)},${f(i.z)}`).join(';') : '';
   const base = [w.tick, f(p.x), f(p.z), p.hp, f(b.x), f(b.z), b.hp ?? 0, live, w.rng.peek().toFixed(9), st, it, p.dyingAt ?? ''];
   if (w.opts.store) base.push('s' + p.store.length);   // 기본 판 해시는 그대로(떼어 내기 시험)
-  if (w.tries) base.push('t' + w.tries.names.join('+') + w.tries.fires.length + (w.tries.rope.to ? 'r' : '') + w.tries.mines.length + (w.tries.snipe && w.tries.snipe.on ? 's' : ''));
-  if (isSword(w)) base.push('c' + w.opts.char + (p.blade.move ? p.blade.move.kind[0] : '-') + p.blade.cuts.length + f(p.blade.charge) + (p.swords ? '|w' + p.swords.list.length + ',' + p.swords.list.filter(s => s.leg).length + ',' + p.swords.strikes.length + ',' + f(p.swords.busyUntil) : ''));   // 사수 판 해시는 그대로
+  if (w.tries) base.push('t' + w.tries.names.join('+') + (w.tries.rope.to ? 'r' : '') + w.tries.mines.length + (w.tries.snipe && w.tries.snipe.on ? 's' : ''));
+  if (isSword(w)) base.push('c' + w.opts.char + (p.blade.move ? p.blade.move.kind[0] : '-') + p.blade.cuts.length + f(p.blade.charge) + (p.blade.chain ? '|n' + p.blade.chain.left + ',' + f(p.blade.chain.until) : '') + (p.swords ? '|w' + p.swords.list.length + ',' + p.swords.list.filter(s => s.leg).length + ',' + p.swords.strikes.length + ',' + f(p.swords.busyUntil) : ''));   // 사수 판 해시는 그대로
   if (w.kit) base.push('k' + kitAll(w).join('+'));
   if (w.stage) base.push('g' + w.stage.room + w.stage.phase + w.stage.rewards.map(r => r.kind[0] + r.what + (r.armed ? 1 : 0)).join(',') + (w.stage.pending ? w.stage.pending.id : '') + f(w.stage.playSec));
   if (w.weapons.salvoBeam || w.weapons.salvoDroneUntil > w.time) base.push('v' + f(w.weapons.salvoBeam ? w.weapons.salvoBeam.until : 0) + f(w.weapons.salvoDroneUntil));

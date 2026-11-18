@@ -49,7 +49,7 @@
 | `bot` | 시범 봇: `1` 숙련 · `some` 가끔 패링 · `dodge` 피하기만 · `walk` 걷기만 · `turtle` 서서 패링만 · `script` 연습 장면의 정해진 손(`clip=`) |
 | `phase` | `2`면 2단계(체력 50%)부터 |
 | `pattern` | 그 패턴만 되풀이(1~8, 8 = 레이저) |
-| `lab` | 상황 되풀이 장면: `parry` `stream` `melee` `rush` `dodge` `graze` `execute` · 이기어검의 움직임을 보는 장면 `swords`(가만히 선 보스) `swordmobs`(가만히 선 몬스터 넷) — `char=sword&bot=script&clip=idle\|chain\|slash\|spin\|finish\|burst\|stack`과 같이 쓴다 |
+| `lab` | 상황 되풀이 장면: `parry` `stream` `melee` `rush` `dodge` `graze` `execute` · 이기어검의 움직임을 보는 장면 `swords`(가만히 선 보스) `swordmobs`(가만히 선 몬스터 넷) — `char=sword&bot=script&clip=idle\|chain\|slash\|spin\|finish\|burst\|stack\|gap\|forms`과 같이 쓴다 |
 | `pitch` | 시점 각도(45·60, 그 밖은 고정 확인용) |
 | `bh` | 탄 높이 |
 | `speed` | 게임 빠르기 배율 |
@@ -74,7 +74,7 @@
 5. 모아 던지기가 기본 규칙이다(2026-11-17). 예전 방식(받자마자 날아감 + U·I·O 스킬)은 `?store=0`. `?hard=1`을 붙이면 받는 피해 1.3배. 사람 손에 맞춘 봇은 `?bot=user`.
 6. **한 판의 뼈대**(2026-11-17): `?stage=1`(보스 수호자) · `?stage=2`(보스 용) — 방 넷 + 보스, 5분 안쪽. 방 3은 특수 방(스테이지 1 = 버티기 40초, 스테이지 2 = 정예 돌격병 + 졸개), 방 4에는 방의 특징(기둥 · 밀물)이 붙는다. 미사일 하나를 들고 시작해, 방을 깰 때마다 **카드 둘 + 보급 하나** 가운데 하나를 걸어가서 줍는다(자리 위에 잠깐 서 있어야 주워진다 — 지나가기만 해서는 안 주워진다). 카드는 네 갈래 — 무기 2칸 · 탄 기술 1칸 · 이동기 2칸 · 몸(제한 없음) — 이고 스테이지가 끝나면 다 사라진다. 칸이 찬 갈래의 카드를 밟으면 밟은 자리가 "무르기", 나머지 자리가 지금 낀 카드가 된다(버릴 카드로 걸어가면 바뀐다 — 자리는 한 번 벗어났다 돌아와야 눌린다). 탄을 쓰면(U 던지기 · I 저격 · O 지뢰) 낀 무기가 **한 방**을 같이 낸다(쓴 칸 수만큼). 끝나면 등급(S·A·B·C — 싸운 시간·맞은 횟수·다시 한 횟수, 카드를 고르는 시간은 세지 않는다)과 최고 기록(브라우저에 저장)이 뜬다. 죽으면 R로 그 방부터 다시(F4 = 처음부터, 카드가 새로 뽑힌다). `&room=3`이면 그 방에서 시작, `&kit=burst,sky`면 그 카드를 들고 시작, `&seed=7`이면 그 카드 차례로(셋 다 연습용 — **기록은 주소에 `stage`와 화면 옵션(`mute`·`raf`·`intro`·`ring`·`pitch`·`bh`)만 붙은 판에만 남는다**). 설계 `docs/superpowers/specs/2026-11-17-barrage-run-design.md`(잰 수치는 §12), 몬스터는 `…-barrage-stage-design.md`.
 7. 기본 판(2026-11-17 낮에 올림): 무기가 늘 나가고 패링하면 과열(`always`), 몬스터가 공격을 돌아가며 씀(`vary`), I 누르고 있기 = 저격(`snipe`). `?try=none`이면 이 셋을 끈 예전 판, `?try=-snipe`처럼 하나만 뺄 수 있다. 보스전만 여는 판은 무기 칸 규칙대로 **미사일 + 산탄**을 들고 시작한다(`?gear=all`이면 넷, 예전 판 `?try=none`은 넷 그대로).
-8. 실험 기믹(기본 판에 더 켠다): `?try=이름,이름` — `rope`·`sky`(갈고리 이동, K) · `dash`(돌진 베기) · `swap`(자리 바꾸기, K — 갈고리와 같이 켜면 L) · `pillars`(엄폐 기둥) · `fire`(불 장판) · `crystal`(수정) · `focus`(집중 사격) · `lance`(꿰뚫는 던지기) · `mine`(지뢰, O) · `orbit`(오라) · `graze`(스침 모으기) · `bubble`(보스 보호막) · `tide`(밀물) · `always`(무기가 늘 나가고 패링하면 과열) · `hunt`(나를 겨눈 탄은 보라, 그 옆이 흰색) · `snipe`(I 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다 — WASD로 그쪽의 가까운 적을 고르고 떼면 모은 탄을 쏜다) · `vary`(몬스터가 공격을 돌아가며 쓴다). 실험 스테이지 `?stage=2`(자폭병·보호탑·버티기 방). 기록 `docs/superpowers/specs/2026-11-17-barrage-experiments.md`.
+8. 실험 기믹(기본 판에 더 켠다): `?try=이름,이름` — `sky`(갈고리, K — 끌려가는 동안은 안 맞는다) · `dash`(돌진 베기) · `swap`(자리 바꾸기, K — 갈고리와 같이 켜면 L) · `pillars`(엄폐 기둥) · `lance`(꿰뚫는 던지기) · `mine`(지뢰, O) · `orbit`(오라) · `graze`(스침 모으기) · `bubble`(보스 보호막) · `tide`(밀물) · `always`(무기가 늘 나가고 패링하면 과열) · `snipe`(I 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다 — WASD로 그쪽의 가까운 적을 고르고 떼면 모은 탄을 쏜다) · `vary`(몬스터가 공격을 돌아가며 쓴다). 스테이지 2 `?stage=2`(자폭병 · 정예 · 밀물). 기록 `docs/superpowers/specs/2026-11-17-barrage-experiments.md`.
 9. 한 동작씩 연습: `?lab=parry` · `?lab=stream` · `?lab=melee` · `?lab=rush` · `?lab=dodge` · `?lab=graze` · `?lab=execute`(그로기 처형 — 다가가 Shift).
 10. 시작 장면(보스 이름, 약 1초)은 아무 키로 건너뛰고, `?intro=0`이면 없다. 소리 끄기는 `?mute=1`.
 11. 시점은 V, 고리는 G, 회복 변형은 `?heal=1`.
@@ -86,3 +86,5 @@
     **이기어검**(검사의 무기 — 설계 `docs/superpowers/specs/2026-11-17-barrage-flying-swords-design.md`, 판정 `src/sim/swords.js`, 그리기 `src/view/swordsView.js`): 검 다섯 자루가 늘 떠 있다. 사거리 안에 적이 있으면 모두 나가서 돌아오지 않고 0.5초에 한 번씩 번갈아 찌른다(적 사이를 오가고, 혼자면 그 적을 돌며). 스킬이 적을 벨 때마다 다섯 자루가 더 생겨 4초 남고(열다섯까지), **가진 검이 모두 그 스킬을 따라 벤다** — 일섬은 내 줄과 나란히, 회전 베기는 난무, 마무리는 나와 함께 물러났다가 착지하며 차례로 쏜다. 검은 무너짐을 주지 않고 칸도 채우지 않는다.
     움직임 보기: `?char=sword&lab=swords&bot=script&clip=burst`(주소에 `join=0` = 스킬에 새 다섯만 나서게 — 견줘 보는 용). 느린 영상: `tools/record.ps1 -Fps 120 -Slow 4 -Query "char=sword&lab=swords&clip=spin&bot=script&mute=1"`(판과 효과가 같이 느려진다 — `speed=`는 판만 느려진다).
     봇(수호자 40판, 2026-11-17): 검사 29승 · 이긴 판 68초(사수 31승 · 65초). 용 20판: 검사 18승 · 54초(사수 14승 · 54초).
+    **일섬의 형태**(2026-11-18 시험판 — 설계 `docs/superpowers/specs/2026-11-18-barrage-run-growth-design.md` §3·§8, 카드는 나중): 주소에 `&slash=chain`(잇는 일섬 — 한 칸으로 세 번, 선 뒤 0.6초 안에 U를 다시) · `&slash=deep`(깊은 일섬 — 한 번에 세게, 선 뒤 0.3초는 다른 스킬이 기다린다).
+    움직임 보기: `?char=sword&slash=chain&lab=swordmobs&bot=script&clip=forms`(몬스터 사이를 건너다닌다) · `&lab=swords`(보스를 되지나간다).

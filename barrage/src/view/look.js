@@ -117,11 +117,15 @@ export const LOOK = {
     burst: { slash: 1.0, spin: 0.8, finish: 1.6 }, number: 26, numberBig: 40, healNumber: 22,
     stop: 0.025, finishStop: 0.07, finishShake: [9, 0.18], punch: [0.04, 0.18], jolt: 0.2, joltBig: 0.5,
     names: { slash: '일섬', spin: '회전 베기', finish: '마무리' },
+    // 스킬의 형태(sim/sword.js — 2026-11-18, 주소 slash=chain | deep): formNames = HUD에 뜨는 이름. forms.chain.cent = 이어질 때마다 소리가 오르는 폭(센트).
+    // forms.deep = 깊은 일섬의 무게: cent 소리 높이(낮게) · flashW 지나갈 줄의 굵기 배율 · stop 벨 때의 멈춤(초) · shake [px, 초] · punch [당김, 초] · number 숫자 크기 · jolt 보스가 움찔하는 세기.
+    formNames: { chain: '잇는 일섬', deep: '깊은 일섬' },
+    forms: { chain: { cent: 220 }, deep: { cent: -400, flashW: 2.4, stop: 0.06, shake: [8, 0.16], punch: [0.07, 0.24], number: 36, jolt: 0.4 } },
     // gap = 틈(view/gap.js — 2026-11-18 사용자: "돌진한 뒤에 보스 패턴을 보고 피할지 연계를 할지 결정을 하는 순간이 필요하다"): 일섬으로 건너편에 서면 다음 키를 누를 때까지 판이 slow배로 흐른다(가장 길게 max초).
     // near = 몸 표면까지 이 거리 안에 살아 있는 적이 있을 때만 연다, labelY·labelPx = 내 머리 위 글자의 높이·크기, labels = 예고의 색에 따라 읽어 주는 말(없음 · 빨강 · 흰/금). 그동안 검의 밝기는 swords.quiet배.
     // gap.spin = 난무 앞의 느려짐(회전 베기 — 사용자: "난무 펼쳐지기 전에 좀 길게 슬로우"): 검 타격이 열리면 slow배로 흐르다가 첫 검이 베는 순간 풀린다(가장 길게 max초, 잇달아 쓸 때는 every초에 한 번). 검은 옅어지지 않는다.
     // gap.finish = 연사 앞의 느려짐(마무리 — 사용자: "O 스킬도 너무 순식간에 지나가서"): 착지해서 활이 선 순간부터 첫 검이 꽂히기 전까지 slow배(가장 길게 max초).
-    gap: { spin: { slow: 0.08, max: 0.5, every: 1.0 }, finish: { slow: 0.1, max: 0.6 }, slow: 0.2, max: 0.7, near: 4.5, labelY: 2.8, labelPx: 22, labels: { go: 'I · O 몰아친다', dodge: 'Space 피한다', parry: 'J 받아친다' } },
+    gap: { spin: { slow: 0.08, max: 0.5, every: 1.0 }, finish: { slow: 0.1, max: 0.6 }, slow: 0.2, max: 0.7, near: 4.5, labelY: 2.8, labelPx: 22, labels: { go: 'I · O 몰아친다', chain: 'U 잇는다 · I · O', dodge: 'Space 피한다', parry: 'J 받아친다' } },
     // skill = 스킬을 썼다는 강조(2026-11-18 — 사수의 한 방처럼): chain = 이 초 안에 앞의 느려짐이 있으면 겹쳐 쌓지 않는다,
     // slash·spin·finish = 가장자리 빛(초) · 느려짐 [빠르기, 초] · 화면 당김 [세기, 초]. 일섬의 flash = 지나갈 줄이 먼저 번쩍이는 긴 선(양 끝으로 더 뻗는 길이 · 굵기 · 초), 마무리의 slowOrbs = 칸을 이만큼 털었을 때부터 느려진다,
     // spray = 스킬 본체가 벤 자리에서 칼이 지나간 쪽으로 튀는 불티(수 · 빠르기 · 퍼지는 각(도) · 남는 초 · 크기).
@@ -167,8 +171,8 @@ export const LOOK = {
       warp: { sec: 0.34, side: 0.9, fwd: 0.8, reach: 3.2, width: 0.7, back: 0.5 },
       gust: { n: 48, sec: 0.42, dist: 2.8, len: 1.5, w: 0.08, alpha: 0.85, wave: 70, y: 0.55, start: 0.25, sweep: 0.7, vary: [0.6, 0.8] },
       cross: { arm: 0.6, gap: 0.25, w: 0.1, dot: 0.12, y: 0.75, spin: 0.6, alpha: 0.95 }, aimW: 0.14, aimAlpha: 0.6, glowW: 0.8, glowAlpha: 0.12, flashW: 1.1, flashSec: 0.22, y: 0.7, shake: 16, shakeSec: 0.28, burst: 2.4, number: 34, dim: 'saturate(0.55) brightness(0.8)' },
-    bubbleR: 2.3, bubbleAlpha: [0.16, 0.34], mineR: 0.32, crystalH: 1.3, crystalR: 0.45, boomBurst: 2.2, boomShake: 9, boomShakeSec: 0.18, anchorH: 1.2, anchorR: 0.12, anchorTop: 0.34, ropeW: 0.06, pillarH: 1.9, fireAlpha: [0.28, 0.5], fireFade: 0.7, blockGap: 0.08, dashBurst: 1.4, dashNumber: 22, ropeShake: 3, ropeShakeSec: 0.08,
-    names: { rope: '갈고리 이동 — K: 가는 쪽 말뚝으로(맞을 수 있다)', sky: '날아가는 갈고리 — K: 가는 쪽 말뚝으로(공중이라 안 맞는다)', pillars: '엄폐 기둥 — 보라·빨강 탄과 평타를 막는다(흰·금은 지나간다), 많이 막으면 무너진다', fire: '불 장판 — 빨간 원이 떨어진 자리가 탄다(적도 탄다)', dash: '돌진 베기 — 회피로 적을 지나가면 피해', lance: '꿰뚫는 던지기 — 던진 탄이 곧게 뚫고 간다', mine: '지뢰 — O: 모은 탄 하나를 발밑에(적이 밟으면 터진다)', orbit: '오라 — 모은 탄이 있으면 가까운 적이 깎인다', crystal: '수정 — 곁에서 패링하면 둘레의 보라 탄이 흰 탄으로', swap: '자리 바꾸기 — K(갈고리와 같이 켜면 L): 겨눈 몬스터와', focus: '집중 사격 — 잠깐 서 있으면 평타 2배', graze: '스침 모으기 — 네 번 스치면 한 칸', bubble: '보호막 — 보스가 막을 두르면 던진 탄만 통한다(세 발이면 깨진다)', tide: '밀물 — 빨간 반쪽에서 건너가라', always: '늘 나가는 무기 — 패링하면 과열(더 자주 쏜다)', hunt: '흰 탄 찾아가기 — 나를 겨눈 탄은 보라, 그 옆이 흰색', vary: '공격 다양화 — 사수: 세 발·넓은 부채·연사, 돌격병: 연속 돌진, 포격병: 줄 포격', snipe: '저격 — I 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다. WASD로 그쪽의 가까운 적을 고르고 떼면 쏜다(회피 = 취소)' },
+    bubbleR: 2.3, bubbleAlpha: [0.16, 0.34], mineR: 0.32, boomBurst: 2.2, boomShake: 9, boomShakeSec: 0.18, anchorH: 1.2, anchorR: 0.12, anchorTop: 0.34, ropeW: 0.06, pillarH: 1.9, blockGap: 0.08, dashBurst: 1.4, dashNumber: 22, ropeShake: 3, ropeShakeSec: 0.08,
+    names: { sky: '갈고리 — K: 가는 쪽 말뚝으로(공중이라 안 맞는다)', pillars: '엄폐 기둥 — 보라·빨강 탄과 평타를 막는다(흰·금은 지나간다), 많이 막으면 무너진다', dash: '돌진 베기 — 회피로 적을 지나가면 피해', lance: '꿰뚫는 던지기 — 던진 탄이 곧게 뚫고 간다', mine: '지뢰 — O: 모은 탄 하나를 발밑에(적이 밟으면 터진다)', orbit: '오라 — 모은 탄이 있으면 가까운 적이 깎인다', swap: '자리 바꾸기 — K(갈고리와 같이 켜면 L): 겨눈 몬스터와', graze: '스침 모으기 — 네 번 스치면 한 칸', bubble: '보호막 — 보스가 막을 두르면 던진 탄만 통한다(세 발이면 깨진다)', tide: '밀물 — 빨간 반쪽에서 건너가라', always: '늘 나가는 무기 — 패링하면 과열(더 자주 쏜다)', vary: '공격 다양화 — 사수: 세 발·넓은 부채·연사, 돌격병: 연속 돌진, 포격병: 줄 포격', snipe: '저격 — I 누르고 있기: 시간이 느려지고 겨눈 적에 조준점이 붙는다. WASD로 그쪽의 가까운 적을 고르고 떼면 쏜다(회피 = 취소)' },
   },
   // 평타·무기 연출(사용자 "기본 공격이나 무기도 좀 더 화려했으면"): 선과 불티로만 — 부드러운 빛·연기는 쓰지 않는다(사용자가 고른 느낌). 청록만, 적 탄 아래 층.
   // head = 평타 머리(밝고 짧게 — 꼬리는 sizes.shotLen·shotAlpha), muzzle = 쏠 때 앞으로 튀는 불티, heat = 과열(패링 뒤 가동 시간) 동안의 굵기 배율,

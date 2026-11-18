@@ -62,8 +62,7 @@ export const PATTERNS = {
       const P = w.rules.patterns[1], n = run.sparse ? P.nSparse : P.n;
       due(run, t, P.volleys, () => {
         const a0 = aimAt(w), half = (n - 1) / 2, step = n > 1 ? P.spreadDeg * D / (n - 1) : 0;
-        const hunt = !!w.tries && !!w.tries.on.hunt;   // 흰 탄 찾아가기(실험): 나를 겨눈 가운데는 보라, 그 양옆이 흰
-        for (let i = 0; i < n; i++) shoot(w, run, (hunt ? Math.abs(i - half) === 1 : i === half) ? K.WHITE : K.NORMAL, a0 + (i - half) * step, P.speed);
+        for (let i = 0; i < n; i++) shoot(w, run, i === half ? K.WHITE : K.NORMAL, a0 + (i - half) * step, P.speed);
       });
       return run.k >= P.volleys.length;
     },
@@ -115,9 +114,8 @@ export const PATTERNS = {
       if (o < 0 || !b.alive[o]) return true;   // 구슬이 지워졌다(맞힘·판 밖)
       // 흰 조각이 갈 방향 = 조각 방향 중 플레이어 쪽에 가장 가까운 nw개 → 화면이 구슬에 점으로 표시
       const toP = Math.atan2(w.player.z - b.z[o], w.player.x - b.x[o]);
-      const hunt = w.tries && w.tries.on.hunt ? 1 : 0;   // 흰 탄 찾아가기(실험): 내 쪽 조각 하나는 보라, 그 다음으로 가까운 것들이 흰
       const dirs = Array.from({ length: n }, (_, i) => run.dir + i * 2 * Math.PI / n);
-      const near = dirs.map((a, i) => [Math.abs(Math.atan2(Math.sin(a - toP), Math.cos(a - toP))), i]).sort((p, q) => p[0] - q[0]).slice(hunt, hunt + nw).map(e => e[1]);
+      const near = dirs.map((a, i) => [Math.abs(Math.atan2(Math.sin(a - toP), Math.cos(a - toP))), i]).sort((p, q) => p[0] - q[0]).slice(0, nw).map(e => e[1]);
       run.marks = near.map(i => dirs[i]);
       const d = Math.hypot(w.player.x - b.x[o], w.player.z - b.z[o]);
       if ((d <= P.burstDist && t >= P.minTravel) || t >= P.burstAt) {   // 조금은 날아가야 구슬로 읽힌다

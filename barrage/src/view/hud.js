@@ -3,7 +3,7 @@
 import { BASE_TRIES, tryKey } from '../sim/tries.js';
 import { CARDS, GROUPS, kitCards, kitAll } from '../sim/cards.js';
 import { guide } from './guide.js';
-import { isSword, slashLanding, spinReach, finishReach } from '../sim/sword.js';
+import { isSword, slashLanding, spinReach, finishReach, chainLeft } from '../sim/sword.js';
 import { BUILD } from './version.js';
 
 // 결과 화면 밝기: 승리·패배 순간에서 since초 — 늦게(큰 순간을 먼저 보여 주고) 서서히 뜬다
@@ -36,7 +36,7 @@ export function createHud(canvas, LOOK) {
     const b = w.boss, p = w.player, now = ui.now;
     const away = !!b.away, S = w.stage;   // 일반 방(스테이지): 보스 막대 대신 방 번호와 남은 적
     if (ui.gap && (ui.gap.kind === 'slash' || ui.gap.threat)) {   // 검사의 틈(view/gap.js — 난무·연사 앞의 느려짐에서는 읽어 줄 예고가 있을 때만): 내 머리 위에, 지금 나를 덮는 예고의 색으로 할 일을 읽어 준다(흰·금 = 받아치기, 빨강 = 피하기, 없으면 몰아치기)
-      const G = LOOK.sword.gap, t = ui.gap.threat, s = ui.project(p.x, p.z, G.labelY), key = !t ? 'go' : t.color === 'red' ? 'dodge' : 'parry';
+      const G = LOOK.sword.gap, t = ui.gap.threat, s = ui.project(p.x, p.z, G.labelY), key = !t ? (chainLeft(w) > 0 ? 'chain' : 'go') : t.color === 'red' ? 'dodge' : 'parry';
       ctx.font = font(G.labelPx, true); ctx.textAlign = 'center';
       ctx.lineWidth = 4; ctx.strokeStyle = C.bg ?? '#14121a'; ctx.strokeText(G.labels[key], s.x, s.y);
       ctx.fillStyle = !t ? C.cyan : t.color === 'red' ? C.red : t.color === 'gold' ? C.gold : C.white; ctx.fillText(G.labels[key], s.x, s.y);
@@ -50,11 +50,11 @@ export function createHud(canvas, LOOK) {
     if (now > st.trailHold) st.trail = Math.max(hp, st.trail - 0.6 * (ui.dt ?? 0.016));
     if (st.trail < hp) st.trail = hp;
     const bw = Math.min(720, W * 0.5), bx = (W - bw) / 2, by = 22;
-    if (away) {
+    if (away && S) {
       const left = w.enemies.reduce((n, m) => n + (m.dead ? 0 : 1), 0);
       ctx.textAlign = 'center'; ctx.font = font(18, true); ctx.fillStyle = C.text; ctx.fillText(`방 ${S.room + 1} / ${S.of}`, W / 2, by + 12);
       ctx.font = font(13); ctx.fillStyle = C.textDim; ctx.fillText(S.phase === 'fight' ? (S.surviveUntil != null ? `버티기 ${Math.max(0, S.surviveUntil - w.time).toFixed(0)}초` : `남은 적 ${left}`) : S.phase === 'reward' ? '하나를 골라 그 위에 서세요' : S.phase === 'replace' ? `칸이 찼습니다 — 버릴 카드 위에 서세요(새 카드: ${LOOK.names.card[S.pending.id]})` : '문으로 →', W / 2, by + 32);
-    } else {
+    } else if (!away) {   // 스테이지 없이 보스만 치운 연습 장면(lab=swordmobs)에는 보스 막대도 방 번호도 없다
     bar(bx, by, bw, 14, st.trail, C.hpTrail);
     ctx.fillStyle = C.hp; ctx.fillRect(bx, by, bw * hp, 14);
     // 무력화(80%부터 맥동)
@@ -118,9 +118,10 @@ export function createHud(canvas, LOOK) {
       const low = p.hp > 0 && p.hp <= w.rules.player.hp * LOOK.feel.lowHp.at && n > 0;   // 체력 위태 + 모은 것 있음 = 던져서 회복하라고 깜빡
       ctx.fillStyle = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : n > 0 ? C.cyan : C.textDim;
       if (isSword(w)) {   // 검사: 스킬 셋 — 지금 누르면 나가는 것만 밝다(칸이 없으면 셋 다 어둡고, 닿는 적이 없는 스킬도 어둡다)
-        const N = LOOK.sword.names, reach = n > 0 && !!slashLanding(w), lit = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : C.cyan;
+        const N = LOOK.sword.names, form = w.forms ? w.forms.slash : null, left = chainLeft(w), held = form === 'deep' && w.time < p.blade.keepUntil;   // 형태(sim/sword.js): 잇는 일섬의 남은 횟수 · 깊은 일섬 뒤의 기다림
+        const reach = (n > 0 || left > 0) && !!slashLanding(w), lit = low ? (Math.floor(now * 6) % 2 ? C.heal : C.text) : C.cyan;
         let tx = px + 8 + cap * 18 + 6 + sk;
-        for (const [label, ok] of [[`U ${N.slash}`, reach], [`I ${N.spin}`, n > 0 && spinReach(w)], [`O ${N.finish}`, n > 0 && finishReach(w)]]) {
+        for (const [label, ok] of [[`U ${form ? LOOK.sword.formNames[form] : N.slash}${left > 0 ? ` ×${left}` : ''}`, reach], [`I ${N.spin}`, n > 0 && !held && spinReach(w)], [`O ${N.finish}`, n > 0 && !held && finishReach(w)]]) {
           ctx.fillStyle = ok ? lit : C.textDim; ctx.fillText(label, tx, py - 41); tx += ctx.measureText(label).width + 14;
         }
         if (p.swords) {   // 이기어검: 검 묶음 셋(바탕은 늘 켜져 있다) — 스킬 묶음은 남은 시간만큼 밑줄이 줄어든다

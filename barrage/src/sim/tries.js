@@ -1,20 +1,16 @@
 // 실험 기믹(?try=이름,이름 — 사용자 2026-11-17 "다양한 기믹이나 무기 같은 거 만들어서 여러 가지 테스트"): 기본 판·스테이지는 그대로 두고 켠 것만 끼어든다.
-//  rope    갈고리 이동: 판의 말뚝에 줄을 걸어 빠르게 끌려간다(이동기 키 — tryKey). 무적 없음 — 회피와 다른 값(멀리·빨리, 대신 맞을 수 있다).
-//  sky     날아가는 갈고리: rope와 같되 끌려가는 동안은 공중이라 맞지 않는다(대신 내릴 자리는 말뚝뿐, 받아치지도 못한다).
+//  sky     갈고리: 판의 말뚝에 줄을 걸어 빠르게 끌려간다(이동기 키 — tryKey). 끌려가는 동안은 공중이라 맞지 않는다(대신 내릴 자리는 말뚝뿐, 받아치지도 못한다).
+//          줄의 상태는 w.tries.rope, 수치는 RULES.tries.rope(말뚝 자리·빠르기·쉬는 시간).
 //  pillars 엄폐 기둥: 보라·빨강 탄과 내 평타를 막는다(흰·금과 던진 탄은 넘어간다 — 받아칠 것은 남긴다). hp발 막으면 무너진다. 몸은 돌아서 지나간다.
-//  fire    불 장판: 빨간 원 공격(포격·내려찍기)이 떨어진 자리가 몇 초 탄다 — 나도 적도 탄다(끌어들이기).
 //  dash    돌진 베기: 회피로 적의 몸을 지나가면 피해(회피가 공격도 된다).
 //  mine    지뢰: 모은 탄 하나를 발밑에 놓는다(O, 회복 없음). 적의 몸이 닿으면 둘레의 적이 던진 탄보다 세게 다친다.
 //  orbit   오라: 모은 탄이 있는 동안 가까운 적이 깎인다(들고 있을 이유 — 던져서 회복할지, 붙어서 갈지).
-//  crystal 수정: 수정 곁에서 패링을 누르면 둘레의 보라 탄이 흰 탄(받아칠 것)으로 바뀐다. 탄막을 수확으로 바꾼다.
 //  swap    자리 바꾸기: 겨눈 몬스터와 자리를 바꾼다(이동기 키). 둘러싸였을 때 빠져나오고, 적을 폭발·불 속에 넣는다.
-//  focus   집중 사격: 잠깐 서 있으면 평타가 세진다(서 있을 이유와 위험).
 //  graze   스침 모으기: 스칠 때마다 조금씩 모여 몇 번에 한 칸(패링 말고도 모으는 길).
 //  bubble  보호막(보스전): 보스가 가끔 막을 두른다 — 평타·무기는 막히고 던진 탄만 통한다. 던진 탄 몇 발이면 깨진다(던질 때를 고르게).
 //  tide    밀물(판 전체): 판의 반쪽에 빨간 예고가 깔리고 잠시 뒤 그 반쪽이 다친다 — 탄 사이로 판을 건너야 한다.
 //  always  늘 나가는 무기(사용자 "기본으로 나가고 패링했을 때 강화"): 낀 무기가 받아치지 않아도 쏜다. 패링하면 가동 시간 동안 과열(over배 자주).
 //          산탄도 burstEvery초마다 부채(던질 때 따로 나가지 않는다). 스테이지는 start 무기 하나를 들고 시작한다. 평타 shot배·무기 mul배(사용자 "데미지가 너무 낮다") — 그만큼 보스 체력 bossHp배, 방의 몬스터 수 crowd배(체력 mobHp배).
-//  hunt    흰 탄 찾아가기(사용자 "가만히 서서 패링만 기다린다"): 나를 겨눈 탄은 보라, 그 옆이 흰색(조준 부채·사수·쪼개지는 구슬) — 서 있으면 맞고, 옆으로 들어가야 받는다.
 //  snipe   저격(사용자): I를 누르고 있으면 저격 자세 — 몸은 서고(화면이 시간을 slow배로 늦춘다), 조준점이 겨눈 적에 붙어 따라간다.
 //          모아 던지기 판에서만 있다(탄을 쓴다). 갈고리·자리 바꾸기·지뢰와 키가 따로라 같이 있다(한 판의 뼈대 §8). 겨눌 적이 없으면 못 든다.
 //          WASD = 적 고르기(사용자 "AD로 타깃을 선택" → W·S도): 지금 고른 적에서 누른 쪽(±45°)의 가장 가까운 적. 선은 몸에서 고른 적을 지나 뻗는다.
@@ -23,12 +19,12 @@
 //          사수: 세 발 → 넓은 부채(wideN발) → 연사(한 줄로 streamN발, 첫 발이 흰 탄), 돌격병: 두 번에 한 번 연속 돌진(짧은 예고 warn2),
 //          포격병: 두 번에 한 번 줄 포격(나를 지나는 줄에 원 lineN개가 차례로).
 //  lance   꿰뚫는 던지기: 던진 탄이 따라가지 않고 곧게 날며 길 위의 적을 모두 뚫는다(줄 세우기).
-// w.tries = null(꺼짐) 또는 { on: { 이름: true }, rope, pillars, fires, … }. 수치는 RULES.tries.
+// w.tries = null(꺼짐) 또는 { on: { 이름: true }, rope, pillars, mines, … }. 수치는 RULES.tries.
 import { K } from './rules.js';
 import { emit } from './events.js';
 import { clampToBoard, segCircle, slideOut } from './geom.js';
 import { killBullet } from './bullets.js';
-import { hurtPlayer, isDodging } from './player.js';
+import { isDodging } from './player.js';
 import { hurtFoe, foeR } from './foes.js';
 import { addStagger } from './boss.js';
 import { storeAdd, throwMul } from './store.js';
@@ -38,7 +34,7 @@ import { executeActive } from './execute.js';
 import { autoActive } from './rewards.js';
 import { isSword } from './sword.js';
 
-export const TRIES = ['rope', 'sky', 'pillars', 'fire', 'dash', 'lance', 'mine', 'orbit', 'crystal', 'swap', 'focus', 'graze', 'bubble', 'tide', 'always', 'hunt', 'snipe', 'vary'];
+export const TRIES = ['sky', 'pillars', 'dash', 'lance', 'mine', 'orbit', 'swap', 'graze', 'bubble', 'tide', 'always', 'snipe', 'vary'];
 
 // 기본 판으로 올린 것(사용자 2026-11-17): 주소 없이 열면 켜진다. 규칙은 아직 여기(실험 틀)에 있고, sim의 createWorld 기본값은 꺼짐 그대로다(시험·고정 해시).
 export const BASE_TRIES = ['always', 'vary', 'snipe'];
@@ -63,9 +59,9 @@ function blank(w) {
   return {
     on: {}, names: [],
     rope: { to: null, readyAt: 0, from: null }, anchors: [], pillars: [],
-    fires: [], fireAt: 0, dashAt: -1, dashHit: [],
-    lanceLast: null, mines: [], crystals: [], bubble: null, tide: null, snipe: null,
-    swapAt: 0, still: 0, shotMul: 1, shotBase: 1, orbitAt: 0, grazeSeen: w.stats.grazes, grazeN: 0,
+    dashAt: -1, dashHit: [],
+    lanceLast: null, mines: [], bubble: null, tide: null, snipe: null,
+    swapAt: 0, shotBase: 1, orbitAt: 0, grazeSeen: w.stats.grazes, grazeN: 0,
   };
 }
 
@@ -74,20 +70,18 @@ function turn(w, name, on) {
   const X = w.tries, T = w.rules.tries;
   if (on) X.on[name] = true; else delete X.on[name];
   X.names = TRIES.filter(t => X.on[t]);
-  const roped = !!(X.on.rope || X.on.sky);
-  if (name === 'rope' || name === 'sky') {
+  const roped = !!X.on.sky;
+  if (name === 'sky') {
     if (roped && !X.anchors.length) X.anchors = T.rope.anchors.map(([x, z]) => ({ x, z }));
     if (!roped) { X.anchors = []; X.rope.to = null; }
   } else if (name === 'pillars') X.pillars = on ? T.pillars.at.map(([x, z]) => ({ x, z, r: T.pillars.r, hp: T.pillars.hp })) : [];
   else if (name === 'lance') X.lanceLast = on ? new Int32Array(w.bullets.cap) : null;
   else if (name === 'mine') X.mines = [];
-  else if (name === 'crystal') X.crystals = on ? T.crystal.at.map(([x, z]) => ({ x, z, readyAt: w.time })) : [];
   else if (name === 'bubble') X.bubble = on ? { on: false, hp: 0, until: 0, nextAt: w.time + T.bubble.first } : null;
   else if (name === 'tide') {
     if (!on && X.tide && X.tide.area) { const k = w.floorAreas.indexOf(X.tide.area); if (k >= 0) w.floorAreas.splice(k, 1); }
     X.tide = on ? { nextAt: w.time + T.tide.first, area: null } : null;
-  } else if (name === 'fire') X.fires = [];
-  else if (name === 'focus') { X.still = 0; X.shotMul = 1; }
+  }
   else if (name === 'orbit') X.orbitAt = w.time;
   else if (name === 'graze') { X.grazeSeen = w.stats.grazes; X.grazeN = 0; }
   else if (name === 'snipe') X.snipe = on && w.opts.store && !isSword(w) ? { on: false, angle: 0, since: 0, wait: false, target: null, rx: 0, rz: 0, rpx: 0, rpz: 0, firedAt: -1e9, fx: 0, fz: 0, fa: 0 } : null;
@@ -198,11 +192,11 @@ export const tryOn = (w, name) => !!w.tries && !!w.tries.on[name];
 // 없으면(보스전에 ?try=로 켠 판) 갈고리 = move1, 자리 바꾸기 = 갈고리가 켜져 있으면 move2 아니면 move1. 지뢰는 늘 orb. 키가 없는 실험은 null.
 export function tryKey(w, name) {
   if (name === 'mine') return 'orb';
-  if (name !== 'rope' && name !== 'sky' && name !== 'swap') return null;
+  if (name !== 'sky' && name !== 'swap') return null;
   const at = w.kit ? w.kit.move.indexOf(name) : -1;
   if (at >= 0) return at === 0 ? 'move1' : 'move2';
   const X = w.tries;
-  return name === 'swap' && X && (X.on.rope || X.on.sky) ? 'move2' : 'move1';
+  return name === 'swap' && X && X.on.sky ? 'move2' : 'move1';
 }
 export const ropePulling = w => !!w.tries && !!w.tries.rope.to;
 
@@ -229,10 +223,10 @@ export function triesMove(w, input) {
   const X = w.tries;
   if (!X || w.result) return;
   const R = w.rules, p = w.player;
-  if (X.on.rope || X.on.sky) {
+  if (X.on.sky) {
     const T = R.tries.rope, rope = X.rope, busy = !!w.execute || (p.auto && w.time < p.autoUntil) || p.dyingAt != null || !!p.blade.move;   // 검사의 스킬이 몸을 움직이는 동안은 줄을 놓고, 새로 걸지도 못한다
     if (rope.to && (isDodging(w) || busy)) { rope.to = null; emit(w, 'ropeEnd', { x: p.x, z: p.z, cut: true }); }   // 구르면 줄을 놓는다
-    if (input[tryKey(w, X.on.sky ? 'sky' : 'rope')] && !rope.to) {
+    if (input[tryKey(w, 'sky')] && !rope.to) {
       const a = !busy && !isDodging(w) && w.time >= rope.readyAt ? pickAnchor(w, input) : null;
       if (a) { rope.to = a; rope.from = { x: p.x, z: p.z }; rope.readyAt = w.time + T.cooldown; emit(w, 'ropeStart', { x: p.x, z: p.z, ax: a.x, az: a.z }); }
       else emit(w, 'denied', { what: 'rope' });
@@ -242,7 +236,7 @@ export function triesMove(w, input) {
       if (d <= T.stopAt + step) { rope.to = null; emit(w, 'ropeEnd', { x: p.x, z: p.z, cut: false }); }
       else {
         [p.x, p.z] = clampToBoard(R, p.x + dx / d * step, p.z + dz / d * step, R.player.bodyR);
-        if (X.on.sky) p.invulnUntil = Math.max(p.invulnUntil, w.time + 2 * R.dt);   // 공중: 끌려가는 동안은 맞지 않는다
+        p.invulnUntil = Math.max(p.invulnUntil, w.time + 2 * R.dt);   // 공중: 끌려가는 동안은 맞지 않는다
       }
     }
   }
@@ -260,12 +254,6 @@ export function triesMove(w, input) {
   if (X.on.mine && !isSword(w) && input[tryKey(w, 'mine')]) {   // 지뢰: 모은 탄 하나를 발밑에(검사의 O는 마무리 — sword.js)
     if (p.store.length && X.mines.length < R.tries.mine.max && !busy2) { const o = p.store.pop(); X.mines.push({ x: p.x, z: p.z, born: w.time, perfect: o.perfect, stagger: o.stagger }); emit(w, 'mineSet', { x: p.x, z: p.z, n: p.store.length }); if (w.aim && !w.aim.dead) weaponSalvo(w, 1, Math.atan2(w.aim.z - p.z, w.aim.x - p.x), 'mine'); }
     else emit(w, 'denied', { what: 'mine' });
-  }
-  if (X.on.focus) {   // 집중 사격: 서 있은 시간(shots.js가 shotMul을 곱한다)
-    X.still = p.x === p.px && p.z === p.pz ? X.still + R.dt : 0;
-    const mul = X.still >= R.tries.focus.after - 1e-9 ? R.tries.focus.mul : 1;
-    if (mul !== X.shotMul) emit(w, 'focus', { on: mul > 1, x: p.x, z: p.z });
-    X.shotMul = mul;
   }
   if (X.on.orbit && p.store.length && w.time >= X.orbitAt) {   // 오라: tick초마다 가까운 적을 깎는다
     const O = R.tries.orbit;
@@ -305,7 +293,7 @@ export function triesBodies(w) {
   }
 }
 
-// 탄이 움직인 뒤, 판정 전: 기둥이 적 탄과 평타를 막고, 불 장판이 붙고 탄다
+// 탄이 움직인 뒤, 판정 전: 기둥이 적 탄과 평타를 막고, 지뢰가 터지고, 보호막·밀물이 돈다
 export function triesBullets(w) {
   const X = w.tries;
   if (!X) return;
@@ -339,16 +327,6 @@ export function triesBullets(w) {
       if (f === w.boss) addStagger(w, m.stagger);
     }
   }
-  if (X.crystals.length && w.events.some(e => e.t === w.time && e.type === 'parryStart')) {   // 수정: 곁에서 패링을 누르면 둘레의 보라 탄이 흰 탄으로
-    const C = T.crystal, b = w.bullets;
-    for (const c of X.crystals) {
-      if (w.time < c.readyAt || Math.hypot(p.x - c.x, p.z - c.z) > C.reach) continue;
-      let n = 0;
-      for (let i = 0; i < b.cap; i++) if (b.alive[i] && b.kind[i] === K.NORMAL && Math.hypot(b.x[i] - c.x, b.z[i] - c.z) <= C.R) { b.kind[i] = K.WHITE; b.r[i] = R.bullets.r[K.WHITE]; n++; }
-      c.readyAt = w.time + C.rest;
-      emit(w, 'crystalPulse', { x: c.x, z: c.z, n });
-    }
-  }
   if (X.bubble && !w.boss.away && !w.boss.dead) {   // 보호막: first초 뒤부터 every초마다 sec초(깨지면 바로 걷힌다 — foes.hurtFoe)
     const Bb = X.bubble, Bu = T.bubble;
     if (!Bb.on && w.time >= Bb.nextAt - 1e-9) { Bb.on = true; Bb.hp = Bu.hits; Bb.until = w.time + Bu.sec; emit(w, 'bubbleOn', { x: w.boss.x, z: w.boss.z }); }
@@ -371,19 +349,4 @@ export function triesBullets(w) {
     if (a && a.hit && w.time >= a.born + a.warn + Ti.linger) { const k = w.floorAreas.indexOf(a); if (k >= 0) w.floorAreas.splice(k, 1); Td.area = null; Td.nextAt = w.time + Ti.every; }
   }
   if (X.lanceLast && p.throwSum) { const b = w.bullets; let flying = false; for (let i = 0; i < b.cap && !flying; i++) flying = !!b.alive[i] && !!b.thrown[i]; if (!flying) p.throwSum = 0; }
-  if (X.on.fire) {
-    const F = T.fire;
-    for (const e of w.events) if (e.t === w.time && e.type === 'meleeHit' && e.shape === 'circle') { X.fires.push({ x: e.x, z: e.z, r: F.r, born: w.time, until: w.time + F.sec }); emit(w, 'fireStart', { x: e.x, z: e.z }); }
-    for (let k = X.fires.length - 1; k >= 0; k--) if (w.time >= X.fires[k].until) X.fires.splice(k, 1);
-    if (X.fires.length && w.time >= X.fireAt) {   // tick초마다 한 번: 안에 선 것이 탄다(플레이어는 맞은 뒤 무적을 따른다)
-      X.fireAt = w.time + F.tick;
-      const inside = (x, z, r) => X.fires.some(f => w.time >= f.born + F.arm && Math.hypot(x - f.x, z - f.z) <= f.r + r * 0.5);
-      if (inside(p.x, p.z, 0)) hurtPlayer(w, F.dmg, R.src.fire, p.x, p.z);
-      for (const f of w.foeList) {
-        if (f.dead || !inside(f.x, f.z, foeR(w, f))) continue;
-        hurtFoe(w, f, (f === w.boss ? F.bossDps : F.mobDps) * F.tick, 'weapon', { pierce: true });
-        emit(w, 'fireBurn', { x: f.x, z: f.z });
-      }
-    }
-  }
 }

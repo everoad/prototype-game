@@ -37,7 +37,7 @@ export function moveShots(w) {
     if (f) {
       s.alive[i] = 0;
       w.stats.shotsHit++;
-      hurtFoe(w, f, S.dmg * (w.tries ? w.tries.shotMul * w.tries.shotBase : 1), 'shot', { fromX: s.px[i], fromZ: s.pz[i] });   // 집중 사격·늘 나가는 무기(실험)
+      hurtFoe(w, f, S.dmg * (w.tries ? w.tries.shotBase : 1), 'shot', { fromX: s.px[i], fromZ: s.pz[i] });   // 늘 나가는 무기(실험)
       if (f === w.boss) emit(w, 'bossHit', { x: s.x[i], z: s.z[i] });   // 몬스터는 hurtFoe가 mobHit을 낸다
       continue;
     }
