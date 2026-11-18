@@ -31,6 +31,7 @@ import { createFeel } from './feel.js';
 import { record, recordingSfx, renderWav } from './recorder.js';
 import { createSfx } from './sfx.js';
 import { createTunePanel } from './tunePanel.js';
+import { createModePanel, MODE_PANEL_W } from './modePanel.js';
 
 const q = new URLSearchParams(location.search);
 const num = (k, d) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : d);
@@ -65,6 +66,7 @@ else {
   try { audio = new AudioContext({ latencyHint: 'interactive' }); sfx = createSfx(audio, LOOK); } catch { sfx = { play() {}, duck() {} }; }
 }
 let panel = null;   // 수치 패널(F2) — 처음 열 때 만든다
+let modes = null;   // 모드 고르기 판(멈춤 화면 — modePanel.js) — 처음 멈출 때 만든다
 // 흰·금 탄 속도가 바뀌면 0.4초 규칙 거리도 따라 바뀐다(minParrySpawn = parryR + 0.4 × parrySpeed)
 const onTune = f => { if (f.key === 'parrySpeed') RULES.bullets.minParrySpawn = RULES.player.parryR + RULES.bullets.parryLead * RULES.bullets.parrySpeed; };
 const feel = createFeel({ timeFx, camera, fx, get sfx() { return sfx; }, actors, hud, LOOK });
@@ -106,6 +108,8 @@ function frame(now, dtReal) {
   }
   if (!inIntro && introOpen) { introOpen = false; camera.release?.(); map.take(); }   // 끝: 카메라를 풀고, 장면 중에 누른 패링·회피는 버린다
   if (!ui.paused && !world.result && !inIntro) advance(world, dtReal * speed * scale, inputFn, 12);
+  if (ui.paused && !recording) (modes ??= createModePanel()).show(true); else if (modes) modes.show(false);   // 멈춘 동안에는 모드 고르기 판이 왼쪽에 뜬다
+  ui.insetLeft = modes && modes.shown ? MODE_PANEL_W : 0;
   const events = drainEvents(world);
   // 검사의 틈(view/gap.js): 일섬으로 건너편에 서면 다음 키를 누를 때까지 판이 느리게 흐른다 — 그동안 검은 옅어지고(view.quiet), 나를 덮는 예고의 색을 읽어 준다(hud)
   const Gp = LOOK.sword.gap, slowOn = LOOK.feel.on.slow !== false;

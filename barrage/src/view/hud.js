@@ -187,7 +187,7 @@ export function createHud(canvas, LOOK) {
     ctx.font = font(15, true); ctx.fillStyle = C.text; ctx.textAlign = 'right';
     ctx.fillText(mmss(w.time), W - 20, 34);
     ctx.font = font(12); ctx.fillStyle = C.textDim;
-    ctx.fillText(w.kit ? `Esc 멈춤(조작 안내) · V 시점 · F4 처음부터${w.result === 'lose' ? ' · R 이 방 다시' : ''}` : `WASD 이동 · J/Shift 패링 · Space 회피 · Q 방패 · E 폭탄 · ${isSword(w) ? 'U 일섬 · I 회전 베기 · O 마무리' : w.opts.store ? 'U 던지기 · I 저격 · 1~4 무기' : 'U/I/O 무기 스킬 · 1~4 무기'} · V 시점 · Esc 멈춤 · F4 다시`, W - 20, H - 18);   // 스테이지는 짧게(낀 것 HUD가 키를 보여 준다)
+    ctx.fillText(w.kit ? `Esc 멈춤(조작 안내 · 판 고르기) · V 시점 · F4 처음부터${w.result === 'lose' ? ' · R 이 방 다시' : ''}` : `WASD 이동 · J/Shift 패링 · Space 회피 · Q 방패 · E 폭탄 · ${isSword(w) ? 'U 일섬 · I 회전 베기 · O 마무리' : w.opts.store ? 'U 던지기 · I 저격 · 1~4 무기' : 'U/I/O 무기 스킬 · 1~4 무기'} · V 시점 · Esc 멈춤(판 고르기) · F4 다시`, W - 20, H - 18);   // 스테이지는 짧게(낀 것 HUD가 키를 보여 준다)
     if (w.kit) kitBar(w, ui);
     ctx.fillText(`빌드 ${BUILD}${isSword(w) ? ' · 검사' : ''}`, W - 20, ui.bot ? 70 : 54);
     if (ui.bot) ctx.fillText(`봇: ${ui.bot}`, W - 20, 54);
@@ -342,7 +342,7 @@ export function createHud(canvas, LOOK) {
       ctx.fillText(`시간 ${mmss(w.time)} · 맞음 ${s.hits} · 패링 ${s.parries} · 완벽 ${s.perfects} · 스침 ${s.grazes}${isSword(w) ? ` · 일섬 ${s.blade.slash} · 회전 베기 ${s.blade.spin} · 마무리 ${s.blade.finish} · 회복 ${Math.round(s.healed)}` : w.opts.store ? ` · 던지기 ${s.throws} · 회복 ${Math.round(s.healed)}` : ''}`, W / 2, H / 2 - 20);
       ctx.fillStyle = C.textDim; ctx.fillText(w.stage && w.result === 'lose' ? 'R 이 방 다시 · F4 처음부터' : 'F4 다시', W / 2, H / 2 + 14);
       if (w.stage) ctx.fillText(`방 ${w.stage.room + 1} / ${w.stage.of} · 다시 한 횟수 ${w.stage.retries}` + w.stage.times.map(t => ` · 방 ${t.room} ${t.sec.toFixed(0)}초`).join(''), W / 2, H / 2 + 40);
-    } else pauseGuide(w);
+    } else pauseGuide(w, ui);
     ctx.globalAlpha = 1;
   }
 
@@ -359,14 +359,15 @@ export function createHud(canvas, LOOK) {
     ctx.textAlign = 'left';
     return wd;
   }
-  function pauseGuide(w) {
+  function pauseGuide(w, ui) {
     const Gd = LOOK.guide, g = guide(w, LOOK);
     const pw = Gd.panelW, x0 = (W - pw) / 2, inner = pw - Gd.pad * 2, colW = (inner - Gd.colGap) / 2;
     const rows = Math.max(g.left.length, g.right.length);
     const total = 46 + 24 + 30 + g.how.length * Gd.lineH + 14 + 24 + rows * Gd.rowH + 12 + 24 + Gd.rowH + 12 + 24 + 26 + (g.cards.length ? 30 + g.cards.length * Gd.cardH : 0) + 34;
     // 작은 창에서는 판 전체를 줄여 그린다(잘리지 않게)
-    const fit = Math.min(1, (H - 16) / total, (W - 16) / pw);
-    ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(fit, fit); ctx.translate(-W / 2, -H / 2);
+    const inset = ui.insetLeft ?? 0, Wa = W - inset;   // 왼쪽에 뜬 모드 고르기 판(modePanel.js)의 너비만큼 비켜서, 남은 자리의 가운데에 그린다
+    const fit = Math.min(1, (H - 16) / total, (Wa - 16) / pw);
+    ctx.save(); ctx.translate(inset + Wa / 2, H / 2); ctx.scale(fit, fit); ctx.translate(-W / 2, -H / 2);
     let y = (H - total) / 2;
     ctx.fillStyle = 'rgba(16,14,24,0.94)'; ctx.fillRect(x0, y, pw, total);
     ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y + 0.5, pw - 1, total - 1);
