@@ -120,6 +120,12 @@ export const LOOK = {
     // 스킬의 형태(sim/sword.js — 2026-11-18, 주소 slash=chain | deep): formNames = HUD에 뜨는 이름. forms.chain.cent = 이어질 때마다 소리가 오르는 폭(센트).
     // forms.deep = 깊은 일섬의 무게: cent 소리 높이(낮게) · flashW 지나갈 줄의 굵기 배율 · stop 벨 때의 멈춤(초) · shake [px, 초] · punch [당김, 초] · number 숫자 크기 · jolt 보스가 움찔하는 세기.
     formNames: { chain: '잇는 일섬', deep: '깊은 일섬' },
+    // marks = 자국의 보이기(sim/marks.js): 적의 머리 위에 떠 있는 짧은 청록 빗금(HUD에 그린다 — 벨 때 몸 위에 번쩍이는 칼자국과 자리 · 모양이 다르다).
+    // bossY · mobY = 떠 있는 높이(U), plate = 어두운 바탕판 [가로, 세로, 모서리](px) · plateAlpha · rim(테두리의 불투명도) — 떠 있는 검과 같은 청록이라 바탕판 없이는 묻힌다(상태 표시로 읽히게).
+    // len = 빗금의 길이 [다 됐을 때, 갓 남겼을 때](px), w = 굵기(px), tiltDeg = 기운 각, blinkAt = 남은 몫이 이보다 적으면 깜빡인다 · blink = 깜빡임 빠르기.
+    // 사건: leaveSpark = 남을 때의 불티, popBurst · number = 저절로(또 남겨서) 터질 때의 불꽃 · 숫자 크기, spinBurst · spinNumber · spinShake · spinCent = 터뜨리는 회전이 터뜨릴 때, tracer = 옮겨 갈 때 날아가는 선의 굵기.
+    marks: { bossY: 3.6, mobY: 2.6, plate: [34, 24, 7], plateAlpha: 0.88, rim: 0.7, len: [6, 22], w: 4, tiltDeg: -58, blinkAt: 0.25, blink: 18,
+      leaveSpark: 0.5, popBurst: 0.7, number: 20, spinBurst: 1.7, spinNumber: 32, spinShake: [5, 0.1], spinCent: 500, tracer: 1.1 },
     forms: { chain: { cent: 220 }, deep: { cent: -400, flashW: 2.4, stop: 0.06, shake: [8, 0.16], punch: [0.07, 0.24], number: 36, jolt: 0.4 } },
     // gap = 틈(view/gap.js — 2026-11-18 사용자: "돌진한 뒤에 보스 패턴을 보고 피할지 연계를 할지 결정을 하는 순간이 필요하다"): 일섬으로 건너편에 서면 다음 키를 누를 때까지 판이 slow배로 흐른다(가장 길게 max초).
     // near = 몸 표면까지 이 거리 안에 살아 있는 적이 있을 때만 연다, labelY·labelPx = 내 머리 위 글자의 높이·크기, labels = 예고의 색에 따라 읽어 주는 말(없음 · 빨강 · 흰/금). 그동안 검의 밝기는 swords.quiet배.

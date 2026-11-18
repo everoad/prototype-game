@@ -41,7 +41,7 @@ export function hitFoe(w, x0, z0, x1, z1, pad = 0) {
 export function hurtFoe(w, f, amount, src, { raw = false, pierce = false, fromX = null, fromZ = null, quiet = false } = {}) {
   if (f === w.boss) {
     const bub = w.tries && w.tries.bubble && w.tries.bubble.on ? w.tries.bubble : null;   // 보호막(실험): 던진 탄만 통하고, 던진 탄 hits발이면 깨진다
-    if (bub && src !== 'throw' && src !== 'salvo' && src !== 'blade') { emit(w, 'mobBlock', { id: 0, x: f.x, z: f.z }); return 0; }   // 한 방(salvo)도 던진 탄으로 친다
+    if (bub && src !== 'throw' && src !== 'salvo' && src !== 'blade' && src !== 'mark') { emit(w, 'mobBlock', { id: 0, x: f.x, z: f.z }); return 0; }   // 한 방(salvo)도 던진 탄으로 친다
     if (bub && --bub.hp <= 0) { bub.on = false; bub.nextAt = w.time + w.rules.tries.bubble.every; emit(w, 'bubbleBreak', { x: f.x, z: f.z }); }
     return damageBoss(w, amount, src, raw);
   }

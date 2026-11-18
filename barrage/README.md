@@ -91,4 +91,5 @@
     움직임 보기: `?char=sword&lab=swords&bot=script&clip=burst`(주소에 `join=0` = 스킬에 새 다섯만 나서게 — 견줘 보는 용). 느린 영상: `tools/record.ps1 -Fps 120 -Slow 4 -Query "char=sword&lab=swords&clip=spin&bot=script&mute=1"`(판과 효과가 같이 느려진다 — `speed=`는 판만 느려진다).
     봇(수호자 40판, 2026-11-17): 검사 29승 · 이긴 판 68초(사수 31승 · 65초). 용 20판: 검사 18승 · 54초(사수 14승 · 54초).
     **일섬의 형태**(2026-11-18 시험판 — 설계 `docs/superpowers/specs/2026-11-18-barrage-run-growth-design.md` §3·§8, 카드는 나중): 주소에 `&slash=chain`(잇는 일섬 — 한 칸으로 세 번, 선 뒤 0.6초 안에 U를 다시) · `&slash=deep`(깊은 일섬 — 한 번에 세게, 선 뒤 0.3초는 다른 스킬이 기다린다).
+    **자국 카드**(2026-11-18 시험판 — 같은 설계 문서 §3·§11): `&mark=cut,pop` — 긋는 칼(일섬이 자국을 남긴다) · 터뜨리는 회전(회전 베기가 자국을 세 배로 터뜨린다). 자국은 4초 뒤 저절로 터지고, 주인이 죽으면 곁의 적에게 옮겨 간다. 보기: `?char=sword&mark=cut,pop&lab=swords&bot=script&clip=marks`.
     움직임 보기: `?char=sword&slash=chain&lab=swordmobs&bot=script&clip=forms`(몬스터 사이를 건너다닌다) · `&lab=swords`(보스를 되지나간다).

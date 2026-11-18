@@ -428,6 +428,18 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           sfx.play('throwHit', { detune: fin ? -300 : 300 });
           break;
         }
+        // 자국(sim/marks.js): 남을 때 작은 불티, 터질 때 숫자와 불꽃(터뜨리는 회전이면 크게 · 살짝 흔들린다), 옮겨 갈 때 가는 선이 다음 적에게 날아간다.
+        case 'markLeave': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.sword.marks.leaveSpark); break;
+        case 'markPop': {
+          const V = LOOK.sword.marks, spin = e.why === 'spin';
+          if (!(e.dmg > 0)) break;
+          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', spin ? V.spinBurst : V.popBurst);
+          if (on('numbers')) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', spin ? V.spinNumber : V.number);
+          if (spin) { shake(V.spinShake[0], V.spinShake[1]); sfx.play('throwHit', { detune: V.spinCent }); }
+          else sfx.play('tick');
+          break;
+        }
+        case 'markMove': fx.tracer(e.fromX, e.fromZ, e.x, e.z, 'cyan', LOOK.sword.marks.tracer); break;
         // 이기어검(sim/swords.js): 찌르기는 작은 소리와 불티(1초에 perSec번까지), 스킬 타격은 올라가는 음 몇 개와 합계 숫자 하나.
         // 검은 화면을 멈추지 않는다 — 칸 stopOrbs 이상을 턴 마무리의 마지막 검만(그 검에서 흔들리고 당겨진다).
         case 'swordStab': {

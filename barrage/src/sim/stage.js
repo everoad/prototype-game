@@ -14,6 +14,7 @@ import { initDragon } from './dragon.js';
 import { setTry } from './tries.js';
 import { spawnMob, refreshFoes } from './foes.js';
 import { createSwords } from './swords.js';
+import { clearMarks } from './marks.js';
 import { CARDS, drawPicks, giveCard, dropCard, kitCards, kitFull, kitSnapshot, kitRestore } from './cards.js';
 
 export const stageDef = (rules, id) => rules.stage.list[id] ?? null;
@@ -49,6 +50,7 @@ function sweep(w) {
   w.player.throwSum = 0;
   if (w.tries && w.tries.snipe) { w.tries.snipe.on = false; w.tries.snipe.wait = false; }   // 저격 자세(실험)는 방을 넘어가지 않는다
   if (w.tries) { w.tries.mines.length = 0; w.tries.rope.to = null; }   // 놓인 지뢰·끌려가던 줄도
+  clearMarks(w);   // 검사의 자국(marks.js)
 }
 
 const snapshot = w => ({ hp: w.player.hp, stock: { ...w.player.stock }, store: w.player.store.map(s => ({ ...s })), gear: [...w.weapons.on], kit: kitSnapshot(w) });

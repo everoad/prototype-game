@@ -43,6 +43,23 @@ export function createHud(canvas, LOOK) {
       ctx.textAlign = 'left';
     }
     if (S) stageLayer(w, ui);
+    if (w.marks && w.marks.list.length) {   // 검사의 자국(sim/marks.js): 자국 난 적의 머리 위에 어두운 바탕판과 청록 빗금 — 빗금은 남은 시간만큼 짧아지고, 곧 터질 때는 깜빡인다
+      const V = LOOK.sword.marks, keep = w.rules.sword.marks.keep, rad = V.tiltDeg * Math.PI / 180;
+      ctx.lineCap = 'round';
+      for (const m of w.marks.list) {
+        const f = m.foe, left = Math.max(0, Math.min(1, (m.until - w.time) / keep)), s = ui.project(f.x, f.z, f === b ? V.bossY : V.mobY);
+        const len = V.len[0] + (V.len[1] - V.len[0]) * left, dx = Math.cos(rad) * len / 2, dy = Math.sin(rad) * len / 2;
+        const stroke = (color, wd) => { ctx.strokeStyle = color; ctx.lineWidth = wd; ctx.beginPath(); ctx.moveTo(s.x - dx, s.y - dy); ctx.lineTo(s.x + dx, s.y + dy); ctx.stroke(); };
+        const [pw, ph, pr] = V.plate, blink = left < V.blinkAt ? 0.55 + 0.45 * Math.sin(now * V.blink) : 1;
+        ctx.beginPath(); ctx.roundRect(s.x - pw / 2, s.y - ph / 2, pw, ph, pr);
+        ctx.fillStyle = `rgba(16,14,24,${V.plateAlpha})`; ctx.fill();
+        ctx.globalAlpha = V.rim * blink; ctx.strokeStyle = C.cyan; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.globalAlpha = blink;
+        stroke(C.cyan, V.w);
+        ctx.globalAlpha = 1;
+      }
+      ctx.lineCap = 'butt';
+    }
     // 보스 체력 + 깎인 꼬리(잠깐 남았다 줄어듦)
     const hp = away ? 1 : b.hp / b.maxHp;
     if (hp < st.lastHp) st.trailHold = now + 0.4;

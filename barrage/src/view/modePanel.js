@@ -38,9 +38,9 @@ export function createModePanel({ query = new URLSearchParams(location.search), 
       root.append(el('div', CSS.head, g.title));
       const row = el('div', CSS.row);
       for (const [v, name] of shownItems(g, sel)) {
-        const on = g.many ? sel.try.includes(v) : sel[g.id] === v;
+        const on = g.many ? sel[g.id].includes(v) : sel[g.id] === v;
         row.append(button(on ? CSS.chipOn : CSS.chip, name, () => {
-          if (g.many) sel.try = on ? sel.try.filter(x => x !== v) : [...sel.try, v];
+          if (g.many) sel[g.id] = on ? sel[g.id].filter(x => x !== v) : [...sel[g.id], v];
           else sel[g.id] = v;
           render();
         }));

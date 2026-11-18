@@ -192,6 +192,8 @@ export const RULES = {
     // forms = 스킬의 형태(설계 2026-11-18-barrage-run-growth-design.md §3 — 처음 값. 지금은 주소 slash=chain | deep으로 고른다, 카드는 나중이다):
     // slash.chain = 잇는 일섬(여럿에게): 한 칸으로 n번까지 — 선 뒤 window초 안에 U를 다시 누르면 칸 없이 한 번 더. 한 번의 세기 dmg배 · 무너짐 stag배 · 검의 타격 swords배(묶음은 첫 번에만 생긴다).
     // slash.deep = 깊은 일섬(하나에게): 한 칸에 한 번, 세기 dmg배 · 무너짐 stag배. 선 뒤 lock초 동안 다른 스킬이 기다린다(그동안의 누름은 기억했다가 풀리는 틱에 낸다).
+    // marks = 자국(sim/marks.js — 설계 2026-11-18-barrage-run-growth-design.md §3. 처음 값): keep = 남는 초, value = 남긴 베기에 대한 세기의 배율, pop = 터뜨리는 회전이 터뜨릴 때의 배율, moveR = 주인이 죽었을 때 옮겨 갈 수 있는 거리(U).
+    marks: { keep: 4, value: 0.25, pop: 3, moveR: 8 },
     forms: { slash: { chain: { n: 3, window: 0.6, dmg: 0.4, stag: 0.4, swords: 0.4 }, deep: { dmg: 1.6, stag: 1.6, lock: 0.3 } } },
   },
   // on = 콤보를 다 받아내면 자동 반격을 하는가 — 사용자 2026-11-17 "빼자"(보스가 한동안 멈추는 것이 과하다) → 끔. 장치는 남겨 둔다.

@@ -11,6 +11,7 @@ import { autoActive } from './rewards.js';
 import { isDodging } from './player.js';
 import { storeAdd } from './store.js';
 import { swordsOnCut } from './swords.js';
+import { marksOnCut } from './marks.js';
 
 export const CHARS = ['gunner', 'sword'];   // 캐릭터 고르기(?char=) — 모르는 값은 사수
 
@@ -99,6 +100,7 @@ function cut(w, f, skill, dmg, stagger, orbs = 1, swords = null) {
   if (boss && dealt > 0) addStagger(w, stagger);
   if (dealt > 0) swordsOnCut(w, skill, f, orbs, swords ?? undefined);   // 이기어검(swords.js): 벤 스킬마다 묶음이 생기고 가진 검이 모두 따라 벤다(orbs = 그 스킬이 쓴 칸 수, swords = 형태가 바꾸는 것)
   emit(w, 'bladeHit', { skill, id: boss ? 0 : f.id, x, z, dmg: dealt });
+  if (dealt > 0) marksOnCut(w, f, skill, dmg * (boss ? 1 : w.rules.sword.mob));   // 자국(marks.js): 긋는 칼이 남기고 터뜨리는 회전이 쓴다 — 카드를 든 판에서만
   return dealt;
 }
 

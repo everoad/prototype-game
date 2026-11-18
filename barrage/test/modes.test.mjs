@@ -14,16 +14,16 @@ const opt = sel => worldOptions(Q(modeQuery(sel)), () => 0);
 const base = () => readModes(Q(''));
 
 test('주소가 비어 있으면 기본 판이다: 사수 · 보스전(수호자) · 더 켠 것 없음', () => {
-  assert.deepEqual(base(), { char: 'gunner', board: 'boss', slash: '', gear: '', try: [], lab: '' });
+  assert.deepEqual(base(), { char: 'gunner', board: 'boss', slash: '', gear: '', try: [], mark: [], lab: '' });
   assert.equal(modeQuery(base()), '', '기본 판의 주소에는 아무것도 붙지 않는다');
 });
 
 test('지금 주소에서 고른 것을 읽는다', () => {
-  assert.deepEqual(readModes(Q('char=sword&slash=chain')), { char: 'sword', board: 'boss', slash: 'chain', gear: '', try: [], lab: '' });
-  assert.deepEqual(readModes(Q('stage=2&char=sword&slash=deep&seed=7')), { char: 'sword', board: 'stage2', slash: 'deep', gear: '', try: [], lab: '' });
-  assert.deepEqual(readModes(Q('boss=dragon&gear=all&try=bubble,sky')), { char: 'gunner', board: 'dragon', slash: '', gear: 'all', try: ['sky', 'bubble'], lab: '' });
+  assert.deepEqual(readModes(Q('char=sword&slash=chain')), { char: 'sword', board: 'boss', slash: 'chain', gear: '', try: [], mark: [], lab: '' });
+  assert.deepEqual(readModes(Q('stage=2&char=sword&slash=deep&seed=7')), { char: 'sword', board: 'stage2', slash: 'deep', gear: '', try: [], mark: [], lab: '' });
+  assert.deepEqual(readModes(Q('boss=dragon&gear=all&try=bubble,sky')), { char: 'gunner', board: 'dragon', slash: '', gear: 'all', try: ['sky', 'bubble'], mark: [], lab: '' });
   assert.equal(readModes(Q('lab=melee')).lab, 'melee');
-  assert.deepEqual(readModes(Q('char=nope&slash=nope&stage=9&try=nope,dash&lab=nope')), { char: 'gunner', board: 'boss', slash: '', gear: '', try: ['dash'], lab: '' }, '모르는 값은 기본으로');
+  assert.deepEqual(readModes(Q('char=nope&slash=nope&stage=9&try=nope,dash&lab=nope')), { char: 'gunner', board: 'boss', slash: '', gear: '', try: ['dash'], mark: [], lab: '' }, '모르는 값은 기본으로');
 });
 
 test('고른 것에서 만든 주소는 같은 판으로 열린다', () => {
@@ -58,7 +58,7 @@ test('맞지 않는 것은 주소에 넣지 않는다: 사수에게 일섬의 �
 test('보이는 것: 지금 고른 것에 맞는 갈래와 칸만 — 검사에게만 일섬의 형태, 사수 보스전에만 무기', () => {
   const ids = sel => shownGroups(sel).map(g => g.id);
   assert.deepEqual(ids(base()), ['char', 'board', 'gear', 'try', 'lab']);
-  assert.deepEqual(ids({ ...base(), char: 'sword' }), ['char', 'board', 'slash', 'try', 'lab']);
+  assert.deepEqual(ids({ ...base(), char: 'sword' }), ['char', 'board', 'slash', 'mark', 'try', 'lab']);
   assert.deepEqual(ids({ ...base(), board: 'stage1' }), ['char', 'board', 'try', 'lab']);
   assert.deepEqual(ids({ ...base(), lab: 'parry' }), ['char', 'lab'], '연습 장면을 고르면 판 · 무기 · 더 켜기는 숨는다');
   const tryOf = sel => shownItems(MODE_GROUPS.find(g => g.id === 'try'), sel).map(i => i[0]);
@@ -80,3 +80,25 @@ test('지금 주소의 다른 옵션 가운데 소리 끔(mute)만 가지고 간
   assert.equal(modeQuery({ ...base(), char: 'sword' }, Q('mute=1&seed=9&heal=1')), 'char=sword&mute=1');
   assert.equal(modeQuery(base(), Q('seed=9')), '');
 });
+
+// ── 자국 카드(검사 — sim/marks.js)
+import { MARK_CARDS } from '../src/sim/marks.js';
+test('자국 카드: 검사에게만 뜨고, 쓰는 카드(터뜨리는 회전)는 남기는 카드(긋는 칼)를 고른 뒤에만 뜬다', () => {
+  const g = MODE_GROUPS.find(x => x.id === 'mark');
+  assert.deepEqual(g.items.map(i => i[0]), MARK_CARDS, '목록은 실제 카드와 같다');
+  const items = sel => shownItems(g, sel).map(i => i[0]);
+  assert.deepEqual(items({ ...base(), char: 'sword' }), ['cut']);
+  assert.deepEqual(items({ ...base(), char: 'sword', mark: ['cut'] }), ['cut', 'pop']);
+  assert.ok(!shownGroups(base()).some(x => x.id === 'mark'), '사수에게는 없다');
+});
+
+test('자국 카드: 주소로 오가고, 남기는 카드 없이 고른 쓰는 카드는 주소에 넣지 않는다', () => {
+  assert.deepEqual(readModes(Q('char=sword&mark=cut,pop')).mark, ['cut', 'pop']);
+  assert.equal(modeQuery({ ...base(), char: 'sword', mark: ['cut', 'pop'] }), 'char=sword&mark=cut,pop');
+  assert.equal(modeQuery({ ...base(), char: 'sword', mark: ['pop'] }), 'char=sword');
+  assert.equal(modeQuery({ ...base(), mark: ['cut'] }), '', '사수에게는 없다');
+  assert.equal(opt({ ...base(), char: 'sword', slash: 'chain', mark: ['cut', 'pop'] }).marks, 'cut,pop');
+  const sel = readModes(Q('stage=1&char=sword&slash=chain&mark=cut,pop'));
+  assert.deepEqual(readModes(Q(modeQuery(sel))), sel);
+});
+
