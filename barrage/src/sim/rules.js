@@ -20,7 +20,7 @@ export const RULES = {
   },
   start: { player: [-6, 0], boss: [6, 0] },      // 판 양 끝(§5.2 여는 순서)
   // 맞은 출처 번호(hurt src, stats.hitsByPattern 키): 패턴 1~7은 그 번호
-  src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14, tail: 15, wing: 16, shooter: 17, charger: 18, mortar: 19, shieldMob: 20, bomber: 22, tide: 23, waller: 24, spinner: 25 },
+  src: { laser: 8, orbs: 9, combo: 10, slam: 11, wave: 12, sword: 13, background: 14, tail: 15, wing: 16, shooter: 17, charger: 18, mortar: 19, shieldMob: 20, bomber: 22, tide: 23, waller: 24, spinner: 25, breath: 26, strafe: 27, dive: 28, walls: 29, bombs: 30, whirl: 31, shells: 32, pounce: 33 },
   // 두 겹 탄막의 아래(§5.4): 바탕 고리(+ 2단계 느린 나선), 2단계 쌍둥이 구슬. 흰·금 없음.
   layers: {
     bg1: { every: 2.2, n: 10, speed: 6 },
@@ -217,7 +217,8 @@ export const RULES = {
     sword: { warn: 0.4, R: 12, halfDeg: 12, dmg: 18, stagger: [12, 20], active: 0.1 },
     redWindow: 3, redMax: 2, redSlack: 0.15,   // redSlack = 타격 예정 시각 어림의 여유
   },
-  combos: { A: [['swing', 'white'], ['swing', 'white'], ['slam', 'gold']], B: [['swing', 'white'], ['slam', 'red']] },
+  // duel = 포격수의 긴 콤보(siege.pounce — 2단계): 흰 둘 · 빨간 내려찍기 · 흰 하나 · 금 마무리. 다른 보스는 A · B만 쓴다.
+  combos: { A: [['swing', 'white'], ['swing', 'white'], ['slam', 'gold']], B: [['swing', 'white'], ['slam', 'red']], duel: [['swing', 'white'], ['swing', 'white'], ['slam', 'red'], ['swing', 'white'], ['slam', 'gold']] },
   lanes: { redWarn: 0.7, goldWarn: 0.5, lockBefore: 0.2 },   // 빨강·금 탄의 차선 예고(§5.1)
   // 시범 봇(§9, 확인·영상용 도구): 사람처럼 0.2초 늦게, 둘레 10 U만 본다. think = 움직임을 다시 정하는 간격.
   // zone = 용 판 자리 정하기: from U 안에서 받은 공격이 끝날 때 chance꼴로 옆·뒤 R U 자리를 sec초 지킨다(pull = 그 자리로 끄는 세기, keep = 용과 지키는 거리, 설계 용 §9)
@@ -225,7 +226,7 @@ export const RULES = {
   // 맞춘 결과(기본 판, 무기 다 켬, 10판, 죽지 않게): 63초 · 맞음 5.8 · 패링 15.8 · 완벽 13.9
   // sword = 검사 봇(확인용): keep = 보스전에서 지키는 거리(칼바람이 닿는 안쪽 — 보스 가운데에서 boss.r + wave.range + wave.r까지 닿는다), stay = 붙어서 칸이 남아 있을 때, room = 방에서 가장 가까운 적과 지키는 거리(칼바람이 닿게), enter·enterRoom = 이만큼 모이면 일섬으로 들어간다(보스전·방),
   //   exitSec = 빨간 몸 공격이 이 안에 닿으면 마무리, lowHp = 체력이 이 몫 아래면 칸을 써서 회복, margin = 회전 베기를 누르는 거리의 여유.
-  bot: { sword: { keep: [6, 7], stay: [2.4, 3.8], room: [4.5, 5.8], enter: 3, enterRoom: 1, exitSec: 0.25, lowHp: 0.25, margin: 0.2 }, user: { react: 0.38, think: 0.2, chance: 0.9 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
+  bot: { siege: { pull: 4, eyePull: 3, eyeAhead: 1.2 }, sword: { keep: [6, 7], stay: [2.4, 3.8], room: [4.5, 5.8], enter: 3, enterRoom: 1, exitSec: 0.25, lowHp: 0.25, margin: 0.2 }, user: { react: 0.38, think: 0.2, chance: 0.9 }, shell: { pull: 6, inside: 0.75, ahead: 0.6 }, snipe: { ticks: 30, hpAbove: 0.75 }, room: { keep: [4, 6.5], keepBurst: [2, 3.4], stepOff: 3, stand: 0.6, pull: 3, healBelow: 0.6, ropeFar: 7, dashFrom: 4.2, mineFrom: 3.2, totem: [1.6, 3] }, zone: { chance: 0.5, from: 6, R: [3, 4.5], sec: [2, 4], pull: 1.0, keep: [9, 11] }, react: 0.2, sight: 10, look: 0.5, samples: 6, think: 3 / 120, parryLead: [0.03, 0.10], jitter: 0.04, jitterSome: 0.08, someRate: 0.5, keep: [8, 10], margin: 0.3, dodgeLead: 0.05, duel: [2.6, 4.2], execBand: [2.4, 3.6] },
   // 보스 두뇌(§5.1~5.3): 준비 → 패턴 → 숨, 거리 묶음, 돌진 시계, 깨어남, 2단계 새 패턴 하나씩.
   brain: {
     // 박자(§5.5): 준비 0.25초, 숨 0.15~0.35초, 다음 준비는 앞 패턴 마지막 0.3초와 겹친다
@@ -257,6 +258,65 @@ export const RULES = {
     wing: { warn: 0.4, halfDeg: 90 },
     // 고르기: 여는 순서(화염구 부채 → 불 창 → 흰 활공 → 덮치기 + 발톱 A), 2단계 새 패턴, 쓰는 패턴(7 = 날개 탄 벽, 나머지는 머리), 가까운 앞에서 포효 몫
     brain: { opening: [{ pattern: 1 }, { pattern: 3 }, { slam: 'white' }, { approach: 'A' }], intro2: [6, 7], patterns: [1, 2, 3, 4, 6, 7, 8], nearWave: 0.5 },
+  },
+  // 세 번째 보스 — 나는 용(설계 2026-11-19-barrage-wyrm-design.md, 주소 boss=dragon2). 용의 몸(dragon.*)을 쓰고 판 · 두뇌 · 대표 공격이 다르다. 각도는 도, 거리는 U, 시간은 초.
+  // board · start = 이 판만의 크기와 시작 자리(다른 판은 위의 board · start 그대로). turn = 몸 돌기(초당 — 수호자처럼 휙), near = 가까움(발톱), rest = 공격 사이의 숨, land = 내려앉아 추스르는 초(쏠 틈).
+  // opening = 여는 차례, patterns = 땅에서 섞는 머리 패턴(1·2단계).
+  // breath(불 뿜기) = inhale초 들이켠 뒤 dur초(1·2단계) 동안 every초마다 n발 — 줄기는 초당 sweep도(1·2단계)까지만 나를 쫓고, 탄은 ±spreadDeg로 흩어지며 속도는 speed × vary 사이. 끝에 금 한 발(조준 차선).
+  //   from = 이보다 가까우면 먼저 물러난다. retreat = 날갯짓 한 번에 dist만큼 물러나기(sec초, hop만큼 뜬다).
+  // fly(날기) = rise초에 alt까지 떠올라 내 자리를 지나는 줄을 speed로 훑는다(passes번, 1·2단계).
+  //   strip(불줄) = 줄을 따라 step마다 반지름 R의 빨간 원 — 용이 그 위를 지나는 순간 터진다(첫 원도 warn초는 보인다). linger = 터진 뒤 남는 초, minLen = 줄이 이보다 짧으면(벽을 보고 선 채 내가 바로 밑에 있다) 판 가운데 쪽으로 긋는다 — 그 밖에는 늘 내 자리를 지난다.
+  //   ember(불씨) = every번째 원마다 양옆으로 한 발씩 흘러나오는 느린 탄(speed, life초 뒤 사라진다).
+  // dive(급강하) = 내 자리의 반지름 R 원(white꼴로 흰색, 아니면 빨강) — warn초 뒤 떨어지고 lockBefore 전에 자리를 굳힌다. drop = 마지막 이 초에 내리꽂는다. 내려앉은 자리에서 반대 색 고리(floor.wave)가 퍼진다.
+  dragon2: {
+    board: { hx: 18, hz: 12 }, start: { player: [-9, 0], boss: [9, 0] },
+    hp: 5000, turn: 720, near: 5, rest: [0.45, 0.8], land: 0.8,   // 체력은 봇으로 잡은 처음 값(떠 있는 동안은 못 치니 용보다 적다)
+    opening: ['breath', 'flight'], patterns: [[1, 3], [1, 3, 6]],
+    breath: { inhale: 0.6, dur: [3.0, 3.8], every: 0.05, n: 2, spreadDeg: 7, speed: 13, vary: [0.85, 1.1], sweep: [48, 60], from: 9 },
+    retreat: { dist: 13, sec: 0.45, hop: 1.6 },
+    fly: { rise: 0.7, alt: 7, speed: 24, passes: [1, 2],
+      strip: { step: 1.6, R: 1.3, warn: 0.75, dmg: 20, linger: 0.2, minLen: 5, ember: { every: 2, speed: 1.6, life: 2.4 } } },
+    dive: { warn: 1.0, lockBefore: 0.25, drop: 0.3, R: 2.6, dmg: 26, white: 0.55, stagger: [14, 22] },
+  },
+  // 네 번째 보스 — 포격수(설계 2026-11-19-barrage-siege-design.md, 주소 boss=siege). 정체성 이야기 앞의 사용자 말(탄의 종류와 패턴 · 큰 판 · 거리와 카메라)로 짠 장면 여섯. 각도는 도, 거리는 U, 시간은 초. [a, b] = 1 · 2단계(따로 적은 것은 범위).
+  // board · start = 이 판만의 크기와 시작 자리. rest = 장면 사이의 숨(범위). opening · cycle = 여는 장면과 되풀이하는 차례.
+  // leap(도약) = speed로 뛰되 sec 범위 안에서(멀수록 길게), hop만큼 뜬다. inset = 물러날 자리(판 네 변의 가운데)가 벽에서 떨어진 거리, min = 이보다 가까운 자리로는 뛰지 않고 바로 시작한다.
+  // walls(포격전) = 보스를 지나고 나를 향한 쪽에 수직인 줄에 spacing마다 탄을 깔아 speed(느리다)로 보낸다 — n번, lead 뒤 every마다. 벽마다 내 옆 far 거리에 gap 너비의 빈 곳,
+  //   whiteEvery번째 벽마다(첫 벽부터) 반대쪽 plug 거리에 plugGap 너비의 틈과 그 한가운데 흰 탄 하나(벽과 같은 빠르기) — 나머지 벽은 빈 곳뿐이다. 빈 곳은 벽마다 반대쪽.
+  //   벽 사이는 every × 벽의 빠르기(약 2.5 U) — 달려들면 벽을 잇달아 만난다. from = 이보다 가까우면 먼저 물러난다, close = 첫 벽 뒤에 이 안으로 다가오면 끝난다 —
+  //   다만 hops번(1 · 2단계)까지는 끝내지 않고 다시 멀리 물러나 남은 벽을 쏜다(내려앉고 hopLead 뒤부터). tail = 마지막 벽 뒤의 숨, spearAfter = 2단계에 이 번째 벽 뒤로 빨간 창(조준 차선, spearSpeed).
+  // bombs(폭탄 밭) = 내 자리 둘레 field 안에 step 간격(벌집)으로 반지름 R의 빨간 원 — warn 뒤 한꺼번에 터진다(n번, 터진 뒤 gap초에 다음). 내게서 at 거리에 흰 원(white.R — 받아치면 칸이 찬다)과 빈 곳,
+  //   둘은 내게서 본 각이 apartDeg 넘게 벌어진다. white.keep · hole.keep = 그 가운데에서 이 안에는 빨간 원을 놓지 않는다. edge = 흰 원 · 빈 곳이 벽에서 떨어지는 거리, linger = 터진 뒤 남는 초.
+  // chain(색 순서 고리) = warn 뒤 gap마다 고리(floor.wave) 하나씩 — seqs에서 고른 색 순서로. 빨강은 구르기 충전(둘)까지만. end = 마지막 고리 뒤의 숨.
+  // whirl(회오리) = 판 가운데에서 windup 뒤 dur 동안 팔 arms개가 초당 turn도 돌며 every마다 한 발씩(speed — 느리다). flip = 1이면 가운데 때에 도는 쪽을 뒤집는다.
+  //   white = every초마다 팔마다 흰 탄 하나, 팔보다 도는 쪽으로 aheadDeg 앞에(팔의 앞머리에 붙어 있어야 받는다).
+  // shells(터지는 포탄) = n발을 gap마다 — 내게서 at 거리, 보스 쪽 ± swingDeg의 자리에 fly초 뒤 떨어진다(impact = 떨어지는 자리의 빨간 원). 앞 포탄의 자리와 apart 넘게 떨어진다.
+  //   떨어진 자리에서 큰 탄 mids개(반지름 midR, midSpeed)가 퍼지고 — 내 쪽은 늘 큰 탄 사이의 한가운데 — split초 뒤 저마다 작은 탄 ring개의 고리(ringSpeed)로 다시 터진다.
+  //   그 고리에서 떨어진 자리(눈)를 향한 한 발: back개의 큰 탄은 흰 탄을 보내고 나머지는 비운다 — 눈으로는 흰 탄만 모인다. eye = 눈의 표시(반지름 R, 흰 탄이 닿는 때 = 다시 터진 뒤 lead초).
+  // pounce(덮치기) = 내 자리의 반지름 R 원(white꼴로 흰색, 아니면 빨강) — warn 뒤 떨어지고 lockBefore 전에 자리를 굳힌다, hop만큼 뛰어오른다. 내려앉으면 combos(1 · 2단계)에서 고른 근접 콤보.
+  siege: {
+    board: { hx: 18, hz: 12 }, start: { player: [-9, 0], boss: [15, 0] },
+    hp: 8500, rest: [0.6, 0.9],   // 체력은 봇으로 잡은 처음 값(검사 약 70초 · 사수 약 85초 — 첫 바퀴가 끝날 즈음 2단계)
+    opening: ['walls'], cycle: ['pounce', 'chain', 'whirl', 'shells', 'bombs', 'walls'],
+    leap: { speed: 45, sec: [0.4, 0.75], hop: 3.5, inset: 3, min: 2 },
+    walls: { n: [6, 8], lead: 0.5, every: 0.55, spacing: 0.75, speed: 6, gap: 2.4, far: [2.5, 4], plug: [0.9, 1.7], plugGap: 2.2, whiteEvery: 2, from: 20, close: 6, hops: [0, 1], hopLead: 0.3, tail: 0.5, spearAfter: [2, 5], spearSpeed: 18 },
+    bombs: { n: [2, 3], warn: [1.3, 1.1], gap: 0.3, field: 8.5, step: 2.4, R: 1.5, dmg: 20, white: { R: 1.8, keep: 3.3, stagger: [14, 22] }, hole: { keep: 3.6 }, at: [3.5, 5.5], apartDeg: 100, edge: 1.5, linger: 0.2 },
+    chain: { warn: 0.5, gap: [0.5, 0.42], end: 0.5,
+      seqs: [[['red', 'white', 'white', 'red'], ['red', 'white', 'red', 'white'], ['white', 'red', 'white', 'red'], ['white', 'red', 'red', 'white']],
+        [['red', 'white', 'white', 'red', 'white', 'white'], ['white', 'red', 'white', 'white', 'red', 'white'], ['white', 'white', 'red', 'white', 'red', 'white']]] },
+    whirl: { windup: 0.6, dur: [5, 6.5], arms: [4, 5], turn: [26, 32], every: 0.09, speed: 5.5, flip: [0, 1], white: { every: 1.1, aheadDeg: 12 } },
+    shells: { n: [2, 3], gap: [1.1, 0.85], fly: 1.0, at: [3.5, 5.5], swingDeg: 40, apart: 4.5, edge: 1.5, impact: { R: 1.3, dmg: 18, linger: 0.15 },
+      mids: 6, midR: 0.4, midSpeed: 6, split: 0.55, ring: 8, ringSpeed: 6.5, back: 2, eye: { R: 1.0, lead: 0.4, linger: 0.2 }, end: 0.8 },
+    pounce: { warn: 0.85, lockBefore: 0.25, hop: 5, R: 2.4, dmg: 24, white: 0.5, stagger: [14, 22], linger: 0.2, combos: [['A', 'B'], ['duel']] },
+  },
+  // 수호자 + 장면(설계 2026-11-19-barrage-mix-design.md, 주소 boss=ranged2). 사용자: "수호자에 신규 패턴을 섞는 거지." 수호자의 두뇌(brain) · 탄 패턴 · 장판 · 근접 · 바탕 탄막은 그대로 쓰고,
+  // 그 사이사이에 포격수의 장면(siege.* — 수치도 그대로)이 하나씩 혼자 끼어든다. board · start = 이 판만의 크기와 시작 자리(여는 순서는 수호자의 거리에서).
+  // every = 장면이 끝난 뒤 다음 장면까지의 초(1 · 2단계) — 그 사이는 수호자의 여느 싸움. 첫 장면은 여는 순서가 끝난 뒤. cycle = 장면의 차례(되풀이 — 덮치기는 수호자의 돌진 · 박치기와 겹쳐 뺐다).
+  // rushAfter = 이 장면이 끝났을 때 내가 아직 멀면(가까움 near 밖) 수호자의 다음 공격은 다가오기(돌진 + 콤보) — 제가 벌린 거리를 제 손으로 좁힌다. 체력 · every는 봇으로 잡은 처음 값(검사 약 70초, 장면이 시간의 4할).
+  mix: {
+    board: { hx: 18, hz: 12 }, start: { player: [-6, 0], boss: [6, 0] },
+    hp: 9000, every: [4.5, 3.5],
+    cycle: ['chain', 'shells', 'whirl', 'bombs', 'walls'], rushAfter: ['walls'],
   },
   // 탄막 패턴 시작값(§5.2 — 빌더가 다듬는다). muzzle = 보스 가운데에서 탄이 나오는 거리.
   patterns: {

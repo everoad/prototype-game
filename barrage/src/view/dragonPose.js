@@ -4,13 +4,14 @@
 // crouch 0~1 몸 낮춤 · paws 0~1 앞발 들기 · down 0~1 엎드림(그로기)
 const clamp01 = x => Math.max(0, Math.min(1, x));
 const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+const FLAP = 13;        // 나는 용이 떠 있을 때의 날갯짓 빠르기(라디안/초 — 순수 함수라 LOOK을 읽지 않는다)
 const HEAD_FREE = 7;   // 패턴 7(날개 탄 벽)만 머리 공격이 아니다
 
 // 보스 무리는 rotation.y = −face로 돈다: 그 안에서 목을 θ 돌리면 머리는 face − θ를 본다 → 빔 쪽(face + headYaw)을 보려면 θ = −headYaw
 export const neckYaw = pose => -pose.headYaw;
 
 export function dragonPose(w) {
-  const b = w.boss, out = { headLift: 0, jaw: 0, neck: 1, headYaw: 0, wingL: 0, wingR: 0, tail: 0, crouch: 0, paws: 0, down: 0 };
+  const b = w.boss, out = { headLift: 0, jaw: 0, neck: 1, headYaw: 0, wingL: 0, wingR: 0, tail: 0, crouch: 0, paws: 0, down: 0, pitch: 0, tuck: 0 };
   if (w.time < b.groggyUntil && !b.dead) { out.down = 1; out.jaw = 1; return out; }
   const since = w.time - b.stateAt;
   // 패턴 준비: 머리 패턴 = 머리 들고 입 벌림, 날개 탄 벽 = 두 날개 펼침
@@ -45,5 +46,19 @@ export function dragonPose(w) {
   const r = w.melee?.rush;
   if (r) { if (r.phase === 'crouch') { out.crouch = clamp01((w.time - r.start) / w.rules.rush.crouch); out.paws = out.crouch; } else { out.crouch = 0.4; out.wingL = out.wingR = 0.5; } }
   if (w.melee?.areas?.length) out.paws = 1;
+  // 나는 용(sim/dragon2.js): pitch = 몸 숙임(라디안, + = 머리가 아래) · tuck 0~1 = 다리 접기. 떠 있는 동안 두 날개가 FLAP의 빠르기로 친다.
+  if (b.wyrm) {
+    const D = w.rules.dragon2, flap = Math.sin(w.time * FLAP);
+    if (b.state === 'inhale') { const u = clamp01(since / D.breath.inhale); out.neck = 1 + 0.4 * u; out.headLift = u; out.jaw = 0.3 * u; out.crouch = 0.3 * u; }
+    else if (b.state === 'breath') { out.jaw = 1; out.headLift = 0.15; out.neck = 1.15; out.crouch = 0.25; out.wingL = out.wingR = 0.35; }
+    else if (b.state === 'retreat') { const u = clamp01(since / D.retreat.sec); out.wingL = out.wingR = u < 0.4 ? 1 : -1; out.tuck = 0.6; out.pitch = -0.25; }
+    else if (b.state === 'takeoff') { const u = clamp01(since / D.fly.rise); out.crouch = u < 0.2 ? 1 - u * 5 : 0; out.wingL = out.wingR = u < 0.2 ? 1 : flap; out.tuck = u; out.pitch = -0.45 * Math.sin(Math.PI * u); }
+    else if (b.state === 'aim') { out.wingL = out.wingR = flap; out.tuck = 1; out.headLift = -0.3; out.jaw = 0.5; out.neck = 1.25; }
+    else if (b.state === 'strafe') { out.wingL = out.wingR = 0.75 + 0.2 * flap; out.tuck = 1; out.pitch = 0.2; out.jaw = 1; out.headLift = -0.6; }
+    else if (b.state === 'diveAim') {
+      const a = b.act?.area, left = a ? a.born + a.warn - w.time : 1, fall = clamp01(1 - left / D.dive.drop);   // 마지막 drop초: 날개를 접고 머리부터 내리꽂는다
+      out.tuck = 1 - fall; out.wingL = out.wingR = fall > 0 ? 0.15 : flap; out.pitch = fall > 0 ? 0.9 : 0.35; out.paws = fall; out.jaw = 0.6;
+    } else if (b.state === 'land') { const u = clamp01(since / 0.35); out.crouch = 1 - u; out.wingL = out.wingR = 0.6 * (1 - u); }
+  }
   return out;
 }

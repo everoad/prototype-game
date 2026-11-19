@@ -149,6 +149,7 @@ export function createBulletsView(view, LOOK, cap) {
     for (const m of Object.values(meshes)) m.count = 0;
     const b = w.bullets, vis = S.bulletVisual, minR = S.bulletMinPx * view.unitsPerPx(), bh = S.bh;
     const sn = w.tries?.snipe, Wp = LOOK.tries.snipe.warp, vt = view.simTime ?? w.time, warped = !!sn && vt - sn.firedAt < Wp.sec;   // 저격이 가른 공기(그림만 밀린다)
+    const lift = w.boss.wyrm ? { src: w.rules.src.breath, y: (w.boss.alt ?? 0) + LOOK.wyrm.mouthY, sec: LOOK.wyrm.breathDrop } : null;
     for (let i = 0; i < b.cap; i++) {
       if (!b.alive[i]) continue;
       if (w.result === 'win' && b.kind[i] !== K.REFLECT) continue;   // 이긴 순간 남은 적 탄은 반짝이며 사라진다(main)
@@ -157,7 +158,10 @@ export function createBulletsView(view, LOOK, cap) {
       const r = Math.max(b.r[i] * vis, minR), k = b.kind[i];
       const yaw = Math.atan2(b.vz[i], b.vx[i]);
       if (k !== K.REFLECT) put(meshes.shadow, x, 0.01, z, r * 0.9, 1, r * 0.9);
-      if (k === K.NORMAL) { put(meshes.normal, x, bh, z, r, r, r); put(meshes.normalCore, x, bh, z, r, r, r); }
+      if (k === K.NORMAL) {
+        const y = lift && b.src[i] === lift.src ? bh + (lift.y - bh) * Math.max(0, 1 - (w.time - b.born[i]) / lift.sec) : bh;   // 나는 용의 불: 입 높이에서 나와 탄 높이로 내려앉는다(그림만 — 판정은 바닥)
+        put(meshes.normal, x, y, z, r, r, r); put(meshes.normalCore, x, y, z, r, r, r);
+      }
       else if (k === K.WHITE) put(meshes.white, x, bh, z, r * 1.15, r * 1.15, r * 1.15, now * 3 + i, 0.6);
       else if (k === K.GOLD) { put(meshes.gold, x, bh, z, r * 1.2, r * 1.2, r * 1.2, now * 3 + i, 0.6); put(meshes.goldRim, x, bh, z, r, r, r); }
       else if (k === K.RED) put(meshes.red, x, bh, z, r * 1.9, r * 0.8, r * 0.8, yaw);

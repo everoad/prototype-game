@@ -11,6 +11,7 @@ export const foeR = (w, f) => f.r ?? w.rules.boss.r;
 
 // 틱 처음에 한 번: 적 목록과 겨눌 적
 export function refreshFoes(w) {
+  if (w.boss.air) { w.foeList = w.noFoes ??= []; w.aim = null; return; }   // 떠 있는 용(dragon2.js): 겨눌 것이 없다
   if (!isAway(w)) { w.foeList = w.bossOnly ??= [w.boss]; w.aim = w.boss; return; }
   const p = w.player, list = w.foeList === w.bossOnly || !w.foeList ? [] : w.foeList;
   list.length = 0;

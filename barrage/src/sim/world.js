@@ -13,8 +13,10 @@ import { autoActive, stepAuto } from './rewards.js';
 import { executeActive, canExecute, startExecute, stepExecute, endExecute } from './execute.js';
 import { useItems, shieldBullets, updateItemSpawns } from './items.js';
 import { createWeapons, updateWeapons } from './weapons.js';
-import { initBrain, thinkBoss } from './brain.js';
+import { initBrain, thinkBoss, initMix, mixRules } from './brain.js';
 import { initDragon, thinkDragon } from './dragon.js';
+import { initDragon2, thinkDragon2, wyrmRules } from './dragon2.js';
+import { initSiege, thinkSiege, siegeRules } from './siege.js';
 import { throwStore } from './store.js';
 import { refreshFoes, isAway } from './foes.js';
 import { updateMobs } from './mobs.js';
@@ -29,10 +31,13 @@ import { updateLayers } from './layers.js';
 import { updateBeams } from './beams.js';
 import { updateWaves } from './floor.js';
 
-export const BOSSES = ['ranged', 'dragon'];   // 보스 고르기(?boss=) — 모르는 값은 첫 보스
+export const BOSSES = ['ranged', 'dragon', 'dragon2', 'siege', 'ranged2'];   // dragon2 = 나는 용(큰 판 — dragon2.js) · siege = 포격수(큰 판 — siege.js) · ranged2 = 수호자 + 장면(큰 판 — brain.js의 initMix)   // 보스 고르기(?boss=) — 모르는 값은 첫 보스
 
 export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, heal = false, ai = true, gear = null, boss = 'ranged', store = false, hard = false, stage = null, room = 1, tries = null, kit = null, char = 'gunner', clip = null, forms = null, marks = null } = {}) {
-  const r = RULES;
+  const bossName = BOSSES.includes(boss) ? boss : 'ranged', wyrm = bossName === 'dragon2' && !labName(lab) && !stageDef(RULES, stage);   // 나는 용은 보스전에서만(연습 장면 · 스테이지는 지금 그대로)
+  const siege = bossName === 'siege' && !labName(lab) && !stageDef(RULES, stage);   // 포격수도 보스전에서만
+  const mix = bossName === 'ranged2' && !labName(lab) && !stageDef(RULES, stage);   // 수호자 + 장면도 보스전에서만
+  const r = wyrm ? wyrmRules(RULES) : siege ? siegeRules(RULES) : mix ? mixRules(RULES) : RULES;   // 나는 용 · 포격수 · 수호자 + 장면의 판만 넓다(판 크기 · 시작 자리)
   const who = CHARS.includes(char) ? char : 'gunner', sword = who === 'sword';   // 캐릭터(sword.js) — 검사는 늘 모아 받고 무기를 들지 않는다
   const w = {
     rules: r, rng: makeRng(seed), seed,
@@ -42,7 +47,7 @@ export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, h
     bullets: createBullets(r.bullets.cap), shots: createShots(r.shots.cap), lanes: [], beams: [], waves: [], items: [], floor: null, floorAreas: [], melee: { areas: [], taken: true, rush: null, combo: null },
     enemies: [], foeList: null, aim: null, mobAreas: [],   // 일반 몬스터와 적 목록·겨눈 적(스테이지, foes.js) · 떨어지는 포탄(mobs.js)
     stats: createStats(),
-    opts: { phase, pattern, lab: labName(lab), heal, ai, boss: BOSSES.includes(boss) ? boss : 'ranged', store: !!store || !!stageDef(r, stage) || sword, hard: !!hard, stage: stageDef(r, stage) ? stage : null, char: who, clip },
+    opts: { phase, pattern, lab: labName(lab), heal, ai, boss: (bossName === 'dragon2' && !wyrm) || (bossName === 'siege' && !siege) || (bossName === 'ranged2' && !mix) ? 'ranged' : bossName, store: !!store || !!stageDef(r, stage) || sword, hard: !!hard, stage: stageDef(r, stage) ? stage : null, char: who, clip },
     weapons: createWeapons(r, sword ? 'none' : gear),   // 보조 무기(§4.10) — 기본 없음, 화면은 ?gear=
     stage: null,   // 스테이지(stage.js) — 보스전·연습 장면에서는 null
     marks: sword ? createMarks(marks) : null,   // 검사의 자국 카드(marks.js — 없으면 null)
@@ -51,7 +56,7 @@ export function createWorld({ seed = 1, phase = 1, pattern = null, lab = null, h
     tries: null,   // 실험 기믹(tries.js, ?try=) — 꺼져 있으면 null
   };
   if (sword) w.player.swords = createSwords(r);   // 이기어검(swords.js) — 검사 판에만 있다
-  if (w.opts.boss === 'dragon' && !w.opts.lab) initDragon(w); else initBrain(w);   // 연습 장면은 용을 모른다(지금 그대로)
+  if (wyrm) initDragon2(w); else if (siege) initSiege(w); else if (mix) initMix(w); else if (w.opts.boss === 'dragon' && !w.opts.lab) initDragon(w); else initBrain(w);   // 연습 장면은 용을 모른다(지금 그대로)
   if (w.opts.lab) setupLab(w);
   refreshFoes(w);
   if (w.opts.store && r.store.bossHp !== 1) { w.boss.maxHp *= r.store.bossHp; w.boss.hp *= r.store.bossHp; }   // 모아 던지기 판의 보스 체력(§4.11)
@@ -91,6 +96,8 @@ export function step(w, input) {
   // 보스(두뇌가 패턴·돌진·근접을 돌린다) · 차선
   if (w.opts.lab) thinkLab(w);
   else if (isAway(w)) updateMobs(w);   // 일반 방: 보스는 자리에 없고 몬스터가 움직인다(스테이지)
+  else if (w.boss.wyrm) thinkDragon2(w);   // 나는 용: 바탕 탄막 없이 제 공격만
+  else if (w.boss.siege) thinkSiege(w);   // 포격수: 장면 하나씩
   else { if (w.boss.kind === 'dragon') thinkDragon(w); else thinkBoss(w); updateLayers(w); }
   updateBeams(w);
   updateWaves(w);
@@ -141,6 +148,9 @@ export function stateHash(w) {
   if (w.opts.store) base.push('s' + p.store.length);   // 기본 판 해시는 그대로(떼어 내기 시험)
   if (w.tries) base.push('t' + w.tries.names.join('+') + (w.tries.rope.to ? 'r' : '') + w.tries.mines.length + (w.tries.snipe && w.tries.snipe.on ? 's' : ''));
   if (isSword(w)) base.push('c' + w.opts.char + (p.blade.move ? p.blade.move.kind[0] : '-') + p.blade.cuts.length + f(p.blade.charge) + (p.blade.chain ? '|n' + p.blade.chain.left + ',' + f(p.blade.chain.until) : '') + (p.swords ? '|w' + p.swords.list.length + ',' + p.swords.list.filter(s => s.leg).length + ',' + p.swords.strikes.length + ',' + f(p.swords.busyUntil) : ''));   // 사수 판 해시는 그대로
+  if (b.wyrm) base.push('y' + f(b.alt) + (b.air ? 1 : 0) + b.state + b.fires.length);
+  if (b.siege) base.push('q' + f(b.alt) + b.state + (b.act ? b.act.kind : '-') + b.queue.length + ',' + w.floorAreas.length);
+  if (b.mix) base.push('x' + f(b.alt) + b.state + (b.act ? b.act.kind : '-') + b.queue.length + ',' + w.floorAreas.length + ',' + f(b.sceneAt));
   if (w.marks) base.push('m' + w.marks.cards.join('+') + ':' + w.marks.list.map(m => (m.foe === b ? 0 : m.foe.id) + ',' + f(m.until) + ',' + f(m.value)).join(';'));
   if (w.kit) base.push('k' + kitAll(w).join('+'));
   if (w.stage) base.push('g' + w.stage.room + w.stage.phase + w.stage.rewards.map(r => r.kind[0] + r.what + (r.armed ? 1 : 0)).join(',') + (w.stage.pending ? w.stage.pending.id : '') + f(w.stage.playSec));

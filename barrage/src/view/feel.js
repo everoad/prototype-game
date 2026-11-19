@@ -144,6 +144,27 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           break;
         }
         case 'waveStart': { const S = F().wave; shake(S.shakePx, S.shakeSec); fx.dust(e.x, e.z, S.dust); sfx.play('slam'); break; }
+        // 나는 용(sim/dragon2.js): 솟는 불 · 그림자 · 불기둥은 wyrmView가 그리고, 여기는 흔들림과 소리
+        case 'wyrmInhale': sfx.play('laserCharge', { detune: -500 }); break;
+        case 'wyrmBreath': sfx.play('whoosh', { detune: -900 }); break;
+        case 'wyrmRetreat': fx.dust(e.x, e.z, 1.4); sfx.play('whoosh', { detune: -500 }); break;
+        case 'wyrmTakeoff': { const W = F().wyrm; shake(W.takeoff[0], W.takeoff[1]); fx.dust(e.x, e.z, 2); sfx.play('whoosh', { detune: -700 }); break; }
+        case 'wyrmStrip': sfx.play('rushCharge', { detune: 300 }); break;
+        case 'fireBoom': { const W = F().wyrm; shake(W.boom[0], W.boom[1]); if (now - (st.boomAt ?? -1e9) >= W.boomGap) { st.boomAt = now; sfx.play('slam', { detune: 500 }); } break; }
+        case 'wyrmDiveAim': sfx.play('rushCharge', { detune: -300 }); break;
+        case 'wyrmLand': { const W = F().wyrm; shake(W.land[0], W.land[1]); if (on('punch')) camera.punch(W.punch[0], W.punch[1]); fx.dust(e.x, e.z, 3); sfx.play('slamWall'); break; }
+        // 포격수(sim/siege.js): 포신 · 그림자 · 포탄 · 솟는 불은 siegeView가 그리고, 여기는 흔들림과 소리
+        case 'siegeLeap': fx.dust(e.x, e.z, 1.6); sfx.play('whoosh'); break;
+        case 'siegeLand': { const G = F().siege; shake(G.land[0], G.land[1]); fx.dust(e.x, e.z, 2); sfx.play('rushArrive'); break; }
+        case 'siegeBombs': sfx.play('rushCharge'); break;
+        case 'bombsBlast': { const G = F().siege; shake(G.blast[0], G.blast[1]); if (on('punch')) camera.punch(G.blastPunch[0], G.blastPunch[1]); sfx.play('slamWall'); sfx.play('thump', { detune: -300 }); break; }
+        case 'siegeWhirl': sfx.play('laserCharge'); break;
+        case 'siegeWhirlFlip': actors.bossJolt?.(now, 0.15); sfx.play('whooshNear'); break;
+        case 'shellLob': fx.spark(e.x, e.z, 'purple', 1.4); sfx.play('thump', { detune: 500 }); break;
+        case 'shellLand': { const G = F().siege; shake(G.shell[0], G.shell[1]); fx.dust(e.x, e.z, 1.4); sfx.play('slam'); break; }
+        case 'shellBurst': if (now - (st.shellBurstAt ?? -1e9) >= F().siege.burstGap) { st.shellBurstAt = now; sfx.play('thump', { detune: 900 }); } break;
+        case 'siegePounce': sfx.play('rushCharge'); break;
+        case 'siegeSlam': { const G = F().siege; shake(G.slam[0], G.slam[1]); if (on('punch')) camera.punch(G.slamPunch[0], G.slamPunch[1]); fx.dust(e.x, e.z, 3); sfx.play('slamWall'); break; }
         case 'laserAim': sfx.play('laserCharge'); break;
         case 'laserFire': { const S = F().laser; shake(S.shakePx, S.shakeSec); sfx.play('laserBeam'); break; }
         case 'laserCut': sfx.stop?.('laserBeam'); break;
@@ -428,18 +449,16 @@ export function createFeel({ timeFx, camera, fx, sfx, actors, hud, LOOK }) {
           sfx.play('throwHit', { detune: fin ? -300 : 300 });
           break;
         }
-        // 자국(sim/marks.js): 남을 때 작은 불티, 터질 때 숫자와 불꽃(터뜨리는 회전이면 크게 · 살짝 흔들린다), 옮겨 갈 때 가는 선이 다음 적에게 날아간다.
-        case 'markLeave': if (on('sparks')) fx.spark(e.x, e.z, 'cyan', LOOK.sword.marks.leaveSpark); break;
+        // 자국(sim/marks.js — 색은 진홍, 맞을 때 · 터질 때의 타격 효과는 view/marksView.js가 그린다): 터질 때 숫자(터뜨리는 회전이면 크게 · 살짝 흔들린다), 옮겨 갈 때 가는 선이 다음 적에게 날아간다.
         case 'markPop': {
           const V = LOOK.sword.marks, spin = e.why === 'spin';
           if (!(e.dmg > 0)) break;
-          if (on('sparks')) fx.burst(e.x, e.z, 'cyan', spin ? V.spinBurst : V.popBurst);
           if (on('numbers')) fx.number(e.x, e.z, Math.round(e.dmg), 'cyan', spin ? V.spinNumber : V.number);
           if (spin) { shake(V.spinShake[0], V.spinShake[1]); sfx.play('throwHit', { detune: V.spinCent }); }
           else sfx.play('tick');
           break;
         }
-        case 'markMove': fx.tracer(e.fromX, e.fromZ, e.x, e.z, 'cyan', LOOK.sword.marks.tracer); break;
+        case 'markMove': fx.tracer(e.fromX, e.fromZ, e.x, e.z, 'wound', LOOK.sword.marks.tracer); break;
         // 이기어검(sim/swords.js): 찌르기는 작은 소리와 불티(1초에 perSec번까지), 스킬 타격은 올라가는 음 몇 개와 합계 숫자 하나.
         // 검은 화면을 멈추지 않는다 — 칸 stopOrbs 이상을 턴 마무리의 마지막 검만(그 검에서 흔들리고 당겨진다).
         case 'swordStab': {

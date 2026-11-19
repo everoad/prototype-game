@@ -28,29 +28,37 @@ export function createScene(canvas, LOOK, opts = {}) {
     scene.add(g);
   }
 
-  // 판: 어둡고 채도 낮게 — 화면에서 가장 밝은 것은 탄이다(§7)
-  const hx = 10, hz = 7;
+  // 판: 어둡고 채도 낮게 — 화면에서 가장 밝은 것은 탄이다(§7). 크기는 판마다 다를 수 있다(setBoard — 나는 용의 판은 넓다).
   const floorMat = new THREE.MeshLambertMaterial({ color: LOOK.colors.board });
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(hx * 2, hz * 2), floorMat);
-  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
-  layers.floor.add(floor);
-  // 1 U 바둑판(거리 읽기용)
-  const gridPts = [];
-  for (let x = -hx; x <= hx; x++) gridPts.push(x, 0.005, -hz, x, 0.005, hz);
-  for (let z = -hz; z <= hz; z++) gridPts.push(-hx, 0.005, z, hx, 0.005, z);
-  const gridGeo = new THREE.BufferGeometry();
-  gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3));
   const gridMat = new THREE.LineBasicMaterial({ color: LOOK.colors.grid });
-  layers.floor.add(new THREE.LineSegments(gridGeo, gridMat));
-  // 난간: 판 둘레 낮은 벽
   const railMat = new THREE.MeshLambertMaterial({ color: LOOK.colors.rail });
   const railTop = new THREE.MeshBasicMaterial({ color: LOOK.colors.railTop });
-  const railH = 0.45, railT = 0.25;
-  for (const [w, d, x, z] of [[hx * 2 + railT * 2, railT, 0, -hz - railT / 2], [hx * 2 + railT * 2, railT, 0, hz + railT / 2], [railT, hz * 2, -hx - railT / 2, 0], [railT, hz * 2, hx + railT / 2, 0]]) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, railH, d), [railMat, railMat, railTop, railMat, railMat, railMat]);
-    m.position.set(x, railH / 2, z); m.castShadow = true; m.receiveShadow = true;
-    layers.floor.add(m);
+  const boardG = new THREE.Group();
+  layers.floor.add(boardG);
+  function setBoard(hx, hz) {
+    for (const m of [...boardG.children]) { boardG.remove(m); m.geometry.dispose(); }
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(hx * 2, hz * 2), floorMat);
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+    boardG.add(floor);
+    // 1 U 바둑판(거리 읽기용)
+    const gridPts = [];
+    for (let x = -hx; x <= hx; x++) gridPts.push(x, 0.005, -hz, x, 0.005, hz);
+    for (let z = -hz; z <= hz; z++) gridPts.push(-hx, 0.005, z, hx, 0.005, z);
+    const gridGeo = new THREE.BufferGeometry();
+    gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3));
+    boardG.add(new THREE.LineSegments(gridGeo, gridMat));
+    // 난간: 판 둘레 낮은 벽
+    const railH = 0.45, railT = 0.25;
+    for (const [w, d, x, z] of [[hx * 2 + railT * 2, railT, 0, -hz - railT / 2], [hx * 2 + railT * 2, railT, 0, hz + railT / 2], [railT, hz * 2, -hx - railT / 2, 0], [railT, hz * 2, hx + railT / 2, 0]]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, railH, d), [railMat, railMat, railTop, railMat, railMat, railMat]);
+      m.position.set(x, railH / 2, z); m.castShadow = true; m.receiveShadow = true;
+      boardG.add(m);
+    }
+    // 그림자가 판을 다 덮게
+    Object.assign(sun.shadow.camera, { left: -(hx + 4), right: hx + 4, top: hz + 5, bottom: -(hz + 5) });
+    sun.shadow.camera.updateProjectionMatrix();
   }
+  setBoard(10, 7);
 
   // 판의 분위기: 0 = 1단계, 1 = 2단계(자줏빛) — 부드럽게 옮겨 간다
   const C1 = { board: new THREE.Color(LOOK.colors.board), grid: new THREE.Color(LOOK.colors.grid), top: new THREE.Color(LOOK.colors.railTop) };
@@ -98,7 +106,7 @@ export function createScene(canvas, LOOK, opts = {}) {
   }
 
   return {
-    THREE, renderer, scene, camera, layers, view, setView, setMood, resize, unitsPerPx, project,
+    THREE, renderer, scene, camera, layers, view, setView, setMood, setBoard, resize, unitsPerPx, project,
     get aspect() { return aspect; },
     render() { renderer.render(scene, camera); },
     canvas,

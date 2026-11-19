@@ -187,7 +187,7 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
     if (zoneGoal && now >= zoneGoal.until) zoneGoal = null;
     let parry = false, dodge = false;
     // 근접 장판 + 검기(부채). 박치기 줄·파도 예고 원은 아래에서 따로 센다.
-    const seenAreas = [...w.melee.areas, ...w.floorAreas.filter(a => a.kind === 'sword' || a.kind === 'tail' || a.kind === 'shell' || a.kind === 'swing' || a.kind === 'boom')].filter(a => a.born <= now - B.react + 1e-9);   // 부채꼴 장판(검기·꼬리)
+    const seenAreas = [...w.melee.areas, ...w.floorAreas.filter(a => a.kind === 'sword' || a.kind === 'tail' || a.kind === 'shell' || a.kind === 'swing' || a.kind === 'boom' || a.kind === 'fire' || a.kind === 'dive' || a.kind === 'bomb' || a.kind === 'impact' || a.kind === 'pounce')].filter(a => a.born <= now - B.react + 1e-9);   // 부채꼴 장판(검기·꼬리)
     const slamOn = !!w.floor && w.floor.kind === 'slam' && w.floor.born <= now - B.react + 1e-9;
     const slamKey = slamOn ? `slam:${Math.round(w.floor.born * 120)}` : null;
     const slamParry = slamOn && w.floor.color !== 'red' && plan(slamKey, true).parry;
@@ -200,6 +200,15 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
       if (a.kind !== 'charge' || a.born > now - B.react + 1e-9) continue;
       const m = w.enemies.find(e => e.id === a.owner);
       if (m && !m.dead) charges.push({ a, m, key: `charge:${a.owner}:${Math.round(a.born * 120)}` });
+    }
+    // 포격수(siege.js): 폭탄 밭이면 받을 생각일 때 흰 원으로 · 아니면 빈 곳으로, 터지는 포탄이면 떨어질 자리 곁에서 기다렸다가 떨어진 뒤 눈으로 들어간다
+    let siegeGoal = null;
+    const act = w.boss.siege || w.boss.mix ? w.boss.act : null;   // 수호자 + 장면(brain.js)도 같은 장면을 쓴다
+    if (act && moves && act.kind === 'bombs' && act.cells && act.born <= now - B.react + 1e-9) siegeGoal = plan(`area:${act.white.born}`, true).parry ? act.white : act.hole;
+    else if (act && moves && parries && act.kind === 'shells') {
+      const s = act.list.find(q => q.stage !== 'done' && q.born <= now - B.react + 1e-9 && plan(`eye:${q.born}`, true).parry);
+      if (s && s.stage !== 'fly') siegeGoal = s;
+      else if (s && s.T - now <= B0.siege.eyeAhead) { const d = Math.hypot(p.x - s.x, p.z - s.z) || 1, r = R.siege.shells.impact.R + R.player.bodyR + 0.7; siegeGoal = { x: s.x + (p.x - s.x) / d * r, z: s.z + (p.z - s.z) / d * r }; }
     }
     let goal = null;
     if (away && w.stage) {
@@ -336,6 +345,7 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
           if (w.tries && w.tries.tide && w.tries.tide.area && !w.tries.tide.area.hit && j === n) { const ta = w.tries.tide.area; if (qx * ta.side > -R.player.bodyR) danger += 12 + Math.abs(qx) * 2; }
           // 레이저 빔
           for (const m of seenBeams) if (beamAt(w, m, qx, qz, t, B.margin)) { danger += 10 * (n + 1 - j); if (j <= 2) early++; }
+          if (siegeGoal && j === 1) danger += Math.hypot(qx - siegeGoal.x, qz - siegeGoal.z) * B0.siege.pull;   // 포격수: 갈 자리(흰 원 · 빈 곳 · 눈)
           if (away && goal) {   // 일반 방: 갈 곳(보상·문)이 있으면 그리로 — 첫 걸음의 거리로 잰다(멀리 내다보면 지나쳐서 제자리에 선다)
             if (j === 1) danger += Math.hypot(qx - goal.x, qz - goal.z) * B0.room.pull;
           } else if (j === n && away) {   // 아니면 가장 가까운 적과 거리를 지킨다
@@ -345,7 +355,7 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
             if (tgt) { const d = Math.hypot(qx - tgt.x, qz - tgt.z), [k0, k1] = tgt.kind === 'totem' ? B0.room.totem : w.tries && w.tries.on.always && w.weapons.on.length === 1 && w.weapons.on[0] === 'burst' ? B0.room.keepBurst : sword ? B0.sword.room : B0.room.keep; danger += (Math.max(0, k0 - d) + Math.max(0, d - k1)) * 0.6; }
             const edge = Math.min(R.board.hx - Math.abs(qx), R.board.hz - Math.abs(qz));
             if (edge < 1.5) danger += (1.5 - edge) * 1.0;
-          } else if (j === n) {
+          } else if (j === n && !siegeGoal) {
             const db = Math.hypot(qx - w.boss.x, qz - w.boss.z);
             // 패링하는 봇은 돌진·근접 동안 달아나지 않고 붙어서 받는다(사람도 그렇다 — 달아나면 패링 기회가 사라진다)
             const duel = parries && (w.boss.state === 'rush' || w.boss.state === 'melee' || w.boss.state === 'meleeWait' || !!w.melee.combo);
@@ -377,7 +387,13 @@ export function createBot(kind, seed, { picks = ['weapon', 'orb', 'move', 'body'
     if (!moves) { mx = 0; mz = 0; }
     // 걸어서 못 피하는 빨간 파도(또는 받지 않을 흰 파도): 닿기 dodgeLead초 전 구르기
     if (dodges && !dodge && !parry && p.dodge.charges > 0 && !isDodging(w)) {
-      for (const h of waves) if ((h.color === 'red' || !plan(h.key, true).parry) && h.t <= B.dodgeLead) dodge = true;
+      for (const h of waves) if ((h.color === 'red' || !plan(h.key, true).parry) && h.t <= B.dodgeLead) {
+        dodge = true;
+        if (w.boss.siege || w.boss.mix) {   // 포격수의 고리는 잇달아 온다: 고리를 따라 옆으로 굴러 그 자리에서 다음 고리를 맞는다(뒤로 구르면 무적이 끝난 뒤에 닿고, 안으로 구르면 다음 고리가 곧 닿는다)
+          const dx = p.x - w.boss.x, dz = p.z - w.boss.z, d = Math.hypot(dx, dz) || 1, s = (-dz * mx + dx * mz) >= 0 ? 1 : -1;
+          mx = -dz / d * s; mz = dx / d * s;
+        }
+      }
     }
     // 무기 스킬(§4.10): 패링하는 봇은 게이지가 차면 낀 무기 스킬을 돌아가며 쓴다(시범용)
     let skill = null;

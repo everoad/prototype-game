@@ -195,7 +195,7 @@ export function createActors(view, LOOK, opts = {}) {
     const jt = now - st.joltAt;
     if (jt < 0.12) { const k = Math.sin(jt / 0.12 * Math.PI) * st.jolt, a = Math.atan2(b.z - p.z, b.x - p.x); bx += Math.cos(a) * k; bz += Math.sin(a) * k; }
     if (w.tries?.snipe) { const o = warpAt(LOOK.tries.snipe.warp, w.tries.snipe, bx, bz, view.simTime ?? w.time, [0, 0]); bx += o[0]; bz += o[1]; }   // 저격에 맞아 젖혀진다(그림만)
-    boss.position.set(bx, 0, bz);
+    boss.position.set(bx, b.alt ?? 0, bz);   // alt = 떠 있는 높이(나는 용 — sim/dragon2.js)
     boss.rotation.y = -b.face;
     boss.visible = !b.away;   // 일반 방(스테이지)에서는 보스가 자리에 없다
     // 몸짓: 준비 젖힘·움츠림, 돌진 늘어남, 그로기 주저앉음

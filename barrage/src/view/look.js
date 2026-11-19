@@ -8,6 +8,8 @@ export const LOOK = {
     player: '#38d9d0', playerDark: '#0b3f45', hitCore: '#9ffcf6', hitRim: '#062a2e',
     boss: '#3b2450', bossDark: '#24142f', bossEye: '#ff7a3c', bossCrack: '#3ef0e6',
     shadow: '#000000', text: '#e8e6ef', textDim: '#9a96a8',
+    // 상처(검사의 자국 — sim/marks.js · view/marksView.js. 사용자 2026-11-18 "진홍으로 해줘"): 예고의 빨강(red — 피해야 할 것)보다 어두운 진홍과 그 속의 옅은 분홍. 적의 몸에서 뻗는 가는 선(타격 효과)으로만 쓴다.
+    wound: '#d0143c', woundCore: '#ff9db1',
     hp: '#ff4d6a', hpTrail: '#ffc1cb', stagger: '#3ef0e6', hpBack: '#2b2733', playerHp: '#38d9d0', pip: '#38d9d0', pipEmpty: '#3a3644',
     windup: { white: '#ffffff', gold: '#ffc23d', red: '#ff3d47', purple: '#a14fe0' },
     // 패링할 수 없는 것의 밝은 쪽(흰·금 금지): 구슬 쏠 때 번쩍 = 옅은 자주, 레이저 속·끝 = 옅은 빨강
@@ -41,7 +43,7 @@ export const LOOK = {
     storeOrbR: 0.12, storeOrbY: 0.95, storeSpin: 2.6, storeArrive: 0.16, storeArcWidth: 0.08, storeArcGapDeg: 14, thrownScale: 1.3,   // 모아 던지기(§4.11): 모인 구슬(크기·높이·도는 빠르기·빨려 드는 시간), 고리 칸(굵기·틈), 던진 탄 크기
     shieldAlpha: 0.22, shieldEdge: 0.6, itemR: 0.42, itemBlink: 3, itemGlow: 0.35,   // 방패 원판(탄 높이)·테 밝기, 아이템 크기, 사라지기 전 깜빡이는 초, 바닥 빛 밝기
   },
-  names: { ranged: '수호자', dragon: '용', reward: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', shield: '방패 +1', bomb: '폭탄 +1', heal: '체력 회복' },
+  names: { ranged: '수호자', dragon: '용', wyrm: '나는 용', siege: '포격수', reward: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', shield: '방패 +1', bomb: '폭탄 +1', heal: '체력 회복' },
     // 카드(한 판의 뼈대 설계 §6·§7): 이름 · 한 줄 설명 · 갈래 이름 · 정예 배너에 쓰는 몬스터 이름
     card: { missile: '미사일', burst: '산탄', beam: '빔', drone: '드론', lance: '꿰뚫는 던지기', mine: '지뢰', orbit: '오라', sky: '갈고리', swap: '자리 바꾸기', dash: '돌진 베기', cap: '탄 칸 +1', charge: '회피 충전 +1', graze: '스침 모으기' },
     cardLine: { missile: '알아서 쫓아간다', burst: '붙을수록 세다', beam: '한 줄을 꿰뚫는다', drone: '내가 안 보는 적을 쏜다',
@@ -123,9 +125,19 @@ export const LOOK = {
     // marks = 자국의 보이기(sim/marks.js): 적의 머리 위에 떠 있는 짧은 청록 빗금(HUD에 그린다 — 벨 때 몸 위에 번쩍이는 칼자국과 자리 · 모양이 다르다).
     // bossY · mobY = 떠 있는 높이(U), plate = 어두운 바탕판 [가로, 세로, 모서리](px) · plateAlpha · rim(테두리의 불투명도) — 떠 있는 검과 같은 청록이라 바탕판 없이는 묻힌다(상태 표시로 읽히게).
     // len = 빗금의 길이 [다 됐을 때, 갓 남겼을 때](px), w = 굵기(px), tiltDeg = 기운 각, blinkAt = 남은 몫이 이보다 적으면 깜빡인다 · blink = 깜빡임 빠르기.
-    // 사건: leaveSpark = 남을 때의 불티, popBurst · number = 저절로(또 남겨서) 터질 때의 불꽃 · 숫자 크기, spinBurst · spinNumber · spinShake · spinCent = 터뜨리는 회전이 터뜨릴 때, tracer = 옮겨 갈 때 날아가는 선의 굵기.
+    // 사건(색은 진홍 — colors.wound. 맞을 때 · 터질 때의 타격 효과는 아래 cutFx): number = 저절로(또 남겨서) 터질 때의 숫자 크기, spinNumber · spinShake · spinCent = 터뜨리는 회전이 터뜨릴 때, tracer = 옮겨 갈 때 날아가는 선의 굵기.
     marks: { bossY: 3.6, mobY: 2.6, plate: [34, 24, 7], plateAlpha: 0.88, rim: 0.7, len: [6, 22], w: 4, tiltDeg: -58, blinkAt: 0.25, blink: 18,
-      leaveSpark: 0.5, popBurst: 0.7, number: 20, spinBurst: 1.7, spinNumber: 32, spinShake: [5, 0.1], spinCent: 500, tracer: 1.1 },
+      number: 20, spinNumber: 32, spinShake: [5, 0.1], spinCent: 500, tracer: 1.1,
+      // cutFx = 자국 난 적이 맞을 때의 타격 효과(view/marksView.js — 사용자 2026-11-18 "베여서 촥 퍼지는 느낌인데 진짜 피 퍼지는 느낌보다는 보통 타격감 표현하는 방식으로"):
+      // 번쩍이는 베임 한 줄(flash) + 그 줄을 따라 촥 퍼졌다 사라지는 가는 줄기(streak). 떨어지는 방울도 바닥의 얼룩도 없다.
+      // reach = 칼바람이 맞힌 자리가 이 거리 안이면 그 적으로 친다 · gap = 잔 타격의 효과 사이 초 · y = 그리는 높이 · core = 베임의 속 줄 굵기 몫 · coreLen = 속 줄의 길이 몫 · coreShare = 줄기 가운데 밝은 것의 몫.
+      // 묶음(hit 잔 타격 · cut 스킬로 벤 때 · pop 자국이 저절로 터질 때 · burst 터뜨리는 회전이 터뜨릴 때): flash = 베임 [처음 길이, 끝 길이, 굵기, 초, 번쩍일 때의 굵기 배율] · n = 줄기 수 ·
+      // len = 줄기의 길이 [min, max] · dist = 뻗어 나가는 거리 [min, max] · w = 굵기 · sec = 초 · coneDeg = 퍼지는 각 · both = 1이면 줄을 따라 양쪽으로 · cross = 1이면 베임이 엇갈려 둘.
+      cutFx: { reach: 0.6, gap: 0.06, y: 0.9, core: 0.35, coreLen: 0.7, coreShare: 0.3,
+        hit: { flash: [0.4, 1.1, 0.09, 0.12, 2.2], n: 3, len: [0.35, 0.8], dist: [0.8, 1.5], w: 0.05, sec: 0.16, coneDeg: 55, both: 0, cross: 0 },
+        cut: { flash: [1.0, 3.2, 0.22, 0.2, 2.8], n: 10, len: [0.7, 1.7], dist: [1.6, 3.2], w: 0.08, sec: 0.24, coneDeg: 55, both: 1, cross: 0 },
+        pop: { flash: [0.5, 1.5, 0.11, 0.14, 2.4], n: 8, len: [0.5, 1.0], dist: [1.0, 1.9], w: 0.06, sec: 0.2, coneDeg: 360, both: 0, cross: 0 },
+        burst: { flash: [1.2, 3.6, 0.24, 0.22, 3.0], n: 18, len: [0.8, 1.9], dist: [2.0, 3.8], w: 0.09, sec: 0.28, coneDeg: 360, both: 0, cross: 1 } } },
     forms: { chain: { cent: 220 }, deep: { cent: -400, flashW: 2.4, stop: 0.06, shake: [8, 0.16], punch: [0.07, 0.24], number: 36, jolt: 0.4 } },
     // gap = 틈(view/gap.js — 2026-11-18 사용자: "돌진한 뒤에 보스 패턴을 보고 피할지 연계를 할지 결정을 하는 순간이 필요하다"): 일섬으로 건너편에 서면 다음 키를 누를 때까지 판이 slow배로 흐른다(가장 길게 max초).
     // near = 몸 표면까지 이 거리 안에 살아 있는 적이 있을 때만 연다, labelY·labelPx = 내 머리 위 글자의 높이·크기, labels = 예고의 색에 따라 읽어 주는 말(없음 · 빨강 · 흰/금). 그동안 검의 밝기는 swords.quiet배.
@@ -231,7 +243,34 @@ export const LOOK = {
     wingAt: [0.25, 1.55, 0.8], wing: [1.7, 0.06, 2.5], wingFold: 1.2, wingFoldSpan: 0.55, wingUp: 1.55, wingDown: -0.4,
     tailAt: [-1.45, 0.95], tailSegs: 4, tailSeg: [1.0, 0.45, 0.45], tailTaper: 0.78, tailCurl: 0.32, tailSwing: 0.45,
     legX: 0.9, legZ: 0.75, leg: [0.4, 0.95, 0.4], walkRate: 2.4, walkSwing: 0.45, pawLift: 0.9,
-    crouch: 0.35, down: 0.5, follow: 0.3, swingFollow: 0.6,
+    crouch: 0.35, down: 0.5, follow: 0.3, swingFollow: 0.6, tuck: 1.1,   // tuck = 떠 있을 때 다리를 뒤로 접는 각(라디안)
+  },
+  // 나는 용(sim/dragon2.js)의 높이를 쓰는 연출(view/wyrmView.js). 판정은 바닥의 원과 시각이 정하고, 여기는 보이는 것만이다.
+  // mouthY = 불 탄이 나오는 높이(몸 위) · breathDrop = 그 탄이 탄 높이로 내려앉는 초.
+  // shadow = 발밑 그림자(r 반지름, alpha, shrink = 높이 1 U마다 줄어드는 몫, min). column = 불줄을 긋는 불기둥(입 mouthAt 앞 · mouthY 위에서 back만큼 뒤의 땅으로, 굵기 w, 속 coreShare, 떨림 flicker · rate).
+  // boom = 원이 터질 때 솟는 불(r = 원 반지름의 몫, h 높이, sec, sparks 불티 수 · sparkUp 솟는 빠르기), land = 내려앉을 때 둘레의 불길(n개가 반지름 r에, 굵기 w), takeoff = 떠오를 때의 흙먼지.
+  wyrm: {
+    mouthY: 2.1, breathDrop: 0.32,
+    shadow: { r: 2.3, alpha: 0.5, shrink: 0.07, min: 0.45 },
+    column: { mouthAt: 2.5, mouthY: 1.6, back: 0.8, w: 0.9, coreShare: 0.4, core: '#ffd9a8', alpha: 0.75, flicker: 0.25, rate: 47 },
+    boom: { r: 0.85, h: 4.2, sec: 0.42, sparks: 6, sparkUp: 9 },
+    land: { n: 10, r: 2.4, w: 0.7, h: 2.6, sec: 0.5, sparks: 22, sparkUp: 7 },
+    takeoff: { sparks: 14, up: 4 },
+  },
+  // 포격수(sim/siege.js)의 높이를 쓰는 연출(view/siegeView.js). 판정은 바닥의 원 · 탄 · 시각이 정하고, 여기는 보이는 것만이다.
+  // shadow = 뛰어오른 몸의 발밑 그림자(나는 용과 같은 뜻). barrel = 몸 둘레의 포신(길이 len · 굵기 w · h, 몸 가운데에서 at, 높이 y).
+  // shell = 날아가는 포탄(반지름 r, 속 core 몫, 쏘는 높이 from에서 alt만큼 솟았다 떨어진다, 바닥의 작은 그림자 shadowR · shadowAlpha — 높이 1 U마다 shrink만큼 줄어든다).
+  // boom = 폭탄 밭의 원이 터질 때 솟는 불(r = 원 반지름의 몫, h 높이, sec, sparkEvery번째 원마다 불티 sparks개 · sparkUp 솟는 빠르기, whiteH = 흰 원의 높이),
+  // land = 포탄이 떨어진 자리(밑 반지름 r, 높이 h, sec, 불꽃 burst, 불티), burst = 큰 탄이 다시 터질 때의 불꽃 크기, slam = 덮친 자리 둘레의 불길(n개가 반지름 r에, 굵기 w), leap = 뛰어오를 때의 흙먼지.
+  siege: {
+    names: { walls: '포격전', pounce: '덮치기', chain: '색 순서 고리', whirl: '회오리', shells: '터지는 포탄', bombs: '폭탄 밭' },   // 장면 이름(HUD의 단계 옆)
+    shadow: { r: 1.9, alpha: 0.5, shrink: 0.09, min: 0.45 },
+    barrel: { len: 1.0, w: 0.36, h: 0.36, at: 1.3, y: 0.95, color: '#6a5a86' },
+    shell: { r: 0.6, core: 0.5, from: 1.8, alt: 6, shadowR: 0.75, shadowAlpha: 0.5, shrink: 0.06 },
+    boom: { r: 0.8, h: 3.2, sec: 0.42, sparkEvery: 3, sparks: 3, sparkUp: 8, whiteH: 4.8 },
+    land: { r: 1.0, h: 3.2, sec: 0.42, burst: 1.6, sparks: 10, sparkUp: 7 }, burst: 0.8,
+    slam: { n: 10, r: 2.2, w: 0.7, h: 2.8, sec: 0.5, sparks: 22, sparkUp: 7 },
+    leap: { sparks: 12, up: 4 },
   },
   // 둘 다 담는, 가만히 있는 카메라(§3). yaw −45° = 시작 자리에서 플레이어 왼쪽 아래·보스 오른쪽 위.
   camera: {
@@ -240,6 +279,8 @@ export const LOOK = {
     posRate: 8, zoomOutRate: 6, zoomInRate: 2,
     deadPos: 1.0, deadW: 1.5, zoomInHold: 1.0,   // 비집는 동안 가만히: 작은 차이 무시, 당기기는 1초 머문 뒤
     edgeMargin: 2, shakeVerticalRatio: 0.4,
+    // wide = 큰 판(나는 용 — sim/dragon2.js · 포격수 — sim/siege.js)에서 바꿔 쓰는 값: 더 멀리 빠지고, 좁히기도 빨리(사용자: 카메라도 줌인 줌아웃 쫙쫙). altMargin = 뜬 높이 1 U마다 보스 여백에 더하는 U, itemReach = 내게서 이 거리 안의 아이템만 화면에 담는다
+    wide: { minW: 22, maxW: 62, zoomOutRate: 7, zoomInRate: 5, zoomInHold: 0.2, deadW: 1.0, altMargin: 0.8, itemReach: 12 },
   },
   // 손맛(§6) — proto-game 값에서 시작. 정지·느려짐은 게임 시간, 흔들림·확대·섬광은 실제 시간.
   feel: {
@@ -283,6 +324,10 @@ export const LOOK = {
     slamParry: { jolt: 0.2, shakePx: 10, shakeSec: 0.16 },   // 받아쳐진 돌진: 크게 튕기면 경직처럼 보여 줄였다(사용자 2026-11-17)
     slamWall: { shakePx: 12, shakeSec: 0.22, dust: 1.8, dustLine: 5, dustLineSize: 0.9 },   // dustLine: 지나간 길 먼지 수
     wave: { shakePx: 6, shakeSec: 0.15, dust: 1.4 },
+    // 나는 용: [흔들림 px, 초] — takeoff 떠오름 · boom 불 원 하나(여럿이 이어져 떤다, 소리는 boomGap초에 한 번) · land 내려앉음(+ punch 순간 확대 [몫, 초])
+    wyrm: { takeoff: [8, 0.25], boom: [5, 0.12], boomGap: 0.09, land: [22, 0.35], punch: [0.06, 0.3] },
+    // 포격수: [흔들림 px, 초] — land 도약에서 내려앉음 · blast 폭탄 밭이 터짐(+ blastPunch 순간 확대 [몫, 초]) · shell 포탄이 떨어짐 · slam 덮쳐 내려앉음(+ slamPunch). burstGap = 큰 탄이 다시 터지는 소리 사이 초
+    siege: { land: [9, 0.2], blast: [20, 0.4], blastPunch: [0.05, 0.3], shell: [7, 0.16], burstGap: 0.08, slam: [22, 0.35], slamPunch: [0.06, 0.3] },
     laser: { shakePx: 4, shakeSec: 0.8 },
     phase: { shakePx: 14, shakeSec: 0.5, stop: 0.12, punch: 0.05, punchSec: 0.4, burst: 4, edgeSec: 0.9, bannerSec: 1.4 },   // 2단계 넘어감: 정지·당김·자주 파편·가장자리·큰 글자
     afterimage: { count: 3, fade: 0.22, alpha: 0.35, alphaNear: 0.6 },

@@ -5,6 +5,9 @@
 //       끼어듦: stun(반격 기회·자동 반격) · groggy → wake(0.4초) → 숨 0.6초 이상 · phaseChange · dead
 // 박자(§5.5): 앞 패턴이 끝나기 overlap초 전부터 숨을 재고, 그 뒤 다음 준비 — 앞 run은 runs 목록에서 끝까지 돈다.
 // 움직임(§5.2): 쏘는 동안에도 플레이어 둘레를 돌며 거리를 맞춘다(준비 중 절반, 근접·장판·멈춤 중엔 안 움직임).
+// 수호자 + 장면(boss=ranged2 — initMix, 수치 RULES.mix): 여는 순서가 끝나면 every초마다 장면(siege.js) 하나가 혼자 끼어든다 —
+//   idle → sceneWait(앞 패턴의 꼬리 · 차선이 끝나길 기다림) → 장면(siege.js의 상태들) → idle(숨) → 여느 싸움. 그로기 · 단계 넘어감은 하던 장면을 거둔다(차례는 잇는다).
+//   장면을 하는 동안 장판 시계는 멈추고 바탕 탄막은 쉰다(layers.js). 지금의 수호자(b.mix가 없다)는 한 틱도 바뀌지 않는다.
 // 빨간 예산(§5.6): 빨간 빠른 공격(빨간 박치기·파도·검기, 레이저, 빨간 내려찍기)은 어느 redWindow초 안에도 redMax번까지 —
 //   고를 때 타격 예정 시각을 어림해 redTimes에 적고, 넘치면 빨강 → 흰(장판) · 다른 패턴(레이저) · 콤보 A(콤보 B)로 바꾼다.
 import { emit } from './events.js';
@@ -15,6 +18,7 @@ import { PATTERNS, startPattern, windupColor } from './patterns.js';
 import { startRush, updateRush, startCombo, updateCombo } from './melee.js';
 import { startSlam, startWave, startSword, updateFloor } from './floor.js';
 import { dist, between, laserAt, setState, cancelAll, dropRuns, redOk, planRed, settleRed, budgetCombo, updateRuns, breathe as breatheCore, interrupts, startMelee } from './bossCore.js';
+import { initScenes, startScene, runScene, dropScene, updateFades } from './siege.js';
 
 export function initBrain(w) {
   const b = w.boss, B = w.rules.brain;
@@ -25,6 +29,30 @@ export function initBrain(w) {
   });
   if (w.opts.phase === 2) { b.hp = Math.min(b.hp, b.maxHp * B.phaseAt); enterPhase2(w, false); }
   if (w.opts.pattern) b.opening = B.opening.length;
+}
+
+// 수호자 + 장면: 수호자의 두뇌에 장면의 칸을 더한다. scene = 하는(방금 한) 장면의 이름, sceneAt = 이때부터 다음 장면을 할 수 있다, sceneFrom = 장면을 시작한 때.
+export const mixRules = r => ({ ...r, board: r.mix.board, start: r.mix.start });   // 판 크기와 시작 자리만 바꾼 것(나머지는 같은 값을 같이 쓴다)
+export function initMix(w) {
+  const b = w.boss;
+  b.hp = b.maxHp = w.rules.mix.hp;
+  initBrain(w);
+  initScenes(b);
+  Object.assign(b, { mix: true, scene: null, sceneAt: 0, sceneFrom: 0, chase: false });   // chase = 다음 고르기는 다가오기(멀리 물러났던 장면 뒤)
+}
+const sceneDue = w => { const b = w.boss; return b.opening >= w.rules.brain.opening.length && !w.opts.pattern && w.time >= b.sceneAt; };
+function beginScene(w) {
+  const b = w.boss;
+  if (!b.queue.length) b.queue.push(...w.rules.mix.cycle);
+  b.scene = b.queue.shift(); b.sceneFrom = w.time;
+  startScene(w, b.scene);
+}
+// 장면이 끝났다(dropped = 그로기 · 단계 넘어감이 거뒀다): 다음 장면은 every초 뒤부터. 제대로 끝난 장면만큼 장판 시계를 늦춘다(장면 동안은 멈춘 셈).
+function endScene(w, dropped) {
+  const b = w.boss;
+  b.sceneAt = w.time + w.rules.mix.every[b.phase - 1];
+  if (!dropped) { b.floorAt += w.time - b.sceneFrom; b.chase = w.rules.mix.rushAfter.includes(b.scene); }
+  emit(w, 'sceneEnd', { name: b.scene, dropped });
 }
 
 function enterPhase2(w, announce = true) {
@@ -55,6 +83,7 @@ export function pickNext(w) {
     if (slot >= 0 && slot < B.intro2.length) { b.introduced.push(B.intro2[slot]); return { pattern: B.intro2[slot], sparse: true }; }
   }
   const combo = () => (w.rng.next() < B.comboB ? 'B' : 'A');
+  if (b.chase) { b.chase = false; if (d >= B.near) return { approach: combo() }; }   // 수호자 + 장면: 멀리 물러났던 장면(포격전) 뒤에는 곧바로 달려든다
   const color = kind => { const r = w.rng.next(), [wh, rd] = B.colors; return r < wh ? 'white' : r < wh + rd ? 'red' : kind === 'slam' ? 'gold' : 'white'; };
   const pickOf = k => (k === 'approach' ? { approach: combo() } : { [k]: color(k) });
   const comboLast = b.last === 'rush' || b.last === 'melee';   // 콤보 뒤 콤보도 연달아로 본다
@@ -140,7 +169,7 @@ function breathe(w, mul = 1) {
 
 // 둘레 돌기: 접선 orbit U/s + 반지름 쪽 radial U/s까지(keep 거리). mul = 준비 중 절반.
 // 난간에 막혀(또는 접선과 물러서기가 난간을 따라 서로 지워져) 돌기 빠르기의 절반도 못 가면: 먼저 물러서기를 접고, 그래도 막히면 방향을 바꾼다(flipCooldown초에 한 번까지).
-const MOVING = new Set(['idle', 'windup', 'pattern', 'wake', 'floorWait', 'patternWait']);
+const MOVING = new Set(['idle', 'windup', 'pattern', 'wake', 'floorWait', 'patternWait', 'sceneWait']);
 function moveBoss(w, mul = 1) {
   const b = w.boss, B = w.rules.brain, R = w.rules, p = w.player, dt = R.dt * mul;
   if (w.time >= b.flipAt) { b.orbitDir = -b.orbitDir; b.flipAt = w.time + between(w, B.flip); }
@@ -171,10 +200,19 @@ function startHop(w) {
 export function thinkBoss(w) {
   const b = w.boss, B = w.rules.brain;
   if (!w.opts.ai || w.result) return;
-  if (b.dead) { setState(w, 'dead'); return; }
+  if (b.dead) { if (b.mix) dropScene(w); setState(w, 'dead'); return; }
   b.farFor = dist(w) > B.far ? b.farFor + w.rules.dt : 0;
-  if (interrupts(w, enterPhase2)) return;   // 단계 넘어감 → 그로기 → 경직 → 깨어남(bossCore)
+  if (b.mix) updateFades(w);
+  if (!b.lift && interrupts(w, enterPhase2)) {   // 단계 넘어감 → 그로기 → 경직 → 깨어남(bossCore). 장면의 도약 중(lift)에는 내려앉은 뒤에 끼어든다
+    if (b.act) { dropScene(w); endScene(w, true); }
+    return;
+  }
   updateRuns(w);
+  if (b.act) {   // 장면을 하는 동안(수호자 + 장면): 장면의 한 틱 — 끝나면 siege.js의 rest가 숨을 재고 idle로 돌려놓는다
+    if (!runScene(w)) dropScene(w);
+    if (!b.act) endScene(w, false);
+    return;
+  }
   if (MOVING.has(b.state)) moveBoss(w, b.state === 'windup' ? B.windupMoveMul : 1);
   switch (b.state) {
     case 'wake':
@@ -182,7 +220,13 @@ export function thinkBoss(w) {
       return;
     case 'idle':
       // 뛰는 동안은 쏘지 않으니 앞 패턴 꼬리가 다 끝났을 때만 뛴다(§5.2)
-      if (w.time >= b.breathUntil) { if (!b.runs.length && w.rng.next() < B.hop.chance) startHop(w); else startNext(w); }
+      if (w.time >= b.breathUntil) {
+        if (b.mix && sceneDue(w)) setState(w, 'sceneWait');
+        else if (!b.runs.length && w.rng.next() < B.hop.chance) startHop(w); else startNext(w);
+      }
+      return;
+    case 'sceneWait':   // 장면은 혼자 나온다: 앞 패턴의 꼬리와 차선이 다 끝난 뒤에
+      if (!b.runs.length && !w.lanes.length) beginScene(w);
       return;
     case 'hop': {
       const R = w.rules;

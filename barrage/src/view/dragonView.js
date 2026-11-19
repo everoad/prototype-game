@@ -58,6 +58,7 @@ export function createDragonView(view, LOOK, bodyMat) {
     lastX = b.x; lastZ = b.z;
     const low = cur.crouch * G.crouch + cur.down * G.down;
     body.position.y = -low;
+    body.rotation.z = -cur.pitch;   // 나는 용: 떠오를 때 머리를 들고, 내리꽂을 때 숙인다
     torso.rotation.z = -cur.down * 0.08;
     neck.rotation.z = G.neckPitch + cur.headLift * G.lift - cur.down * (G.neckPitch + 0.55);
     neck.rotation.y = neckYaw(cur);
@@ -72,7 +73,7 @@ export function createDragonView(view, LOOK, bodyMat) {
     for (const seg of tail) seg.rotation.y = cur.tail >= 0 ? cur.tail * G.tailCurl : cur.tail * G.tailSwing;
     for (const L of legs) {
       const swing = Math.sin(walk + L.phase) * G.walkSwing * (1 - cur.down);
-      L.hip.rotation.z = swing + (L.front ? cur.paws * G.pawLift : 0);
+      L.hip.rotation.z = swing + (L.front ? cur.paws * G.pawLift : 0) - cur.tuck * G.tuck;   // 떠 있을 때는 다리를 뒤로 접는다
       L.hip.rotation.x = cur.down * 0.7 * Math.sign(L.hip.position.z);
       L.hip.scale.y = 1 - cur.crouch * 0.3;
     }

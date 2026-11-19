@@ -5,11 +5,12 @@ import { emit } from './events.js';
 import { spawnBullet } from './bullets.js';
 import { bossGroggy } from './boss.js';
 
-const QUIET = new Set(['stun', 'groggy', 'phaseChange', 'dead', 'rush', 'melee', 'wake', 'hop']);
+const QUIET = new Set(['stun', 'groggy', 'phaseChange', 'dead', 'rush', 'melee', 'wake', 'hop', 'sceneWait']);   // sceneWait = 장면을 앞두고 앞 패턴의 꼬리를 기다림(수호자 + 장면 — brain.js)
 export function layersOn(w) {
   const b = w.boss;
   return !!w.opts.ai && !w.opts.lab && !b.dead && !w.result && !QUIET.has(b.state) && !bossGroggy(w) && w.time >= (b.stunUntil ?? -1) && w.time >= (b.calmUntil ?? -1)
-    && !(w.beams && w.beams.length);   // 레이저(조준~쓸기) 동안은 바탕 탄막·구슬도 쉰다
+    && !(w.beams && w.beams.length)   // 레이저(조준~쓸기) 동안은 바탕 탄막·구슬도 쉰다
+    && !b.act;   // 장면(siege.js)은 혼자 나온다 — 수호자 + 장면 판에서만 있다
 }
 
 function fire(w, src, x, z, a, speed) {

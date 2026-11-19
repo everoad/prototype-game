@@ -5,6 +5,7 @@ import { K } from '../sim/rules.js';
 import { reach as exitDist } from '../sim/beams.js';   // 판 안에서 (x, z)에서 angle 쪽으로 나가는 곳까지
 
 const D = Math.PI / 180;
+const FRAMED = new Set(['fire', 'dive', 'bomb', 'impact', 'eye', 'pounce']);   // 화면에 꼭 담는 예고 원(큰 판의 보스들)
 export function screenOf(x, z, yawDeg, pitchDeg) {
   const y = yawDeg * D, t = pitchDeg * D;
   return { sx: x * Math.cos(y) - z * Math.sin(y), sy: -Math.sin(t) * (x * Math.sin(y) + z * Math.cos(y)) };
@@ -18,7 +19,7 @@ export function floorOf(sx, sy, yawDeg, pitchDeg) {
 export function framingPoints(w, LOOK) {
   const C = LOOK.camera, p = w.player, b = w.boss, R = w.rules;
   if (b.away) return roomPoints(w, LOOK);
-  const out = [{ x: p.x, z: p.z, r: C.playerMargin }, { x: b.x, z: b.z, r: R.boss.r + C.bossMargin }];
+  const out = [{ x: p.x, z: p.z, r: C.playerMargin }, { x: b.x, z: b.z, r: R.boss.r + C.bossMargin + (b.alt ?? 0) * (C.altMargin ?? 0) }];   // 떠 있는 용(dragon2): 뜬 만큼 여백을 넓혀 몸이 화면에 든다
   for (const l of w.lanes) {
     if (l.kind !== K.RED && l.kind !== K.GOLD) continue;
     const d = exitDist(R.board, l.x, l.z, l.angle);
@@ -30,7 +31,8 @@ export function framingPoints(w, LOOK) {
   }
   // 박치기 줄 끝(판 끝까지 깔림), 레이저 빔 끝(판 안으로 자름)
   for (const a of w.floorAreas ?? []) if (a.shape === 'lane') out.push({ x: a.x + Math.cos(a.face) * a.len, z: a.z + Math.sin(a.face) * a.len, r: C.laneMargin });
-  for (const it of w.items ?? []) out.push({ x: it.x, z: it.z, r: C.laneMargin });   // 아이템(§4.9)이 화면 밖에 생기지 않게
+  for (const it of w.items ?? []) if (C.itemReach == null || Math.hypot(it.x - p.x, it.z - p.z) <= C.itemReach) out.push({ x: it.x, z: it.z, r: C.laneMargin });   // 아이템(§4.9)이 화면 밖에 생기지 않게 — 큰 판에서는 내 곁의 것만(판 끝의 아이템 하나가 카메라를 끝까지 빼지 않게)
+  for (const a of w.floorAreas ?? []) if (FRAMED.has(a.kind)) out.push({ x: a.x, z: a.z, r: a.R + C.laneMargin });   // 나는 용의 불줄 · 급강하 원, 포격수의 폭탄 밭 · 포탄 · 덮칠 자리(예고가 다 보이게)
   for (const m of w.beams ?? []) { const d = exitDist(R.board, m.x, m.z, m.angle); out.push({ x: m.x + Math.cos(m.angle) * d, z: m.z + Math.sin(m.angle) * d, r: C.laneMargin }); }
   return out;
 }

@@ -10,7 +10,7 @@ export function createFx(view, LOOK) {
   const mk = layer => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#fff', depthTest: false, depthWrite: false }), N); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); layer.add(m); return m; };
   const air = mk(L.fx), dirt = mk(L.floorFx);
   dirt.material.depthTest = true;
-  const named = { white: C.white, gold: C.gold, red: C.red, cyan: C.cyan, purple: C.normal, orange: '#ff8a3c', grey: '#8e8a99', item: C.item, heal: C.heal };
+  const named = { white: C.white, gold: C.gold, red: C.red, cyan: C.cyan, purple: C.normal, orange: '#ff8a3c', grey: '#8e8a99', item: C.item, heal: C.heal, wound: C.wound };
   const bh = () => LOOK.sizes.bh;
   let rnd = 12345;   // 연출 전용 난수(sim 난수와 따로)
   const r01 = () => { rnd = (rnd * 1103515245 + 12345) >>> 0; return (rnd >>> 8) / 16777216; };
@@ -67,6 +67,8 @@ export function createFx(view, LOOK) {
       for (let k = 0; k < n; k++) { const a = r01() * Math.PI * 2, d = Math.sqrt(r01()) * rr; emit(x + Math.cos(a) * d, bh(), z + Math.sin(a) * d, 0, 1.5 + r01(), 0, 0.3 + r01() * 0.2, 0.07, 'purple'); }
     },
     // 먼지: 바닥 층, 알갱이마다 거리·빠르기·크기가 달라 고리가 생기지 않는다
+    // 위로 솟는 불티(나는 용의 불 — 높이를 쓰는 연출): n개가 up의 빠르기로 올라가며 조금 퍼진다
+    rise(x, z, color, n = 8, up = 8) { for (let k = 0; k < n; k++) { const a = r01() * Math.PI * 2, s = 1 + r01() * 2.5; emit(x + Math.cos(a) * 0.5, 0.2, z + Math.sin(a) * 0.5, Math.cos(a) * s, up * (0.5 + r01() * 0.7), Math.sin(a) * s, 0.3 + r01() * 0.35, 0.09 + r01() * 0.08, color); } },
     dust(x, z, scale = 1) {
       for (let k = 0; k < Math.round(16 * scale); k++) { const a = r01() * Math.PI * 2, d = (0.6 + r01() * 1.4) * scale, s = (1 + r01() * 3) * scale; emit(x + Math.cos(a) * d, 0.05, z + Math.sin(a) * d, Math.cos(a) * s, 0.4 * r01(), Math.sin(a) * s, 0.35 + r01() * 0.3, 0.09 + r01() * 0.08, 'grey', true); }
     },

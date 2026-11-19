@@ -4,6 +4,7 @@ import { framingPoints, frameTarget, stepFrame, floorOf } from './camMath.js';
 
 export function createCamera(view, LOOK) {
   const C = LOOK.camera;
+  const wideLook = { ...LOOK, camera: { ...LOOK.camera, ...(LOOK.camera.wide ?? {}) } };   // 큰 판(나는 용): 더 멀리 빠지고 빨리 당긴다
   let state = null, pitchDeg = C.pitches[0];
   const fx = { shakePx: 0, shakeUntil: 0, shakeDur: 1, kickX: 0, kickY: 0, kickUntil: 0, kickDur: 1, punch: 0, punchAt: -1, punchDur: 1, hold: 0, holdAt: -1e9, holdUntil: -1e9, now: 0 };
 
@@ -12,10 +13,10 @@ export function createCamera(view, LOOK) {
   // now = 실제 시간(초), dtReal = 실제 흐른 시간
   function update(w, dtReal, now) {
     fx.now = now;
-    const o = { ...opts(), board: w.rules.board };
+    const L2 = w.boss.wyrm || w.boss.siege || w.boss.mix ? wideLook : LOOK, o = { ...opts(), LOOK: L2, board: w.rules.board };
     if (!(o.aspect > 0 && Number.isFinite(o.aspect))) return;   // 숨은 창(높이 0): 비율이 망가진 화면은 건너뛴다
     if (state && !Number.isFinite(state.sx + state.sy + state.width)) state = null;   // 한 번 망가진 틀은 다시 잡는다(NaN에 갇히지 않게)
-    const pts = framingPoints(w, LOOK), ideal = frameTarget(pts, o);
+    const pts = framingPoints(w, L2), ideal = frameTarget(pts, o);
     state = state ? stepFrame(state, ideal, pts, dtReal, o) : { ...ideal, narrowT: 0 };
     const f = floorOf(state.sx, state.sy, C.yawDeg, pitchDeg);
     // 흔들림·반동·순간 확대

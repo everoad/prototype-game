@@ -14,6 +14,7 @@ export function createBullets(cap) {
     x: f(), z: f(), px: f(), pz: f(), vx: f(), vz: f(), r: f(), born: f(), holdUntil: f(),
     kind: u(), src: u(), alive: u(), perfect: u(), grazed: u(), gold: u(),
     thrown: u(), last: u(), mul: f(), stag: f(),   // 모아 던진 탄(§4.11): 배율·무력화·마지막 발
+    ttl: f(),   // 수명(이 시각이 되면 사라진다 — 0 = 없음. 나는 용의 불씨, dragon2.js)
   };
 }
 
@@ -35,7 +36,7 @@ export function spawnBullet(w, kind, x, z, angle, speed, src = 0) {
   b.x[i] = b.px[i] = x; b.z[i] = b.pz[i] = z;
   b.vx[i] = Math.cos(angle) * speed; b.vz[i] = Math.sin(angle) * speed;
   b.r[i] = R.r[kind]; b.kind[i] = kind; b.src[i] = src;
-  b.born[i] = w.time; b.holdUntil[i] = hold > 0 ? w.time + hold : 0; b.perfect[i] = 0; b.grazed[i] = 0; b.gold[i] = 0; b.thrown[i] = 0; b.last[i] = 0; b.mul[i] = 1; b.stag[i] = 0;
+  b.born[i] = w.time; b.holdUntil[i] = hold > 0 ? w.time + hold : 0; b.perfect[i] = 0; b.grazed[i] = 0; b.gold[i] = 0; b.thrown[i] = 0; b.last[i] = 0; b.mul[i] = 1; b.stag[i] = 0; b.ttl[i] = 0;
   b.alive[i] = 1; b.live++;
   return i;
 }
@@ -57,6 +58,7 @@ export function moveBullets(w) {
   for (let i = 0; i < b.cap; i++) {
     if (!b.alive[i]) continue;
     b.px[i] = b.x[i]; b.pz[i] = b.z[i];
+    if (b.ttl[i] > 0 && w.time >= b.ttl[i]) { killBullet(w, i); continue; }   // 수명이 다한 탄(불씨)
     if (w.time < b.holdUntil[i]) continue;
     const LL = w.tries ? w.tries.lanceLast : null;   // 꿰뚫는 던지기(실험): 던진 탄은 놓일 때 한 번만 겨누고 곧게 난다
     if (b.kind[i] === K.REFLECT && LL && b.thrown[i]) {

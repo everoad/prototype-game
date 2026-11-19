@@ -22,7 +22,7 @@ function shoot(w, run, kind, a, speed, from = null) {
 }
 
 // 차선: 조준이면 발사 lockBefore 전까지 플레이어를 따라가고 그 뒤 고정. warn이 끝나면 그 각도로 쏜다.
-function addLane(w, run, kind, angle, aimed, speed) {
+export function addLane(w, run, kind, angle, aimed, speed) {
   const L = w.rules.lanes, m = w.rules.patterns.muzzle, o = w.boss.mouth;
   const lane = { x: o ? o.x : w.boss.x, z: o ? o.z : w.boss.z, angle, aimed, warn: kind === K.RED ? L.redWarn : L.goldWarn, lockBefore: L.lockBefore, born: w.time, kind, speed, src: run.id, off: o ? 0 : m };
   w.lanes.push(lane);

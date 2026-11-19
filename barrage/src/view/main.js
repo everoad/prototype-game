@@ -14,6 +14,9 @@ import { createMobsView } from './mobsView.js';
 import { createTriesView } from './triesView.js';
 import { createSwordView } from './swordView.js';
 import { createSwordsView } from './swordsView.js';
+import { createMarksView } from './marksView.js';
+import { createWyrmView } from './wyrmView.js';
+import { createSiegeView } from './siegeView.js';
 import { labHand } from '../sim/labs.js';
 import { viewTime } from './warp.js';
 import { restartRoom, stageDef } from '../sim/stage.js';
@@ -44,6 +47,7 @@ const world = createWorld(worldOptions(q));   // 모아 던지기가 기본(?sto
 document.getElementById('wait')?.remove();
 const canvas = document.getElementById('view'), hudCanvas = document.getElementById('hud');
 const view = createScene(canvas, LOOK, { preserveDrawingBuffer: recording });
+view.setBoard(world.rules.board.hx, world.rules.board.hz);   // 판 크기는 판마다(나는 용의 판은 넓다)
 const actors = createActors(view, LOOK, { ring: q.get('ring') !== '0', boss: (world.stage ? stageDef(RULES, world.stage.id).boss : world.boss.kind) === 'dragon' ? 'dragon' : 'ranged', storeCap: world.opts.store ? RULES.store.cap : 0, char: world.opts.char });
 const bullets = createBulletsView(view, LOOK, RULES.bullets.cap);
 const weaponsView = createWeaponsView(view, LOOK, RULES);
@@ -54,6 +58,9 @@ const hud = createHud(hudCanvas, LOOK);
 const camera = createCamera(view, LOOK);
 const timeFx = createTimeFx(LOOK);
 const fx = createFx(view, LOOK);
+const marksView = createMarksView(view, LOOK);   // 검사의 자국: 자국 난 적이 맞을 때 · 자국이 터질 때의 타격 효과(베여서 촥 퍼지는 선)
+const wyrmView = world.boss.wyrm ? createWyrmView(view, LOOK, fx) : null;   // 나는 용: 그림자 · 불기둥 · 솟는 불(높이를 쓰는 연출)
+const siegeView = world.boss.siege || world.boss.mix ? createSiegeView(view, LOOK, fx, actors) : null;   // 포격수: 포신 · 그림자 · 날아가는 포탄 · 솟는 불 — 수호자 + 새 패턴(boss.mix)도 장면의 연출을 같이 쓴다(포신은 없다)
 const swordsView = createSwordsView(view, LOOK, fx);   // 검사의 무기(이기어검 — 떠 있는 검들. 벤 자리의 불티는 fx로 낸다)
 // 소리: 실시간은 Web Audio(사용자 동작 뒤에야 나온다 — 첫 입력 때 resume), 녹화는 사건을 적었다가 끝에 wav로
 let clockNow = 0;
@@ -103,7 +110,7 @@ function frame(now, dtReal) {
   const inIntro = intro.active(now);
   if (inIntro && !introShown) {   // 시작: 카메라를 당기고 보스 이름·포효·몸 부풂
     introShown = true; introOpen = true;
-    hud.banner(now, LOOK.names[world.boss.kind === 'dragon' ? 'dragon' : 'ranged'], LOOK.feel.intro.sec);
+    hud.banner(now, LOOK.names[world.boss.wyrm ? 'wyrm' : world.boss.siege ? 'siege' : world.boss.kind === 'dragon' ? 'dragon' : 'ranged'], LOOK.feel.intro.sec);
     camera.hold?.(LOOK.feel.intro.hold, LOOK.feel.intro.sec + 1); actors.bossPulse(now); sfx.play('roar');
   }
   if (!inIntro && introOpen) { introOpen = false; camera.release?.(); map.take(); }   // 끝: 카메라를 풀고, 장면 중에 누른 패링·회피는 버린다
@@ -128,6 +135,9 @@ function frame(now, dtReal) {
   actors.onEvents(events, now);
   swordView.onEvents(events, now);
   swordsView.onEvents(events, now, world);
+  marksView.onEvents(events, now, world);
+  wyrmView?.onEvents(events, now, world);
+  siegeView?.onEvents(events, now, world);
   feel.handle(events, now);
   feel.tick(world, now);
   // 판이 끝난 순간: 이겼으면 남은 적 탄이 반짝이며 사라진다. 결과 화면은 큰 순간이 지난 뒤 서서히, 졌으면 화면 색이 빠진다.
@@ -160,6 +170,9 @@ function frame(now, dtReal) {
   triesView.update(world, alpha, now);
   swordView.update(world, alpha, now);
   swordsView.update(world, alpha, now);
+  marksView.update(now);
+  wyrmView?.update(world, now);
+  siegeView?.update(world, now);
   view.render();
   hud.draw(world, ui);
   const sz = hud.size;

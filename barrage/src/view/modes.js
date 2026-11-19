@@ -4,7 +4,7 @@
 // 갈래의 items = [값, 화면에 뜨는 이름]. many = 여럿을 같이 켤 수 있다(나머지는 하나만).
 export const MODE_GROUPS = [
   { id: 'char', title: '캐릭터', items: [['gunner', '사수'], ['sword', '검사']] },
-  { id: 'board', title: '판', items: [['boss', '보스전 — 수호자'], ['dragon', '보스전 — 용'], ['stage1', '스테이지 1'], ['stage2', '스테이지 2']] },
+  { id: 'board', title: '판', items: [['boss', '보스전 — 수호자'], ['dragon', '보스전 — 용'], ['dragon2', '보스전 — 나는 용 (새 · 큰 판)'], ['siege', '보스전 — 포격수 (새 · 큰 판 · 장면 여섯)'], ['ranged2', '보스전 — 수호자 + 새 패턴 (새 · 큰 판)'], ['stage1', '스테이지 1'], ['stage2', '스테이지 2']] },
   { id: 'slash', title: '일섬의 형태 (U)', items: [['', '기본'], ['chain', '잇는 일섬 — 한 칸으로 세 번'], ['deep', '깊은 일섬 — 한 번에 세게']] },
   { id: 'mark', title: '자국 카드', many: true, items: [['cut', '긋는 칼 — 일섬이 자국을 남긴다'], ['pop', '터뜨리는 회전 — 회전 베기가 자국을 터뜨린다']] },
   { id: 'gear', title: '무기', items: [['', '둘 — 미사일 · 산탄'], ['all', '넷 다']] },
@@ -14,7 +14,7 @@ export const MODE_GROUPS = [
 
 const group = id => MODE_GROUPS.find(g => g.id === id);
 const has = (id, v) => group(id).items.some(i => i[0] === v);
-const bossFight = sel => sel.board === 'boss' || sel.board === 'dragon';
+const bossFight = sel => sel.board === 'boss' || sel.board === 'dragon' || sel.board === 'dragon2' || sel.board === 'siege' || sel.board === 'ranged2';
 
 // 갈래가 뜻이 있는 때: 연습 장면을 고르면 판 · 무기 · 더 켜기는 듣지 않는다. 일섬의 형태는 검사에게만, 무기 고르기는 사수의 보스전에만(스테이지의 무기는 카드로 얻는다).
 const GROUP_ON = {
@@ -37,7 +37,7 @@ export function readModes(q) {
   const get = k => q.get(k) ?? '', stage = 'stage' + get('stage'), tries = get('try').split(',').map(s => s.trim()), marks = get('mark').split(',').map(s => s.trim());
   return {
     char: get('char') === 'sword' ? 'sword' : 'gunner',
-    board: q.has('stage') && has('board', stage) ? stage : get('boss') === 'dragon' ? 'dragon' : 'boss',
+    board: q.has('stage') && has('board', stage) ? stage : get('boss') === 'ranged2' ? 'ranged2' : get('boss') === 'siege' ? 'siege' : get('boss') === 'dragon2' ? 'dragon2' : get('boss') === 'dragon' ? 'dragon' : 'boss',
     slash: has('slash', get('slash')) ? get('slash') : '',
     gear: get('gear') === 'all' ? 'all' : '',
     mark: group('mark').items.map(i => i[0]).filter(v => marks.includes(v)),
@@ -52,6 +52,9 @@ export function modeQuery(sel, keep = null) {
   if (sel.lab) parts.push('lab=' + sel.lab);
   else if (sel.board.startsWith('stage')) parts.push('stage=' + sel.board.slice(5));
   else if (sel.board === 'dragon') parts.push('boss=dragon');
+  else if (sel.board === 'dragon2') parts.push('boss=dragon2');
+  else if (sel.board === 'siege') parts.push('boss=siege');
+  else if (sel.board === 'ranged2') parts.push('boss=ranged2');
   if (sel.char === 'sword') parts.push('char=sword');
   if (on('slash') && sel.slash) parts.push('slash=' + sel.slash);
   if (on('gear') && sel.gear) parts.push('gear=' + sel.gear);

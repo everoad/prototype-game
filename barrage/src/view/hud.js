@@ -43,7 +43,7 @@ export function createHud(canvas, LOOK) {
       ctx.textAlign = 'left';
     }
     if (S) stageLayer(w, ui);
-    if (w.marks && w.marks.list.length) {   // 검사의 자국(sim/marks.js): 자국 난 적의 머리 위에 어두운 바탕판과 청록 빗금 — 빗금은 남은 시간만큼 짧아지고, 곧 터질 때는 깜빡인다
+    if (w.marks && w.marks.list.length) {   // 검사의 자국(sim/marks.js): 자국 난 적의 머리 위에 어두운 바탕판과 진홍 빗금(상처의 색 — 맞을 때의 타격 효과는 view/marksView.js) — 빗금은 남은 시간만큼 짧아지고, 곧 터질 때는 깜빡인다
       const V = LOOK.sword.marks, keep = w.rules.sword.marks.keep, rad = V.tiltDeg * Math.PI / 180;
       ctx.lineCap = 'round';
       for (const m of w.marks.list) {
@@ -53,9 +53,9 @@ export function createHud(canvas, LOOK) {
         const [pw, ph, pr] = V.plate, blink = left < V.blinkAt ? 0.55 + 0.45 * Math.sin(now * V.blink) : 1;
         ctx.beginPath(); ctx.roundRect(s.x - pw / 2, s.y - ph / 2, pw, ph, pr);
         ctx.fillStyle = `rgba(16,14,24,${V.plateAlpha})`; ctx.fill();
-        ctx.globalAlpha = V.rim * blink; ctx.strokeStyle = C.cyan; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.globalAlpha = V.rim * blink; ctx.strokeStyle = C.wound; ctx.lineWidth = 1.5; ctx.stroke();
         ctx.globalAlpha = blink;
-        stroke(C.cyan, V.w);
+        stroke(C.wound, V.w);
         ctx.globalAlpha = 1;
       }
       ctx.lineCap = 'butt';
@@ -79,7 +79,7 @@ export function createHud(canvas, LOOK) {
     ctx.globalAlpha = pulse; bar(bx, by + 18, bw, 6, sv, C.stagger); ctx.globalAlpha = 1;
     if (now - st.staggerFlashAt < 0.18) { ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(bx, by + 18, bw * sv, 6); }
     ctx.font = font(13, true); ctx.fillStyle = C.text; ctx.textAlign = 'left';
-    ctx.fillText(ui.lab ? `연습: ${ui.lab}` : `${b.phase ?? 1}단계`, bx + bw + 10, by + 12);
+    ctx.fillText(ui.lab ? `연습: ${ui.lab}` : b.siege && b.last ? `${b.phase}단계 · ${LOOK.siege.names[b.last] ?? b.last}` : b.mix && b.act ? `${b.phase}단계 · ${LOOK.siege.names[b.scene] ?? b.scene}` : `${b.phase ?? 1}단계`, bx + bw + 10, by + 12);   // 포격수: 지금 장면의 이름도(장면을 짚어 말하기 쉽게)
     if (S) { ctx.textAlign = 'right'; ctx.fillStyle = C.textDim; ctx.fillText(`방 ${S.room + 1} / ${S.of}`, bx - 10, by + 12); ctx.textAlign = 'left'; }
     }
     // 플레이어 체력 + 회피 충전 점
